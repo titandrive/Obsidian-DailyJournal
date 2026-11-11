@@ -24,6 +24,7 @@ export interface JournalSettings {
 	folder: string;
 	dateFormat: string;
 	home: Place;
+	showWeather: boolean;
 	units: "f" | "c";
 	booksFolder: string;
 	showReading: boolean;
@@ -39,6 +40,7 @@ export const DEFAULT_SETTINGS: JournalSettings = {
 	folder: "Daily Notes",
 	dateFormat: "YYYY/MMM/MM-DD-YY",
 	home: { name: "Los Angeles", lat: 34.05223, lon: -118.24368, tz: "America/Los_Angeles" },
+	showWeather: true,
 	units: "f",
 	booksFolder: "Books",
 	showReading: true,

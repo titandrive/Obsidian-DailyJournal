@@ -70,7 +70,7 @@ async function renderHeader(host: JournalHost, el: HTMLElement, file: TFile, dat
 		weatherChip.setText(weather ?? "");
 		weatherChip.toggle(!!weather);
 	};
-	showWeather(fm.weather ? String(fm.weather) : null);
+	showWeather(settings.showWeather && fm.weather ? String(fm.weather) : null);
 
 	const place = entryPlace(fm, settings.home);
 	const placeChip = chips.createEl("a", { cls: "dj-chip", href: "#", attr: { "aria-label": "Change location for this entry" } });
@@ -81,13 +81,14 @@ async function renderHeader(host: JournalHost, el: HTMLElement, file: TFile, dat
 		const own = hasOwnPlace(app.metadataCache.getFileCache(file)?.frontmatter);
 		new PlaceModal(app, own ? settings.home : null, async (chosen) => {
 			placeName.setText((chosen ?? settings.home).name);
-			showWeather(await host.setEntryPlace(file, chosen));
+			const weather = await host.setEntryPlace(file, chosen);
+			showWeather(settings.showWeather ? weather : null);
 		}).open();
 	};
 
 	// First time an entry is opened, look up that day's weather and save it.
 	// Tried once per entry per session, so a failed lookup can't turn into a retry loop.
-	if (!fm.weather && !host.weatherTried.has(file.path) && !date.isAfter(moment(), "day")) {
+	if (settings.showWeather && !fm.weather && !host.weatherTried.has(file.path) && !date.isAfter(moment(), "day")) {
 		host.weatherTried.add(file.path);
 		const weather = await fetchWeather(place, date, settings.units);
 		if (weather) {

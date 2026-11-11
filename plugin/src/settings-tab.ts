@@ -54,7 +54,10 @@ export class JournalSettingTab extends PluginSettingTab {
 			return setting;
 		};
 
-		new Setting(card()).setName("Header").setDesc("The date, previous/next entry links, that day's weather, and the entry's location. Always shown.");
+		new Setting(card())
+			.setName("Weather")
+			.setDesc("That day's weather in each entry's header, for the entry's location.")
+			.addToggle((t) => t.setValue(s.showWeather).onChange(async (v) => { s.showWeather = v; await save(); this.display(); }));
 		const home = sub(new Setting(group).setName("Default location").setDesc(s.home.name));
 		home.addButton((b) => b.setButtonText("Change…").onClick(() => {
 			new PlaceModal(this.app, null, async (place) => {
@@ -64,7 +67,7 @@ export class JournalSettingTab extends PluginSettingTab {
 				this.display();
 			}, "Default location").open();
 		}));
-		sub(new Setting(group).setName("Temperature"))
+		sub(new Setting(group).setName("Temperature"), s.showWeather)
 			.addDropdown((d) => d.addOption("f", "Fahrenheit (°F)").addOption("c", "Celsius (°C)").setValue(s.units)
 				.onChange(async (v) => { s.units = v === "c" ? "c" : "f"; await save(); }));
 

@@ -56,6 +56,7 @@ var DEFAULT_SETTINGS = {
   folder: "Daily Notes",
   dateFormat: "YYYY/MMM/MM-DD-YY",
   home: { name: "Los Angeles", lat: 34.05223, lon: -118.24368, tz: "America/Los_Angeles" },
+  showWeather: true,
   units: "f",
   booksFolder: "Books",
   showReading: true,
@@ -490,7 +491,7 @@ async function renderHeader(host, el, file, date, fm) {
     weatherChip.setText(weather != null ? weather : "");
     weatherChip.toggle(!!weather);
   };
-  showWeather(fm.weather ? String(fm.weather) : null);
+  showWeather(settings.showWeather && fm.weather ? String(fm.weather) : null);
   const place = entryPlace(fm, settings.home);
   const placeChip = chips.createEl("a", { cls: "dj-chip", href: "#", attr: { "aria-label": "Change location for this entry" } });
   placeChip.createSpan({ cls: "dj-icon" }).innerHTML = PIN_ICON;
@@ -501,10 +502,11 @@ async function renderHeader(host, el, file, date, fm) {
     const own = hasOwnPlace((_a2 = app.metadataCache.getFileCache(file)) == null ? void 0 : _a2.frontmatter);
     new PlaceModal(app, own ? settings.home : null, async (chosen) => {
       placeName.setText((chosen != null ? chosen : settings.home).name);
-      showWeather(await host.setEntryPlace(file, chosen));
+      const weather = await host.setEntryPlace(file, chosen);
+      showWeather(settings.showWeather ? weather : null);
     }).open();
   };
-  if (!fm.weather && !host.weatherTried.has(file.path) && !date.isAfter((0, import_obsidian5.moment)(), "day")) {
+  if (settings.showWeather && !fm.weather && !host.weatherTried.has(file.path) && !date.isAfter((0, import_obsidian5.moment)(), "day")) {
     host.weatherTried.add(file.path);
     const weather = await fetchWeather(place, date, settings.units);
     if (weather) {
@@ -726,7 +728,11 @@ var JournalSettingTab = class extends import_obsidian6.PluginSettingTab {
       setting.settingEl.toggle(visible);
       return setting;
     };
-    new import_obsidian6.Setting(card2()).setName("Header").setDesc("The date, previous/next entry links, that day's weather, and the entry's location. Always shown.");
+    new import_obsidian6.Setting(card2()).setName("Weather").setDesc("That day's weather in each entry's header, for the entry's location.").addToggle((t) => t.setValue(s.showWeather).onChange(async (v) => {
+      s.showWeather = v;
+      await save();
+      this.display();
+    }));
     const home = sub(new import_obsidian6.Setting(group).setName("Default location").setDesc(s.home.name));
     home.addButton((b) => b.setButtonText("Change\u2026").onClick(() => {
       new PlaceModal(this.app, null, async (place) => {
@@ -737,7 +743,7 @@ var JournalSettingTab = class extends import_obsidian6.PluginSettingTab {
         this.display();
       }, "Default location").open();
     }));
-    sub(new import_obsidian6.Setting(group).setName("Temperature")).addDropdown((d) => d.addOption("f", "Fahrenheit (\xB0F)").addOption("c", "Celsius (\xB0C)").setValue(s.units).onChange(async (v) => {
+    sub(new import_obsidian6.Setting(group).setName("Temperature"), s.showWeather).addDropdown((d) => d.addOption("f", "Fahrenheit (\xB0F)").addOption("c", "Celsius (\xB0C)").setValue(s.units).onChange(async (v) => {
       s.units = v === "c" ? "c" : "f";
       await save();
     }));
@@ -1009,6 +1015,10 @@ var DailyJournal = class extends import_obsidian7.Plugin {
     await this.ensureFolder(target);
     await this.app.fileManager.renameFile(file, target);
     const place = entryPlace((_a = this.app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter, this.settings.home);
+    if (!this.settings.showWeather) {
+      new import_obsidian7.Notice(`Moved entry to ${date.format("dddd, MMM D, YYYY")}.`);
+      return;
+    }
     const weather = date.isAfter((0, import_obsidian7.moment)(), "day") ? null : await fetchWeather(place, date, this.settings.units);
     await this.app.fileManager.processFrontMatter(file, (fm) => {
       if (weather)
@@ -1021,13 +1031,15 @@ var DailyJournal = class extends import_obsidian7.Plugin {
   /** Sets an entry's location (null = back to home) and refreshes its weather. Returns the new weather. */
   async setEntryPlace(file, place) {
     const date = entryDate(this.settings, file);
-    const weather = date && !date.isAfter((0, import_obsidian7.moment)(), "day") ? await fetchWeather(place != null ? place : this.settings.home, date, this.settings.units) : null;
+    const weather = this.settings.showWeather && date && !date.isAfter((0, import_obsidian7.moment)(), "day") ? await fetchWeather(place != null ? place : this.settings.home, date, this.settings.units) : null;
     await this.app.fileManager.processFrontMatter(file, (fm) => {
       if (place)
         Object.assign(fm, { location: place.name, latitude: place.lat, longitude: place.lon, timezone: place.tz });
       else
         for (const k of ["location", "latitude", "longitude", "timezone"])
           delete fm[k];
+      if (!this.settings.showWeather)
+        return;
       if (weather)
         fm.weather = weather;
       else

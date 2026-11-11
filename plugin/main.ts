@@ -234,6 +234,10 @@ export default class DailyJournal extends Plugin implements JournalHost {
 		await this.app.fileManager.renameFile(file, target);
 
 		const place = entryPlace(this.app.metadataCache.getFileCache(file)?.frontmatter, this.settings.home);
+		if (!this.settings.showWeather) {
+			new Notice(`Moved entry to ${date.format("dddd, MMM D, YYYY")}.`);
+			return;
+		}
 		const weather = date.isAfter(moment(), "day") ? null : await fetchWeather(place, date, this.settings.units);
 		await this.app.fileManager.processFrontMatter(file, (fm) => {
 			if (weather) fm.weather = weather;
@@ -245,12 +249,14 @@ export default class DailyJournal extends Plugin implements JournalHost {
 	/** Sets an entry's location (null = back to home) and refreshes its weather. Returns the new weather. */
 	async setEntryPlace(file: TFile, place: Place | null): Promise<string | null> {
 		const date = entryDate(this.settings, file);
-		const weather = date && !date.isAfter(moment(), "day")
+		const weather = this.settings.showWeather && date && !date.isAfter(moment(), "day")
 			? await fetchWeather(place ?? this.settings.home, date, this.settings.units)
 			: null;
 		await this.app.fileManager.processFrontMatter(file, (fm) => {
 			if (place) Object.assign(fm, { location: place.name, latitude: place.lat, longitude: place.lon, timezone: place.tz });
 			else for (const k of ["location", "latitude", "longitude", "timezone"]) delete fm[k];
+			// With weather off, leave any saved weather alone; it's just not shown.
+			if (!this.settings.showWeather) return;
 			if (weather) fm.weather = weather;
 			else delete fm.weather;
 		});
