@@ -14,12 +14,3 @@ export function entryTemplate(settings: JournalSettings): string {
 	parts.push(block("onthisday"));
 	return parts.join("\n");
 }
-
-/** Rewrites the old Dataview-based blocks (Apps/Scripts/journal) into `journal` blocks. */
-export function convertLegacyBlocks(text: string): string {
-	const names: Record<string, string> = { nav: "header", header: "header", book: "reading", tracker: "checkin", onthisday: "onthisday" };
-	return text.replace(
-		/```dataviewjs\s*\nawait dv\.view\("[^"]*journal",\s*\{\s*part:\s*"(\w+)"\s*\}\)\s*\n```/g,
-		(match, part: string) => (names[part] ? "```journal\n" + names[part] + "\n```" : match),
-	);
-}

@@ -15,7 +15,6 @@ Works on desktop and mobile; the cards adapt to narrow screens.
 - **Create Journal (Yesterday)** / **Create Journal (Choose Date)**: creates (or opens) the entry for yesterday or any date picked in a month calendar.
 - **Change date (yesterday)** / **Change date (choose date)**: moves the open entry to another date (with a month picker) and fetches that date's weather. Also in the right-click menu for entries.
 - **Change location**: sets the open entry's location and refreshes its weather.
-- **Convert older entries to Daily Journal blocks**: upgrades entries made with the earlier Dataview-based journal script.
 
 Commands that act on an entry only appear while a journal entry is open.
 

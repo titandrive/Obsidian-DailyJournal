@@ -4,7 +4,7 @@ import { MonthPicker, PlaceModal } from "./src/modals";
 import { JournalHost, renderSection } from "./src/render";
 import { DEFAULT_SETTINGS, JournalSettings, Place } from "./src/settings";
 import { JournalSettingTab } from "./src/settings-tab";
-import { convertLegacyBlocks, entryTemplate } from "./src/template";
+import { entryTemplate } from "./src/template";
 import { entryPlace, fetchWeather, hasOwnPlace } from "./src/weather";
 
 /** One rendered `journal` block. Redraws when its entry's properties change (e.g. weather arrives). */
@@ -81,11 +81,6 @@ export default class DailyJournal extends Plugin implements JournalHost {
 			id: "change-location",
 			name: "Change location",
 			checkCallback: (checking) => this.withActiveEntry(checking, (file) => this.pickPlace(file)),
-		});
-		this.addCommand({
-			id: "convert-legacy",
-			name: "Convert older entries to Daily Journal blocks",
-			callback: () => this.convertLegacy(),
 		});
 
 		// The same date actions in the right-click menu (file explorer, tab header) for journal entries.
@@ -214,18 +209,5 @@ export default class DailyJournal extends Plugin implements JournalHost {
 			else delete fm.weather;
 		});
 		return weather;
-	}
-
-	private async convertLegacy(): Promise<void> {
-		let changed = 0;
-		for (const { file } of this.journalEntries()) {
-			const text = await this.app.vault.read(file);
-			const converted = convertLegacyBlocks(text);
-			if (converted !== text) {
-				await this.app.vault.modify(file, converted);
-				changed++;
-			}
-		}
-		new Notice(changed ? `Converted ${changed} entr${changed === 1 ? "y" : "ies"} to Daily Journal blocks.` : "No older entries to convert.");
 	}
 }

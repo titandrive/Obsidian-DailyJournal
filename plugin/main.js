@@ -665,13 +665,6 @@ function entryTemplate(settings) {
   parts.push(block("onthisday"));
   return parts.join("\n");
 }
-function convertLegacyBlocks(text) {
-  const names = { nav: "header", header: "header", book: "reading", tracker: "checkin", onthisday: "onthisday" };
-  return text.replace(
-    /```dataviewjs\s*\nawait dv\.view\("[^"]*journal",\s*\{\s*part:\s*"(\w+)"\s*\}\)\s*\n```/g,
-    (match, part) => names[part] ? "```journal\n" + names[part] + "\n```" : match
-  );
-}
 
 // main.ts
 var JournalBlock = class extends import_obsidian7.MarkdownRenderChild {
@@ -751,11 +744,6 @@ var DailyJournal = class extends import_obsidian7.Plugin {
       id: "change-location",
       name: "Change location",
       checkCallback: (checking) => this.withActiveEntry(checking, (file) => this.pickPlace(file))
-    });
-    this.addCommand({
-      id: "convert-legacy",
-      name: "Convert older entries to Daily Journal blocks",
-      callback: () => this.convertLegacy()
     });
     this.registerEvent(this.app.workspace.on("file-menu", (menu, file) => {
       const date = entryDate(this.settings, file);
@@ -876,17 +864,5 @@ var DailyJournal = class extends import_obsidian7.Plugin {
         delete fm.weather;
     });
     return weather;
-  }
-  async convertLegacy() {
-    let changed = 0;
-    for (const { file } of this.journalEntries()) {
-      const text = await this.app.vault.read(file);
-      const converted = convertLegacyBlocks(text);
-      if (converted !== text) {
-        await this.app.vault.modify(file, converted);
-        changed++;
-      }
-    }
-    new import_obsidian7.Notice(changed ? `Converted ${changed} entr${changed === 1 ? "y" : "ies"} to Daily Journal blocks.` : "No older entries to convert.");
   }
 };
