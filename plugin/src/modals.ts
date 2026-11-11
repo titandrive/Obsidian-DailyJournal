@@ -3,18 +3,24 @@ import { Moment } from "./dates";
 import { Place } from "./settings";
 import { PlaceResult, searchPlaces } from "./weather";
 
-/** Month calendar for choosing an entry's new date. Days that already have an entry can't be picked. */
+/** Month calendar for choosing a date. Days that already have an entry are marked (and can't be picked unless allowTaken). */
 export class MonthPicker extends Modal {
 	private month: Moment;
 
-	constructor(app: App, private current: Moment, private isTaken: (date: Moment) => boolean, private onPick: (date: Moment) => void) {
+	constructor(
+		app: App,
+		private current: Moment | null,
+		private isTaken: (date: Moment) => boolean,
+		private onPick: (date: Moment) => void,
+		private options: { title?: string; allowTaken?: boolean } = {},
+	) {
 		super(app);
-		this.month = current.clone().startOf("month");
+		this.month = (current ?? moment()).clone().startOf("month");
 	}
 
 	onOpen(): void {
 		this.modalEl.addClass("dj-modal");
-		this.titleEl.setText("Move entry to…");
+		this.titleEl.setText(this.options.title ?? "Move entry to…");
 		this.render();
 	}
 
@@ -36,16 +42,20 @@ export class MonthPicker extends Modal {
 			const date = day.clone();
 			const btn = grid.createEl("button", { cls: "dj-picker-day", text: String(date.date()) });
 			if (date.isSame(today, "day")) btn.addClass("is-today");
-			if (date.isSame(this.current, "day")) {
+			if (this.current && date.isSame(this.current, "day")) {
 				btn.addClass("is-current");
 				btn.disabled = true;
-			} else if (this.isTaken(date)) {
-				btn.addClass("has-entry");
-				btn.disabled = true;
-				btn.setAttr("aria-label", "Already has an entry");
-			} else {
-				btn.onclick = () => { this.close(); this.onPick(date); };
+				continue;
 			}
+			if (this.isTaken(date)) {
+				btn.addClass("has-entry");
+				btn.setAttr("aria-label", "Already has an entry");
+				if (!this.options.allowTaken) {
+					btn.disabled = true;
+					continue;
+				}
+			}
+			btn.onclick = () => { this.close(); this.onPick(date); };
 		}
 	}
 

@@ -114,16 +114,18 @@ var PIN_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em"
 
 // src/modals.ts
 var MonthPicker = class extends import_obsidian3.Modal {
-  constructor(app, current, isTaken, onPick) {
+  constructor(app, current, isTaken, onPick, options = {}) {
     super(app);
     this.current = current;
     this.isTaken = isTaken;
     this.onPick = onPick;
-    this.month = current.clone().startOf("month");
+    this.options = options;
+    this.month = (current != null ? current : (0, import_obsidian3.moment)()).clone().startOf("month");
   }
   onOpen() {
+    var _a;
     this.modalEl.addClass("dj-modal");
-    this.titleEl.setText("Move entry to\u2026");
+    this.titleEl.setText((_a = this.options.title) != null ? _a : "Move entry to\u2026");
     this.render();
   }
   render() {
@@ -150,19 +152,23 @@ var MonthPicker = class extends import_obsidian3.Modal {
       const btn = grid.createEl("button", { cls: "dj-picker-day", text: String(date.date()) });
       if (date.isSame(today, "day"))
         btn.addClass("is-today");
-      if (date.isSame(this.current, "day")) {
+      if (this.current && date.isSame(this.current, "day")) {
         btn.addClass("is-current");
         btn.disabled = true;
-      } else if (this.isTaken(date)) {
-        btn.addClass("has-entry");
-        btn.disabled = true;
-        btn.setAttr("aria-label", "Already has an entry");
-      } else {
-        btn.onclick = () => {
-          this.close();
-          this.onPick(date);
-        };
+        continue;
       }
+      if (this.isTaken(date)) {
+        btn.addClass("has-entry");
+        btn.setAttr("aria-label", "Already has an entry");
+        if (!this.options.allowTaken) {
+          btn.disabled = true;
+          continue;
+        }
+      }
+      btn.onclick = () => {
+        this.close();
+        this.onPick(date);
+      };
     }
   }
   onClose() {
@@ -716,6 +722,22 @@ var DailyJournal = class extends import_obsidian7.Plugin {
       callback: () => this.openEntry((0, import_obsidian7.moment)())
     });
     this.addCommand({
+      id: "create-yesterday",
+      name: "Create Journal (Yesterday)",
+      callback: () => this.openEntry((0, import_obsidian7.moment)().subtract(1, "day"))
+    });
+    this.addCommand({
+      id: "create-choose",
+      name: "Create Journal (Choose Date)",
+      callback: () => new MonthPicker(
+        this.app,
+        null,
+        (d) => this.hasEntry(d),
+        (d) => this.openEntry(d),
+        { title: "Create journal entry for\u2026", allowTaken: true }
+      ).open()
+    });
+    this.addCommand({
       id: "change-date-yesterday",
       name: "Change date (yesterday)",
       checkCallback: (checking) => this.withActiveEntry(checking, (file, date) => this.moveEntry(file, date.clone().subtract(1, "day")))
@@ -782,8 +804,10 @@ var DailyJournal = class extends import_obsidian7.Plugin {
     return true;
   }
   pickDate(file, date) {
-    const taken = (d) => !!this.app.vault.getAbstractFileByPath(entryPath(this.settings, d));
-    new MonthPicker(this.app, date, taken, (picked) => this.moveEntry(file, picked)).open();
+    new MonthPicker(this.app, date, (d) => this.hasEntry(d), (picked) => this.moveEntry(file, picked)).open();
+  }
+  hasEntry(date) {
+    return !!this.app.vault.getAbstractFileByPath(entryPath(this.settings, date));
   }
   pickPlace(file) {
     var _a;

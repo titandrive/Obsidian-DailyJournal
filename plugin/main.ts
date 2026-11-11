@@ -57,6 +57,17 @@ export default class DailyJournal extends Plugin implements JournalHost {
 			callback: () => this.openEntry(moment()),
 		});
 		this.addCommand({
+			id: "create-yesterday",
+			name: "Create Journal (Yesterday)",
+			callback: () => this.openEntry(moment().subtract(1, "day")),
+		});
+		this.addCommand({
+			id: "create-choose",
+			name: "Create Journal (Choose Date)",
+			callback: () => new MonthPicker(this.app, null, (d) => this.hasEntry(d), (d) => this.openEntry(d),
+				{ title: "Create journal entry for…", allowTaken: true }).open(),
+		});
+		this.addCommand({
 			id: "change-date-yesterday",
 			name: "Change date (yesterday)",
 			checkCallback: (checking) => this.withActiveEntry(checking, (file, date) => this.moveEntry(file, date.clone().subtract(1, "day"))),
@@ -135,8 +146,11 @@ export default class DailyJournal extends Plugin implements JournalHost {
 	}
 
 	private pickDate(file: TFile, date: Moment): void {
-		const taken = (d: Moment) => !!this.app.vault.getAbstractFileByPath(entryPath(this.settings, d));
-		new MonthPicker(this.app, date, taken, (picked) => this.moveEntry(file, picked)).open();
+		new MonthPicker(this.app, date, (d) => this.hasEntry(d), (picked) => this.moveEntry(file, picked)).open();
+	}
+
+	private hasEntry(date: Moment): boolean {
+		return !!this.app.vault.getAbstractFileByPath(entryPath(this.settings, date));
 	}
 
 	private pickPlace(file: TFile): void {
