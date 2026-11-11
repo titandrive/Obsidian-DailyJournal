@@ -1,6 +1,6 @@
-import { App, normalizePath, PluginSettingTab, Setting } from "obsidian";
+import { App, normalizePath, Notice, PluginSettingTab, Setting } from "obsidian";
 import type DailyJournal from "../main";
-import { PlaceModal, PromptsModal } from "./modals";
+import { ConfirmModal, PlaceModal, PromptsModal } from "./modals";
 import { CheckInFields } from "./settings";
 
 export class JournalSettingTab extends PluginSettingTab {
@@ -44,7 +44,8 @@ export class JournalSettingTab extends PluginSettingTab {
 				}).open();
 			}));
 
-		new Setting(containerEl).setName("Cards").setHeading();
+		new Setting(containerEl).setName("Cards").setHeading()
+			.setDesc("Changes apply to new entries. Use \"Apply to existing entries\" below to update older ones.");
 		// Each card is one block: its main setting on top, its own settings indented inside it.
 		let group = containerEl;
 		const card = () => { group = containerEl.createDiv({ cls: "dj-setting-group" }); return group; };
@@ -92,6 +93,18 @@ export class JournalSettingTab extends PluginSettingTab {
 			.setName("On this day")
 			.setDesc("Links to entries from the same date in earlier months and years.")
 			.addToggle((t) => t.setValue(s.showOnThisDay).onChange(async (v) => { s.showOnThisDay = v; await save(); }));
+
+		new Setting(containerEl)
+			.setName("Apply to existing entries")
+			.setDesc("Update older entries to the current cards, weather and check-in fields, and give entries without a location the default one. Your writing and headings aren't changed.")
+			.addButton((b) => b.setButtonText("Apply…").onClick(async () => {
+				const files = await this.plugin.entriesNeedingLayout();
+				if (!files.length) { new Notice("All entries already match the current settings."); return; }
+				const n = files.length;
+				new ConfirmModal(this.app, "Apply to existing entries",
+					`This updates ${n} entr${n === 1 ? "y" : "ies"} to the current card settings. Your writing and headings aren't changed.`,
+					"Update", () => { void this.plugin.applyLayoutToEntries(files); }).open();
+			}));
 
 		new Setting(containerEl).setName("Appearance").setHeading();
 		new Setting(containerEl)

@@ -4,8 +4,8 @@ import { MonthPicker, PlaceModal } from "./src/modals";
 import { JournalHost, renderSection } from "./src/render";
 import { DEFAULT_SETTINGS, JournalSettings, Place, Prompt } from "./src/settings";
 import { JournalSettingTab } from "./src/settings-tab";
-import { entryTemplate } from "./src/template";
-import { entryPlace, fetchWeather, hasOwnPlace } from "./src/weather";
+import { applyLayout, blockShowsWeather, entryTemplate, parseBlock } from "./src/template";
+import { entryPlace, fetchWeather } from "./src/weather";
 
 /** One rendered `journal` block. Redraws when its entry's properties change (e.g. weather arrives). */
 class JournalBlock extends MarkdownRenderChild {
@@ -195,8 +195,41 @@ export default class DailyJournal extends Plugin implements JournalHost {
 	}
 
 	private pickPlace(file: TFile): void {
-		const own = hasOwnPlace(this.app.metadataCache.getFileCache(file)?.frontmatter);
-		new PlaceModal(this.app, own ? this.settings.home : null, (place) => { void this.setEntryPlace(file, place); }).open();
+		const current = entryPlace(this.app.metadataCache.getFileCache(file)?.frontmatter, this.settings.home);
+		new PlaceModal(this.app, current.name !== this.settings.home.name ? this.settings.home : null, async (place) => {
+			await this.setEntryPlace(file, place, await this.entryShowsWeather(file));
+		}).open();
+	}
+
+	/** Whether an entry's header shows weather (set when the entry was created). */
+	async entryShowsWeather(file: TFile): Promise<boolean> {
+		const header = (await this.app.vault.cachedRead(file)).match(/```journal\n(header[^\n]*)/);
+		return header ? blockShowsWeather(parseBlock(header[1]).options) : false;
+	}
+
+	/** Entries the current card settings would change (cards, weather, check-in fields, missing location). */
+	async entriesNeedingLayout(): Promise<TFile[]> {
+		const out: TFile[] = [];
+		for (const { file } of this.journalEntries()) {
+			const text = await this.app.vault.cachedRead(file);
+			const noPlace = !this.app.metadataCache.getFileCache(file)?.frontmatter?.location && /```journal\nheader/.test(text);
+			if (applyLayout(text, this.settings) !== text || noPlace) out.push(file);
+		}
+		return out;
+	}
+
+	/** Brings existing entries up to the current card settings. Writing and headings are untouched. */
+	async applyLayoutToEntries(files: TFile[]): Promise<void> {
+		const home = this.settings.home;
+		for (const file of files) {
+			await this.app.vault.process(file, (text) => applyLayout(text, this.settings));
+			if (!this.app.metadataCache.getFileCache(file)?.frontmatter?.location) {
+				await this.app.fileManager.processFrontMatter(file, (fm) => {
+					Object.assign(fm, { location: home.name, latitude: home.lat, longitude: home.lon, timezone: home.tz });
+				});
+			}
+		}
+		new Notice(`Updated ${files.length} entr${files.length === 1 ? "y" : "ies"}.`);
 	}
 
 	async openEntry(date: Moment): Promise<void> {
@@ -234,7 +267,7 @@ export default class DailyJournal extends Plugin implements JournalHost {
 		await this.app.fileManager.renameFile(file, target);
 
 		const place = entryPlace(this.app.metadataCache.getFileCache(file)?.frontmatter, this.settings.home);
-		if (!this.settings.showWeather) {
+		if (!(await this.entryShowsWeather(file))) {
 			new Notice(`Moved entry to ${date.format("dddd, MMM D, YYYY")}.`);
 			return;
 		}
@@ -246,17 +279,17 @@ export default class DailyJournal extends Plugin implements JournalHost {
 		new Notice(`Moved entry to ${date.format("dddd, MMM D, YYYY")}${weather ? "" : " (weather unavailable)"}.`);
 	}
 
-	/** Sets an entry's location (null = back to home) and refreshes its weather. Returns the new weather. */
-	async setEntryPlace(file: TFile, place: Place | null): Promise<string | null> {
+	/** Sets an entry's location (null = the default location) and refreshes its weather. Returns the new weather. */
+	async setEntryPlace(file: TFile, place: Place | null, withWeather: boolean): Promise<string | null> {
+		const chosen = place ?? this.settings.home;
 		const date = entryDate(this.settings, file);
-		const weather = this.settings.showWeather && date && !date.isAfter(moment(), "day")
-			? await fetchWeather(place ?? this.settings.home, date, this.settings.units)
+		const weather = withWeather && date && !date.isAfter(moment(), "day")
+			? await fetchWeather(chosen, date, this.settings.units)
 			: null;
 		await this.app.fileManager.processFrontMatter(file, (fm) => {
-			if (place) Object.assign(fm, { location: place.name, latitude: place.lat, longitude: place.lon, timezone: place.tz });
-			else for (const k of ["location", "latitude", "longitude", "timezone"]) delete fm[k];
-			// With weather off, leave any saved weather alone; it's just not shown.
-			if (!this.settings.showWeather) return;
+			// Saved explicitly (even the default), so later changes to the default don't move this entry.
+			Object.assign(fm, { location: chosen.name, latitude: chosen.lat, longitude: chosen.lon, timezone: chosen.tz });
+			if (!withWeather) return; // weather isn't shown in this entry; leave any saved weather alone
 			if (weather) fm.weather = weather;
 			else delete fm.weather;
 		});

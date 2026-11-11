@@ -218,3 +218,23 @@ export class PromptsModal extends Modal {
 		this.contentEl.empty();
 	}
 }
+
+/** A yes/no confirmation. */
+export class ConfirmModal extends Modal {
+	constructor(app: App, private heading: string, private message: string, private confirmText: string, private onConfirm: () => void) {
+		super(app);
+	}
+
+	onOpen(): void {
+		this.modalEl.addClass("dj-modal");
+		this.titleEl.setText(this.heading);
+		this.contentEl.createEl("p", { text: this.message });
+		const footer = this.contentEl.createDiv({ cls: "dj-prompts-footer" });
+		footer.createEl("button", { text: "Cancel" }).onclick = () => this.close();
+		footer.createEl("button", { cls: "mod-cta", text: this.confirmText }).onclick = () => { this.close(); this.onConfirm(); };
+	}
+
+	onClose(): void {
+		this.contentEl.empty();
+	}
+}

@@ -1,16 +1,92 @@
-import { JournalSettings } from "./settings";
+import { CheckInFields, JournalSettings } from "./settings";
 
-const block = (section: string) => "```journal\n" + section + "\n```\n";
+/*
+ * Each entry carries its own layout, written when the entry is created, so changing settings
+ * later only affects new entries:
+ *   - which cards it has: the `journal` blocks present in the note
+ *   - weather on/off: the header block's options ("header weather" / "header no-weather")
+ *   - check-in fields: the check-in block's options ("checkin rating sleep food")
+ * Blocks without options (entries made before this) keep their original behavior: weather on, all fields.
+ */
+
+export const FIELD_KEYS: Array<keyof CheckInFields> = ["rating", "sleep", "exercise", "food"];
+type Section = "header" | "reading" | "checkin" | "onthisday";
+
+const block = (line: string) => "```journal\n" + line + "\n```\n";
+
+export function parseBlock(source: string): { section: string; options: string[] } {
+	const [section = "", ...options] = source.trim().split(/\s+/);
+	return { section, options };
+}
+
+export function blockShowsWeather(options: string[]): boolean {
+	return !options.includes("no-weather");
+}
+
+export function blockFields(options: string[]): CheckInFields {
+	const listed = options.filter((o): o is keyof CheckInFields => (FIELD_KEYS as string[]).includes(o));
+	if (!listed.length) return { rating: true, sleep: true, exercise: true, food: true };
+	return { rating: listed.includes("rating"), sleep: listed.includes("sleep"), exercise: listed.includes("exercise"), food: listed.includes("food") };
+}
+
+/** The block line for each card under the current settings, or null when the card is off. */
+function layoutLines(settings: JournalSettings): Record<Section, string | null> {
+	const fields = FIELD_KEYS.filter((k) => settings.fields[k]);
+	return {
+		header: settings.showWeather ? "header weather" : "header no-weather",
+		reading: settings.showReading ? "reading" : null,
+		checkin: fields.length ? "checkin " + fields.join(" ") : null,
+		onthisday: settings.showOnThisDay ? "onthisday" : null,
+	};
+}
 
 /** Body of a new journal entry. The cards are `journal` code blocks the plugin renders. */
 export function entryTemplate(settings: JournalSettings): string {
-	const parts = ["---", "tags:", "  - journal", "cssclasses:", "  - journal", "---", ""];
-	parts.push(block("header"));
-	if (settings.showReading) parts.push(block("reading"));
-	parts.push(block("checkin"));
+	const home = settings.home;
+	const lines = layoutLines(settings);
+	const parts = [
+		"---", "tags:", "  - journal", "cssclasses:", "  - journal",
+		// The default location is saved in the entry, so changing it later doesn't move old entries.
+		`location: ${JSON.stringify(home.name)}`, `latitude: ${home.lat}`, `longitude: ${home.lon}`, `timezone: ${JSON.stringify(home.tz)}`,
+		"---", "",
+	];
+	for (const section of ["header", "reading", "checkin"] as Section[]) {
+		const line = lines[section];
+		if (line) parts.push(block(line));
+	}
 	for (const prompt of settings.prompts) {
 		parts.push(`${"#".repeat(2 + prompt.level)} ${prompt.text}`, "", "");
 	}
-	if (settings.showOnThisDay) parts.push(block("onthisday"));
+	if (lines.onthisday) parts.push(block(lines.onthisday));
 	return parts.join("\n");
+}
+
+const BLOCK = (section: Section) => new RegExp("```journal\\n" + section + "(?:[ \\t][^\\n]*)?\\n```\\n?");
+
+/**
+ * An existing entry rewritten to the current card settings: cards added or removed, weather and
+ * check-in options updated. Writing, headings and properties are left alone. Notes without a
+ * header block aren't journal-layout entries and come back unchanged.
+ */
+export function applyLayout(text: string, settings: JournalSettings): string {
+	if (!BLOCK("header").test(text)) return text;
+	const lines = layoutLines(settings);
+	let out = text.replace(BLOCK("header"), block(lines.header as string));
+
+	// Cards between the header and the writing, in order: reading, then check-in.
+	for (const section of ["reading", "checkin"] as Section[]) {
+		const line = lines[section];
+		if (line && BLOCK(section).test(out)) {
+			out = out.replace(BLOCK(section), block(line));
+		} else if (line) {
+			const after = section === "checkin" && BLOCK("reading").test(out) ? BLOCK("reading") : BLOCK("header");
+			out = out.replace(after, (m) => m + "\n" + block(line));
+		} else {
+			out = out.replace(new RegExp(BLOCK(section).source + "\\n?"), "");
+		}
+	}
+
+	if (lines.onthisday && !BLOCK("onthisday").test(out)) out = out.replace(/\n*$/, "\n\n" + block(lines.onthisday));
+	else if (!lines.onthisday) out = out.replace(new RegExp("\\n*" + BLOCK("onthisday").source), "\n");
+	return out;
 }

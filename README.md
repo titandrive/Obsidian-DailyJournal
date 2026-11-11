@@ -28,6 +28,8 @@ Daily Journal uses the same folder and date format as Daily notes (copied on fir
 - **Cards**: each card with its own settings: Weather (on/off, default location, °F/°C), Reading (books folder), Check-in (which fields to show), and On this day.
 - **Appearance**: hide the title and Properties box in entries.
 
+Each entry keeps the layout it was created with (its cards, weather on/off, check-in fields and location), so changing settings only affects new entries. **Apply to existing entries** updates older ones to the current settings without touching your writing.
+
 ## Data
 
 Weather comes from [Open-Meteo](https://open-meteo.com) (no account needed). Location search uses Open-Meteo's geocoding API. Each entry stores its weather once, so past entries don't change.

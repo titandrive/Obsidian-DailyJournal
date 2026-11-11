@@ -2,15 +2,16 @@ import { App, moment, TFile } from "obsidian";
 import { bookFromLink, bookLink, currentBook, highlightsOn, pct } from "./books";
 import { entryDate, Moment } from "./dates";
 import { PlaceModal } from "./modals";
-import { JournalSettings, Place } from "./settings";
-import { entryPlace, fetchWeather, hasOwnPlace, PIN_ICON } from "./weather";
+import { CheckInFields, JournalSettings, Place } from "./settings";
+import { blockFields, blockShowsWeather, parseBlock } from "./template";
+import { entryPlace, fetchWeather, PIN_ICON } from "./weather";
 
 /** What the cards need from the plugin. */
 export interface JournalHost {
 	app: App;
 	settings: JournalSettings;
 	weatherTried: Set<string>;
-	setEntryPlace(file: TFile, place: Place | null): Promise<string | null>;
+	setEntryPlace(file: TFile, place: Place | null, withWeather: boolean): Promise<string | null>;
 	journalEntries(): Array<{ file: TFile; date: Moment }>;
 }
 
@@ -33,7 +34,8 @@ function card(parent: HTMLElement, label?: string): HTMLElement {
 	return c;
 }
 
-export async function renderSection(host: JournalHost, section: string, el: HTMLElement, file: TFile): Promise<void> {
+export async function renderSection(host: JournalHost, source: string, el: HTMLElement, file: TFile): Promise<void> {
+	const { section, options } = parseBlock(source);
 	const date = entryDate(host.settings, file);
 	if (!date) return;
 	const fm: Frontmatter = host.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
@@ -41,14 +43,14 @@ export async function renderSection(host: JournalHost, section: string, el: HTML
 	el.addEventListener("mousedown", (e) => { if (!(e.target instanceof HTMLAnchorElement)) e.stopPropagation(); });
 
 	switch (section) {
-		case "header": return renderHeader(host, el, file, date, fm);
-		case "reading": return host.settings.showReading ? renderReading(host, el, file, date, fm) : undefined;
-		case "checkin": return renderCheckIn(host, el, file, fm);
-		case "onthisday": return host.settings.showOnThisDay ? renderOnThisDay(host, el, date) : undefined;
+		case "header": return renderHeader(host, el, file, date, fm, blockShowsWeather(options));
+		case "reading": return renderReading(host, el, file, date, fm);
+		case "checkin": return renderCheckIn(host, el, file, fm, blockFields(options));
+		case "onthisday": return renderOnThisDay(host, el, date);
 	}
 }
 
-async function renderHeader(host: JournalHost, el: HTMLElement, file: TFile, date: Moment, fm: Frontmatter): Promise<void> {
+async function renderHeader(host: JournalHost, el: HTMLElement, file: TFile, date: Moment, fm: Frontmatter, weatherOn: boolean): Promise<void> {
 	const { app, settings } = host;
 	const c = card(el);
 	const top = c.createDiv({ cls: "dj-header" });
@@ -70,7 +72,7 @@ async function renderHeader(host: JournalHost, el: HTMLElement, file: TFile, dat
 		weatherChip.setText(weather ?? "");
 		weatherChip.toggle(!!weather);
 	};
-	showWeather(settings.showWeather && fm.weather ? String(fm.weather) : null);
+	showWeather(weatherOn && fm.weather ? String(fm.weather) : null);
 
 	const place = entryPlace(fm, settings.home);
 	const placeChip = chips.createEl("a", { cls: "dj-chip", href: "#", attr: { "aria-label": "Change location for this entry" } });
@@ -78,17 +80,17 @@ async function renderHeader(host: JournalHost, el: HTMLElement, file: TFile, dat
 	const placeName = placeChip.createSpan({ text: place.name });
 	placeChip.onclick = (e) => {
 		e.preventDefault();
-		const own = hasOwnPlace(app.metadataCache.getFileCache(file)?.frontmatter);
-		new PlaceModal(app, own ? settings.home : null, async (chosen) => {
+		const current = entryPlace(app.metadataCache.getFileCache(file)?.frontmatter, settings.home);
+		new PlaceModal(app, current.name !== settings.home.name ? settings.home : null, async (chosen) => {
 			placeName.setText((chosen ?? settings.home).name);
-			const weather = await host.setEntryPlace(file, chosen);
-			showWeather(settings.showWeather ? weather : null);
+			const weather = await host.setEntryPlace(file, chosen, weatherOn);
+			showWeather(weatherOn ? weather : null);
 		}).open();
 	};
 
 	// First time an entry is opened, look up that day's weather and save it.
 	// Tried once per entry per session, so a failed lookup can't turn into a retry loop.
-	if (settings.showWeather && !fm.weather && !host.weatherTried.has(file.path) && !date.isAfter(moment(), "day")) {
+	if (weatherOn && !fm.weather && !host.weatherTried.has(file.path) && !date.isAfter(moment(), "day")) {
 		host.weatherTried.add(file.path);
 		const weather = await fetchWeather(place, date, settings.units);
 		if (weather) {
@@ -164,9 +166,8 @@ async function renderReading(host: JournalHost, el: HTMLElement, file: TFile, da
 	}
 }
 
-function renderCheckIn(host: JournalHost, el: HTMLElement, file: TFile, fm: Frontmatter): void {
-	const { app, settings } = host;
-	const fields = settings.fields;
+function renderCheckIn(host: JournalHost, el: HTMLElement, file: TFile, fm: Frontmatter, fields: CheckInFields): void {
+	const { app } = host;
 	if (!fields.rating && !fields.sleep && !fields.exercise && !fields.food) return;
 	const save = (key: string, value: unknown) => app.fileManager.processFrontMatter(file, (f) => {
 		if (value === null) delete f[key]; else f[key] = value;
