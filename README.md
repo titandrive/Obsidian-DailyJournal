@@ -20,7 +20,7 @@ Commands that act on an entry only appear while a journal entry is open.
 
 ## With Obsidian's Daily notes
 
-Daily Journal uses the same folder and date format as Daily notes (copied on first run, adjustable in settings). Notes that Daily notes, a calendar plugin, or a dashboard create are filled with the journal layout automatically while they're empty, so leave Daily notes' **Template** setting blank.
+Daily Journal uses the same folder and date format as Daily notes (copied on first run, adjustable in settings). With **Use as Daily notes template** on (the default), it keeps the journal layout in a template file (`Daily Journal.md` in your Templates folder) and sets it as Daily notes' template, so Obsidian's own daily-note command uses it. Empty entries created any other way (calendars, dashboards) are filled with the layout too.
 
 ## Settings
 

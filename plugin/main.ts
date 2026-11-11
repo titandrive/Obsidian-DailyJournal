@@ -96,6 +96,7 @@ export default class DailyJournal extends Plugin implements JournalHost {
 		// Fill new, empty entries (e.g. from Obsidian's Daily notes or the Hearth "Today" card) with the template.
 		this.app.workspace.onLayoutReady(() => {
 			this.registerEvent(this.app.vault.on("create", (file) => this.fillIfEmpty(file)));
+			void this.syncDailyTemplate();
 		});
 	}
 
@@ -114,6 +115,48 @@ export default class DailyJournal extends Plugin implements JournalHost {
 	async saveSettings(): Promise<void> {
 		await this.saveData(this.settings);
 		this.applyNoteChrome();
+		await this.syncDailyTemplate();
+	}
+
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	private corePlugin(id: string): any {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		return (this.app as any).internalPlugins?.getPluginById?.(id)?.instance;
+	}
+
+	/** Where the journal layout is kept as a template: the core Templates folder, if set. */
+	templatePath(): string {
+		const folder = this.corePlugin("templates")?.options?.folder;
+		return normalizePath(`${folder ? folder + "/" : ""}Daily Journal.md`);
+	}
+
+	/**
+	 * With "Use as Daily notes template" on, keep the template file in step with the settings and
+	 * point Daily notes at it. Turned off, clear Daily notes' template if it still points here.
+	 */
+	async syncDailyTemplate(): Promise<void> {
+		const path = this.templatePath();
+		const name = path.replace(/\.md$/, "");
+		const daily = this.corePlugin("daily-notes");
+		const setDailyTemplate = async (value: string) => {
+			if (!daily?.options || daily.options.template === value) return;
+			daily.options.template = value;
+			await daily.plugin?.saveData?.(daily.options);
+		};
+
+		if (this.settings.useAsDailyTemplate) {
+			const text = entryTemplate(this.settings);
+			const existing = this.app.vault.getAbstractFileByPath(path);
+			if (existing instanceof TFile) {
+				if ((await this.app.vault.read(existing)) !== text) await this.app.vault.modify(existing, text);
+			} else {
+				await this.ensureFolder(path);
+				await this.app.vault.create(path, text);
+			}
+			await setDailyTemplate(name);
+		} else if (normalizePath(daily?.options?.template ?? "") === name) {
+			await setDailyTemplate("");
+		}
 	}
 
 	/** Hides the filename title and Properties box in journal notes (the cards show that info). */
@@ -172,27 +215,8 @@ export default class DailyJournal extends Plugin implements JournalHost {
 		if (!this.settings.fillNewEntries || !entryDate(this.settings, file) || !(file instanceof TFile)) return;
 		// Give whatever created the file (e.g. Daily notes with its own template) a moment to write first.
 		window.setTimeout(async () => {
-			const text = await this.app.vault.read(file);
-			const untouched = text.trim() === "" || (this.settings.replaceDailyTemplate && await this.isDailyNotesTemplate(text));
-			if (untouched) await this.app.vault.modify(file, entryTemplate(this.settings));
+			if ((await this.app.vault.read(file)).trim() === "") await this.app.vault.modify(file, entryTemplate(this.settings));
 		}, 500);
-	}
-
-	/**
-	 * Whether a note's text is exactly what Daily notes' template produces ({{date}}-style
-	 * placeholders match anything). Anything with real writing in it doesn't match.
-	 */
-	private async isDailyNotesTemplate(text: string): Promise<boolean> {
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const path = (this.app as any).internalPlugins?.getPluginById?.("daily-notes")?.instance?.options?.template;
-		if (!path) return false;
-		const file = this.app.vault.getAbstractFileByPath(normalizePath(path.endsWith(".md") ? path : path + ".md"));
-		if (!(file instanceof TFile)) return false;
-		const template = (await this.app.vault.read(file)).trim();
-		const pattern = template.split(/\{\{[^}]*\}\}/)
-			.map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-			.join("[\\s\\S]*?");
-		return new RegExp(`^${pattern}$`).test(text.trim());
 	}
 
 	/** Moves an entry to another date and fetches that date's weather for the entry's location. */

@@ -572,7 +572,7 @@ var DEFAULT_SETTINGS = {
     "What was the worst part of your day?"
   ],
   fillNewEntries: true,
-  replaceDailyTemplate: true,
+  useAsDailyTemplate: true,
   hideNoteChrome: true
 };
 
@@ -601,8 +601,8 @@ var JournalSettingTab = class extends import_obsidian6.PluginSettingTab {
       s.fillNewEntries = v;
       await save();
     }));
-    new import_obsidian6.Setting(containerEl).setName("Replace Daily notes template").setDesc("If Daily notes has a template set, swap it for the journal layout when a new entry is created. Entries that already have your writing (e.g. synced from another device) are never touched.").addToggle((t) => t.setValue(s.replaceDailyTemplate).onChange(async (v) => {
-      s.replaceDailyTemplate = v;
+    new import_obsidian6.Setting(containerEl).setName("Use as Daily notes template").setDesc(`Keeps the journal layout in ${this.plugin.templatePath()} and sets it as Daily notes' template, so Obsidian's own daily-note command uses it.`).addToggle((t) => t.setValue(s.useAsDailyTemplate).onChange(async (v) => {
+      s.useAsDailyTemplate = v;
       await save();
     }));
     new import_obsidian6.Setting(containerEl).setName("Writing prompts").setDesc("One per line. The first becomes the main heading; the rest are sub-headings. Used for new entries.").addTextArea((t) => {
@@ -759,6 +759,7 @@ var DailyJournal = class extends import_obsidian7.Plugin {
     }));
     this.app.workspace.onLayoutReady(() => {
       this.registerEvent(this.app.vault.on("create", (file) => this.fillIfEmpty(file)));
+      void this.syncDailyTemplate();
     });
   }
   async loadSettings() {
@@ -776,6 +777,49 @@ var DailyJournal = class extends import_obsidian7.Plugin {
   async saveSettings() {
     await this.saveData(this.settings);
     this.applyNoteChrome();
+    await this.syncDailyTemplate();
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  corePlugin(id) {
+    var _a, _b, _c;
+    return (_c = (_b = (_a = this.app.internalPlugins) == null ? void 0 : _a.getPluginById) == null ? void 0 : _b.call(_a, id)) == null ? void 0 : _c.instance;
+  }
+  /** Where the journal layout is kept as a template: the core Templates folder, if set. */
+  templatePath() {
+    var _a, _b;
+    const folder = (_b = (_a = this.corePlugin("templates")) == null ? void 0 : _a.options) == null ? void 0 : _b.folder;
+    return (0, import_obsidian7.normalizePath)(`${folder ? folder + "/" : ""}Daily Journal.md`);
+  }
+  /**
+   * With "Use as Daily notes template" on, keep the template file in step with the settings and
+   * point Daily notes at it. Turned off, clear Daily notes' template if it still points here.
+   */
+  async syncDailyTemplate() {
+    var _a, _b;
+    const path = this.templatePath();
+    const name = path.replace(/\.md$/, "");
+    const daily = this.corePlugin("daily-notes");
+    const setDailyTemplate = async (value) => {
+      var _a2, _b2;
+      if (!(daily == null ? void 0 : daily.options) || daily.options.template === value)
+        return;
+      daily.options.template = value;
+      await ((_b2 = (_a2 = daily.plugin) == null ? void 0 : _a2.saveData) == null ? void 0 : _b2.call(_a2, daily.options));
+    };
+    if (this.settings.useAsDailyTemplate) {
+      const text = entryTemplate(this.settings);
+      const existing = this.app.vault.getAbstractFileByPath(path);
+      if (existing instanceof import_obsidian7.TFile) {
+        if (await this.app.vault.read(existing) !== text)
+          await this.app.vault.modify(existing, text);
+      } else {
+        await this.ensureFolder(path);
+        await this.app.vault.create(path, text);
+      }
+      await setDailyTemplate(name);
+    } else if ((0, import_obsidian7.normalizePath)((_b = (_a = daily == null ? void 0 : daily.options) == null ? void 0 : _a.template) != null ? _b : "") === name) {
+      await setDailyTemplate("");
+    }
   }
   /** Hides the filename title and Properties box in journal notes (the cards show that info). */
   applyNoteChrome() {
@@ -827,27 +871,9 @@ var DailyJournal = class extends import_obsidian7.Plugin {
     if (!this.settings.fillNewEntries || !entryDate(this.settings, file) || !(file instanceof import_obsidian7.TFile))
       return;
     window.setTimeout(async () => {
-      const text = await this.app.vault.read(file);
-      const untouched = text.trim() === "" || this.settings.replaceDailyTemplate && await this.isDailyNotesTemplate(text);
-      if (untouched)
+      if ((await this.app.vault.read(file)).trim() === "")
         await this.app.vault.modify(file, entryTemplate(this.settings));
     }, 500);
-  }
-  /**
-   * Whether a note's text is exactly what Daily notes' template produces ({{date}}-style
-   * placeholders match anything). Anything with real writing in it doesn't match.
-   */
-  async isDailyNotesTemplate(text) {
-    var _a, _b, _c, _d, _e;
-    const path = (_e = (_d = (_c = (_b = (_a = this.app.internalPlugins) == null ? void 0 : _a.getPluginById) == null ? void 0 : _b.call(_a, "daily-notes")) == null ? void 0 : _c.instance) == null ? void 0 : _d.options) == null ? void 0 : _e.template;
-    if (!path)
-      return false;
-    const file = this.app.vault.getAbstractFileByPath((0, import_obsidian7.normalizePath)(path.endsWith(".md") ? path : path + ".md"));
-    if (!(file instanceof import_obsidian7.TFile))
-      return false;
-    const template = (await this.app.vault.read(file)).trim();
-    const pattern = template.split(/\{\{[^}]*\}\}/).map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[\\s\\S]*?");
-    return new RegExp(`^${pattern}$`).test(text.trim());
   }
   /** Moves an entry to another date and fetches that date's weather for the entry's location. */
   async moveEntry(file, date) {
