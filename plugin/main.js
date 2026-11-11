@@ -572,6 +572,7 @@ var DEFAULT_SETTINGS = {
     "What was the worst part of your day?"
   ],
   fillNewEntries: true,
+  replaceDailyTemplate: true,
   hideNoteChrome: true
 };
 
@@ -598,6 +599,10 @@ var JournalSettingTab = class extends import_obsidian6.PluginSettingTab {
     }));
     new import_obsidian6.Setting(containerEl).setName("Fill new entries").setDesc("When an empty entry is created (Daily notes, a calendar, Hearth), fill it with the journal layout.").addToggle((t) => t.setValue(s.fillNewEntries).onChange(async (v) => {
       s.fillNewEntries = v;
+      await save();
+    }));
+    new import_obsidian6.Setting(containerEl).setName("Replace Daily notes template").setDesc("If Daily notes has a template set, swap it for the journal layout when a new entry is created. Entries that already have your writing (e.g. synced from another device) are never touched.").addToggle((t) => t.setValue(s.replaceDailyTemplate).onChange(async (v) => {
+      s.replaceDailyTemplate = v;
       await save();
     }));
     new import_obsidian6.Setting(containerEl).setName("Writing prompts").setDesc("One per line. The first becomes the main heading; the rest are sub-headings. Used for new entries.").addTextArea((t) => {
@@ -822,9 +827,27 @@ var DailyJournal = class extends import_obsidian7.Plugin {
     if (!this.settings.fillNewEntries || !entryDate(this.settings, file) || !(file instanceof import_obsidian7.TFile))
       return;
     window.setTimeout(async () => {
-      if ((await this.app.vault.read(file)).trim() === "")
+      const text = await this.app.vault.read(file);
+      const untouched = text.trim() === "" || this.settings.replaceDailyTemplate && await this.isDailyNotesTemplate(text);
+      if (untouched)
         await this.app.vault.modify(file, entryTemplate(this.settings));
     }, 500);
+  }
+  /**
+   * Whether a note's text is exactly what Daily notes' template produces ({{date}}-style
+   * placeholders match anything). Anything with real writing in it doesn't match.
+   */
+  async isDailyNotesTemplate(text) {
+    var _a, _b, _c, _d, _e;
+    const path = (_e = (_d = (_c = (_b = (_a = this.app.internalPlugins) == null ? void 0 : _a.getPluginById) == null ? void 0 : _b.call(_a, "daily-notes")) == null ? void 0 : _c.instance) == null ? void 0 : _d.options) == null ? void 0 : _e.template;
+    if (!path)
+      return false;
+    const file = this.app.vault.getAbstractFileByPath((0, import_obsidian7.normalizePath)(path.endsWith(".md") ? path : path + ".md"));
+    if (!(file instanceof import_obsidian7.TFile))
+      return false;
+    const template = (await this.app.vault.read(file)).trim();
+    const pattern = template.split(/\{\{[^}]*\}\}/).map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[\\s\\S]*?");
+    return new RegExp(`^${pattern}$`).test(text.trim());
   }
   /** Moves an entry to another date and fetches that date's weather for the entry's location. */
   async moveEntry(file, date) {

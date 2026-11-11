@@ -172,8 +172,27 @@ export default class DailyJournal extends Plugin implements JournalHost {
 		if (!this.settings.fillNewEntries || !entryDate(this.settings, file) || !(file instanceof TFile)) return;
 		// Give whatever created the file (e.g. Daily notes with its own template) a moment to write first.
 		window.setTimeout(async () => {
-			if ((await this.app.vault.read(file)).trim() === "") await this.app.vault.modify(file, entryTemplate(this.settings));
+			const text = await this.app.vault.read(file);
+			const untouched = text.trim() === "" || (this.settings.replaceDailyTemplate && await this.isDailyNotesTemplate(text));
+			if (untouched) await this.app.vault.modify(file, entryTemplate(this.settings));
 		}, 500);
+	}
+
+	/**
+	 * Whether a note's text is exactly what Daily notes' template produces ({{date}}-style
+	 * placeholders match anything). Anything with real writing in it doesn't match.
+	 */
+	private async isDailyNotesTemplate(text: string): Promise<boolean> {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const path = (this.app as any).internalPlugins?.getPluginById?.("daily-notes")?.instance?.options?.template;
+		if (!path) return false;
+		const file = this.app.vault.getAbstractFileByPath(normalizePath(path.endsWith(".md") ? path : path + ".md"));
+		if (!(file instanceof TFile)) return false;
+		const template = (await this.app.vault.read(file)).trim();
+		const pattern = template.split(/\{\{[^}]*\}\}/)
+			.map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+			.join("[\\s\\S]*?");
+		return new RegExp(`^${pattern}$`).test(text.trim());
 	}
 
 	/** Moves an entry to another date and fetches that date's weather for the entry's location. */

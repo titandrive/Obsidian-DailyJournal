@@ -30,6 +30,10 @@ export class JournalSettingTab extends PluginSettingTab {
 			.setDesc("When an empty entry is created (Daily notes, a calendar, Hearth), fill it with the journal layout.")
 			.addToggle((t) => t.setValue(s.fillNewEntries).onChange(async (v) => { s.fillNewEntries = v; await save(); }));
 		new Setting(containerEl)
+			.setName("Replace Daily notes template")
+			.setDesc("If Daily notes has a template set, swap it for the journal layout when a new entry is created. Entries that already have your writing (e.g. synced from another device) are never touched.")
+			.addToggle((t) => t.setValue(s.replaceDailyTemplate).onChange(async (v) => { s.replaceDailyTemplate = v; await save(); }));
+		new Setting(containerEl)
 			.setName("Writing prompts")
 			.setDesc("One per line. The first becomes the main heading; the rest are sub-headings. Used for new entries.")
 			.addTextArea((t) => {

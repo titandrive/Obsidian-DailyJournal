@@ -22,6 +22,7 @@ export interface JournalSettings {
 	fields: CheckInFields;
 	prompts: string[];
 	fillNewEntries: boolean;
+	replaceDailyTemplate: boolean;
 	hideNoteChrome: boolean;
 }
 
@@ -39,5 +40,6 @@ export const DEFAULT_SETTINGS: JournalSettings = {
 		"What was the worst part of your day?",
 	],
 	fillNewEntries: true,
+	replaceDailyTemplate: true,
 	hideNoteChrome: true,
 };
