@@ -171,6 +171,18 @@ a.dj-book-title { font-weight: 650; font-size: 1.05em; color: var(--text-normal)
 button.dj-prompt-add { display: flex; align-items: center; gap: .4em; margin-top: .6em; }
 .dj-prompts-footer { display: flex; justify-content: flex-end; gap: .5em; margin-top: 1.2em; }
 
-/* ---- Settings: a card's own settings, indented under it ----------------- */
+/* ---- Settings: each card's settings grouped into one block ------------- */
 
-.setting-item.dj-setting-sub { margin-left: 1.6em; padding-left: 1em; border-top: none; border-left: 2px solid var(--background-modifier-border); }
+/* Themes often draw every setting as its own card; inside a group, flatten them into one. */
+.vertical-tab-content .dj-setting-group {
+	background: var(--background-secondary); border-radius: var(--radius-l, 12px);
+	padding: .2em 1em; margin: .6em 0;
+}
+.vertical-tab-content .dj-setting-group > .setting-item {
+	background: transparent !important; box-shadow: none !important; border: none !important;
+	border-radius: 0 !important; margin: 0 !important; padding: .75em 0 !important;
+}
+.vertical-tab-content .dj-setting-group > .setting-item.dj-setting-sub {
+	padding-left: 1.4em !important;
+	border-top: 1px solid color-mix(in srgb, var(--background-modifier-border) 60%, transparent) !important;
+}

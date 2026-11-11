@@ -45,15 +45,17 @@ export class JournalSettingTab extends PluginSettingTab {
 			}));
 
 		new Setting(containerEl).setName("Cards").setHeading();
-		// A card, with its own settings indented underneath (hidden while the card is off).
+		// Each card is one block: its main setting on top, its own settings indented inside it.
+		let group = containerEl;
+		const card = () => { group = containerEl.createDiv({ cls: "dj-setting-group" }); return group; };
 		const sub = (setting: Setting, visible = true) => {
 			setting.settingEl.addClass("dj-setting-sub");
 			setting.settingEl.toggle(visible);
 			return setting;
 		};
 
-		new Setting(containerEl).setName("Header").setDesc("The date, previous/next entry links, that day's weather, and the entry's location. Always shown.");
-		const home = sub(new Setting(containerEl).setName("Default location").setDesc(s.home.name));
+		new Setting(card()).setName("Header").setDesc("The date, previous/next entry links, that day's weather, and the entry's location. Always shown.");
+		const home = sub(new Setting(group).setName("Default location").setDesc(s.home.name));
 		home.addButton((b) => b.setButtonText("Change…").onClick(() => {
 			new PlaceModal(this.app, null, async (place) => {
 				if (!place) return;
@@ -62,28 +64,28 @@ export class JournalSettingTab extends PluginSettingTab {
 				this.display();
 			}, "Default location").open();
 		}));
-		sub(new Setting(containerEl).setName("Temperature"))
+		sub(new Setting(group).setName("Temperature"))
 			.addDropdown((d) => d.addOption("f", "Fahrenheit (°F)").addOption("c", "Celsius (°C)").setValue(s.units)
 				.onChange(async (v) => { s.units = v === "c" ? "c" : "f"; await save(); }));
 
-		new Setting(containerEl)
+		new Setting(card())
 			.setName("Reading")
 			.setDesc("Your current book, its progress, and highlights made that day (from book notes, e.g. MoonSync).")
 			.addToggle((t) => t.setValue(s.showReading).onChange(async (v) => { s.showReading = v; await save(); this.display(); }));
-		sub(new Setting(containerEl).setName("Books folder").setDesc("Where book notes live."), s.showReading)
+		sub(new Setting(group).setName("Books folder").setDesc("Where book notes live."), s.showReading)
 			.addText((t) => t.setPlaceholder("Books").setValue(s.booksFolder)
 				.onChange(async (v) => { s.booksFolder = normalizePath(v || "Books"); await save(); }));
 
-		new Setting(containerEl).setName("Check-in").setDesc("Fields saved as properties, so Bases can chart and query them. Hidden when all are off.");
+		new Setting(card()).setName("Check-in").setDesc("Fields saved as properties, so Bases can chart and query them. Hidden when all are off.");
 		const fields: Array<[keyof CheckInFields, string]> = [
 			["rating", "Day rating (1–10)"], ["sleep", "Sleep (hours)"], ["exercise", "Exercise"], ["food", "Food (breakfast, lunch, dinner)"],
 		];
 		for (const [key, name] of fields) {
-			sub(new Setting(containerEl).setName(name))
+			sub(new Setting(group).setName(name))
 				.addToggle((t) => t.setValue(s.fields[key]).onChange(async (v) => { s.fields[key] = v; await save(); }));
 		}
 
-		new Setting(containerEl)
+		new Setting(card())
 			.setName("On this day")
 			.setDesc("Links to entries from the same date in earlier months and years.")
 			.addToggle((t) => t.setValue(s.showOnThisDay).onChange(async (v) => { s.showOnThisDay = v; await save(); }));
