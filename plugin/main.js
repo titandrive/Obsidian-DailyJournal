@@ -452,6 +452,7 @@ async function highlightsOn(app, folder, day) {
 }
 
 // src/template.ts
+var SHOW_CHROME = "dj-show-chrome";
 var FIELD_KEYS = ["rating", "sleep", "exercise", "food"];
 var block = (line) => "```journal\n" + line + "\n```\n";
 function parseBlock(source) {
@@ -485,6 +486,8 @@ function entryTemplate(settings) {
     "  - journal",
     "cssclasses:",
     "  - journal",
+    // Title and Properties are hidden in entries unless the entry was made with them shown.
+    ...settings.hideNoteChrome ? [] : ["  - " + SHOW_CHROME],
     // The default location is saved in the entry, so changing it later doesn't move old entries.
     `location: ${JSON.stringify(home.name)}`,
     `latitude: ${home.lat}`,
@@ -815,7 +818,7 @@ var JournalSettingTab = class extends import_obsidian6.PluginSettingTab {
         this.display();
       }).open();
     }));
-    new import_obsidian6.Setting(containerEl).setName("Cards").setHeading().setDesc('Changes apply to new entries. Use "Apply to existing entries" below to update older ones.');
+    new import_obsidian6.Setting(containerEl).setName("Cards").setHeading().setDesc('Changes apply to new entries. Use "Apply to existing entries" at the bottom to update older ones.');
     let group = containerEl;
     const card2 = () => {
       group = containerEl.createDiv({ cls: "dj-setting-group" });
@@ -871,7 +874,13 @@ var JournalSettingTab = class extends import_obsidian6.PluginSettingTab {
       s.showOnThisDay = v;
       await save();
     }));
-    new import_obsidian6.Setting(containerEl).setName("Apply to existing entries").setDesc("Update older entries to the current cards, weather and check-in fields, and give entries without a location the default one. Your writing and headings aren't changed.").addButton((b) => b.setButtonText("Apply\u2026").onClick(async () => {
+    new import_obsidian6.Setting(containerEl).setName("Appearance").setHeading();
+    new import_obsidian6.Setting(containerEl).setName("Hide title and properties in entries").setDesc("The cards already show the date and check-in data.").addToggle((t) => t.setValue(s.hideNoteChrome).onChange(async (v) => {
+      s.hideNoteChrome = v;
+      await save();
+    }));
+    new import_obsidian6.Setting(containerEl).setName("Existing entries").setHeading();
+    new import_obsidian6.Setting(containerEl).setName("Apply to existing entries").setDesc("Settings above only apply to new entries. This updates older entries to match them: cards, weather, check-in fields and whether the title and Properties show, and gives entries without a location the default one. Your writing and headings aren't changed.").addButton((b) => b.setButtonText("Apply\u2026").onClick(async () => {
       const files = await this.plugin.entriesNeedingLayout();
       if (!files.length) {
         new import_obsidian6.Notice("All entries already match the current settings.");
@@ -881,17 +890,12 @@ var JournalSettingTab = class extends import_obsidian6.PluginSettingTab {
       new ConfirmModal(
         this.app,
         "Apply to existing entries",
-        `This updates ${n} entr${n === 1 ? "y" : "ies"} to the current card settings. Your writing and headings aren't changed.`,
+        `This updates ${n} entr${n === 1 ? "y" : "ies"} to the current settings. Your writing and headings aren't changed.`,
         "Update",
         () => {
           void this.plugin.applyLayoutToEntries(files);
         }
       ).open();
-    }));
-    new import_obsidian6.Setting(containerEl).setName("Appearance").setHeading();
-    new import_obsidian6.Setting(containerEl).setName("Hide title and properties in entries").setDesc("The cards already show the date and check-in data.").addToggle((t) => t.setValue(s.hideNoteChrome).onChange(async (v) => {
-      s.hideNoteChrome = v;
-      await save();
     }));
   }
 };
@@ -933,7 +937,6 @@ var DailyJournal = class extends import_obsidian7.Plugin {
   async onload() {
     await this.loadSettings();
     this.addSettingTab(new JournalSettingTab(this.app, this));
-    this.applyNoteChrome();
     this.registerMarkdownCodeBlockProcessor("journal", (source, el, ctx) => {
       const file = this.app.vault.getAbstractFileByPath(ctx.sourcePath);
       if (file instanceof import_obsidian7.TFile)
@@ -1002,7 +1005,6 @@ var DailyJournal = class extends import_obsidian7.Plugin {
   }
   async saveSettings() {
     await this.saveData(this.settings);
-    this.applyNoteChrome();
     await this.syncDailyTemplate();
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1047,13 +1049,6 @@ var DailyJournal = class extends import_obsidian7.Plugin {
       await setDailyTemplate("");
     }
   }
-  /** Hides the filename title and Properties box in journal notes (the cards show that info). */
-  applyNoteChrome() {
-    document.body.toggleClass("dj-hide-chrome", this.settings.hideNoteChrome);
-  }
-  onunload() {
-    document.body.removeClass("dj-hide-chrome");
-  }
   journalEntries() {
     return this.app.vault.getMarkdownFiles().map((file) => ({ file, date: entryDate(this.settings, file) })).filter((e) => e.date !== null).sort((a, b) => a.date.valueOf() - b.date.valueOf());
   }
@@ -1084,29 +1079,40 @@ var DailyJournal = class extends import_obsidian7.Plugin {
     const header = (await this.app.vault.cachedRead(file)).match(/```journal\n(header[^\n]*)/);
     return header ? blockShowsWeather(parseBlock(header[1]).options) : false;
   }
-  /** Entries the current card settings would change (cards, weather, check-in fields, missing location). */
+  showsChrome(fm) {
+    const classes = fm == null ? void 0 : fm.cssclasses;
+    return Array.isArray(classes) ? classes.includes(SHOW_CHROME) : classes === SHOW_CHROME;
+  }
+  /** Entries the current settings would change (cards, weather, check-in fields, appearance, missing location). */
   async entriesNeedingLayout() {
-    var _a, _b;
+    var _a;
     const out = [];
     for (const { file } of this.journalEntries()) {
       const text = await this.app.vault.cachedRead(file);
-      const noPlace = !((_b = (_a = this.app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter) == null ? void 0 : _b.location) && /```journal\nheader/.test(text);
-      if (applyLayout(text, this.settings) !== text || noPlace)
+      const fm = (_a = this.app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter;
+      const isLayout = /```journal\nheader/.test(text);
+      const noPlace = isLayout && !(fm == null ? void 0 : fm.location);
+      const chromeOff = isLayout && this.showsChrome(fm) !== !this.settings.hideNoteChrome;
+      if (applyLayout(text, this.settings) !== text || noPlace || chromeOff)
         out.push(file);
     }
     return out;
   }
   /** Brings existing entries up to the current card settings. Writing and headings are untouched. */
   async applyLayoutToEntries(files) {
-    var _a, _b;
     const home = this.settings.home;
     for (const file of files) {
       await this.app.vault.process(file, (text) => applyLayout(text, this.settings));
-      if (!((_b = (_a = this.app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter) == null ? void 0 : _b.location)) {
-        await this.app.fileManager.processFrontMatter(file, (fm) => {
+      await this.app.fileManager.processFrontMatter(file, (fm) => {
+        if (!fm.location)
           Object.assign(fm, { location: home.name, latitude: home.lat, longitude: home.lon, timezone: home.tz });
-        });
-      }
+        const classes = (Array.isArray(fm.cssclasses) ? fm.cssclasses : [fm.cssclasses]).filter((c) => typeof c === "string" && c && c !== SHOW_CHROME);
+        if (!classes.includes("journal"))
+          classes.unshift("journal");
+        if (!this.settings.hideNoteChrome)
+          classes.push(SHOW_CHROME);
+        fm.cssclasses = classes;
+      });
     }
     new import_obsidian7.Notice(`Updated ${files.length} entr${files.length === 1 ? "y" : "ies"}.`);
   }

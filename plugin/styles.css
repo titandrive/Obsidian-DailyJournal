@@ -1,7 +1,8 @@
 /* ---- Journal notes ---------------------------------------------------- */
 
-.dj-hide-chrome .journal .inline-title,
-.dj-hide-chrome .journal .metadata-container { display: none; }
+/* Title and Properties are hidden in journal entries, unless the entry was made with them shown. */
+.journal:not(.dj-show-chrome) .inline-title,
+.journal:not(.dj-show-chrome) .metadata-container { display: none; }
 
 /* No code-block hover outline or </> button around the cards. */
 .cm-preview-code-block:has(.dj-block) .edit-block-button { display: none; }

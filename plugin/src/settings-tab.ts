@@ -45,7 +45,7 @@ export class JournalSettingTab extends PluginSettingTab {
 			}));
 
 		new Setting(containerEl).setName("Cards").setHeading()
-			.setDesc("Changes apply to new entries. Use \"Apply to existing entries\" below to update older ones.");
+			.setDesc("Changes apply to new entries. Use \"Apply to existing entries\" at the bottom to update older ones.");
 		// Each card is one block: its main setting on top, its own settings indented inside it.
 		let group = containerEl;
 		const card = () => { group = containerEl.createDiv({ cls: "dj-setting-group" }); return group; };
@@ -94,22 +94,23 @@ export class JournalSettingTab extends PluginSettingTab {
 			.setDesc("Links to entries from the same date in earlier months and years.")
 			.addToggle((t) => t.setValue(s.showOnThisDay).onChange(async (v) => { s.showOnThisDay = v; await save(); }));
 
-		new Setting(containerEl)
-			.setName("Apply to existing entries")
-			.setDesc("Update older entries to the current cards, weather and check-in fields, and give entries without a location the default one. Your writing and headings aren't changed.")
-			.addButton((b) => b.setButtonText("Apply…").onClick(async () => {
-				const files = await this.plugin.entriesNeedingLayout();
-				if (!files.length) { new Notice("All entries already match the current settings."); return; }
-				const n = files.length;
-				new ConfirmModal(this.app, "Apply to existing entries",
-					`This updates ${n} entr${n === 1 ? "y" : "ies"} to the current card settings. Your writing and headings aren't changed.`,
-					"Update", () => { void this.plugin.applyLayoutToEntries(files); }).open();
-			}));
-
 		new Setting(containerEl).setName("Appearance").setHeading();
 		new Setting(containerEl)
 			.setName("Hide title and properties in entries")
 			.setDesc("The cards already show the date and check-in data.")
 			.addToggle((t) => t.setValue(s.hideNoteChrome).onChange(async (v) => { s.hideNoteChrome = v; await save(); }));
+
+		new Setting(containerEl).setName("Existing entries").setHeading();
+		new Setting(containerEl)
+			.setName("Apply to existing entries")
+			.setDesc("Settings above only apply to new entries. This updates older entries to match them: cards, weather, check-in fields and whether the title and Properties show, and gives entries without a location the default one. Your writing and headings aren't changed.")
+			.addButton((b) => b.setButtonText("Apply…").onClick(async () => {
+				const files = await this.plugin.entriesNeedingLayout();
+				if (!files.length) { new Notice("All entries already match the current settings."); return; }
+				const n = files.length;
+				new ConfirmModal(this.app, "Apply to existing entries",
+					`This updates ${n} entr${n === 1 ? "y" : "ies"} to the current settings. Your writing and headings aren't changed.`,
+					"Update", () => { void this.plugin.applyLayoutToEntries(files); }).open();
+			}));
 	}
 }

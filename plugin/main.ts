@@ -4,7 +4,7 @@ import { MonthPicker, PlaceModal } from "./src/modals";
 import { JournalHost, renderSection } from "./src/render";
 import { DEFAULT_SETTINGS, JournalSettings, Place, Prompt } from "./src/settings";
 import { JournalSettingTab } from "./src/settings-tab";
-import { applyLayout, blockShowsWeather, entryTemplate, parseBlock } from "./src/template";
+import { applyLayout, blockShowsWeather, entryTemplate, parseBlock, SHOW_CHROME } from "./src/template";
 import { entryPlace, fetchWeather } from "./src/weather";
 
 /** One rendered `journal` block. Redraws when its entry's properties change (e.g. weather arrives). */
@@ -44,7 +44,6 @@ export default class DailyJournal extends Plugin implements JournalHost {
 	async onload(): Promise<void> {
 		await this.loadSettings();
 		this.addSettingTab(new JournalSettingTab(this.app, this));
-		this.applyNoteChrome();
 
 		this.registerMarkdownCodeBlockProcessor("journal", (source, el, ctx) => {
 			const file = this.app.vault.getAbstractFileByPath(ctx.sourcePath);
@@ -117,7 +116,6 @@ export default class DailyJournal extends Plugin implements JournalHost {
 
 	async saveSettings(): Promise<void> {
 		await this.saveData(this.settings);
-		this.applyNoteChrome();
 		await this.syncDailyTemplate();
 	}
 
@@ -162,15 +160,6 @@ export default class DailyJournal extends Plugin implements JournalHost {
 		}
 	}
 
-	/** Hides the filename title and Properties box in journal notes (the cards show that info). */
-	applyNoteChrome(): void {
-		document.body.toggleClass("dj-hide-chrome", this.settings.hideNoteChrome);
-	}
-
-	onunload(): void {
-		document.body.removeClass("dj-hide-chrome");
-	}
-
 	journalEntries(): Array<{ file: TFile; date: Moment }> {
 		return this.app.vault.getMarkdownFiles()
 			.map((file) => ({ file, date: entryDate(this.settings, file) }))
@@ -207,13 +196,21 @@ export default class DailyJournal extends Plugin implements JournalHost {
 		return header ? blockShowsWeather(parseBlock(header[1]).options) : false;
 	}
 
-	/** Entries the current card settings would change (cards, weather, check-in fields, missing location). */
+	private showsChrome(fm: Record<string, unknown> | undefined): boolean {
+		const classes = fm?.cssclasses;
+		return Array.isArray(classes) ? classes.includes(SHOW_CHROME) : classes === SHOW_CHROME;
+	}
+
+	/** Entries the current settings would change (cards, weather, check-in fields, appearance, missing location). */
 	async entriesNeedingLayout(): Promise<TFile[]> {
 		const out: TFile[] = [];
 		for (const { file } of this.journalEntries()) {
 			const text = await this.app.vault.cachedRead(file);
-			const noPlace = !this.app.metadataCache.getFileCache(file)?.frontmatter?.location && /```journal\nheader/.test(text);
-			if (applyLayout(text, this.settings) !== text || noPlace) out.push(file);
+			const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
+			const isLayout = /```journal\nheader/.test(text);
+			const noPlace = isLayout && !fm?.location;
+			const chromeOff = isLayout && this.showsChrome(fm) !== !this.settings.hideNoteChrome;
+			if (applyLayout(text, this.settings) !== text || noPlace || chromeOff) out.push(file);
 		}
 		return out;
 	}
@@ -223,11 +220,13 @@ export default class DailyJournal extends Plugin implements JournalHost {
 		const home = this.settings.home;
 		for (const file of files) {
 			await this.app.vault.process(file, (text) => applyLayout(text, this.settings));
-			if (!this.app.metadataCache.getFileCache(file)?.frontmatter?.location) {
-				await this.app.fileManager.processFrontMatter(file, (fm) => {
-					Object.assign(fm, { location: home.name, latitude: home.lat, longitude: home.lon, timezone: home.tz });
-				});
-			}
+			await this.app.fileManager.processFrontMatter(file, (fm) => {
+				if (!fm.location) Object.assign(fm, { location: home.name, latitude: home.lat, longitude: home.lon, timezone: home.tz });
+				const classes: string[] = (Array.isArray(fm.cssclasses) ? fm.cssclasses : [fm.cssclasses]).filter((c: unknown) => typeof c === "string" && c && c !== SHOW_CHROME);
+				if (!classes.includes("journal")) classes.unshift("journal");
+				if (!this.settings.hideNoteChrome) classes.push(SHOW_CHROME);
+				fm.cssclasses = classes;
+			});
 		}
 		new Notice(`Updated ${files.length} entr${files.length === 1 ? "y" : "ies"}.`);
 	}

@@ -6,8 +6,11 @@ import { CheckInFields, JournalSettings } from "./settings";
  *   - which cards it has: the `journal` blocks present in the note
  *   - weather on/off: the header block's options ("header weather" / "header no-weather")
  *   - check-in fields: the check-in block's options ("checkin rating sleep food")
+ *   - title and Properties shown: the "dj-show-chrome" CSS class (hidden without it)
  * Blocks without options (entries made before this) keep their original behavior: weather on, all fields.
  */
+
+export const SHOW_CHROME = "dj-show-chrome";
 
 export const FIELD_KEYS: Array<keyof CheckInFields> = ["rating", "sleep", "exercise", "food"];
 type Section = "header" | "reading" | "checkin" | "onthisday";
@@ -46,6 +49,8 @@ export function entryTemplate(settings: JournalSettings): string {
 	const lines = layoutLines(settings);
 	const parts = [
 		"---", "tags:", "  - journal", "cssclasses:", "  - journal",
+		// Title and Properties are hidden in entries unless the entry was made with them shown.
+		...(settings.hideNoteChrome ? [] : ["  - " + SHOW_CHROME]),
 		// The default location is saved in the entry, so changing it later doesn't move old entries.
 		`location: ${JSON.stringify(home.name)}`, `latitude: ${home.lat}`, `longitude: ${home.lon}`, `timezone: ${JSON.stringify(home.tz)}`,
 		"---", "",
