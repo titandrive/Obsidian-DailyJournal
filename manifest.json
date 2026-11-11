@@ -1,0 +1,9 @@
+{
+	"id": "daily-journal",
+	"name": "Daily Journal",
+	"version": "1.0.0",
+	"minAppVersion": "1.4.0",
+	"description": "A daily journal with weather, location, reading progress and a check-in card for rating, sleep, exercise and food.",
+	"author": "Jimothy",
+	"isDesktopOnly": false
+}
