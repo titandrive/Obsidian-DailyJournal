@@ -50,6 +50,27 @@ function entryPath(settings, date) {
 // src/modals.ts
 var import_obsidian3 = require("obsidian");
 
+// src/settings.ts
+var MAX_PROMPT_LEVEL = 3;
+var DEFAULT_SETTINGS = {
+  folder: "Daily Notes",
+  dateFormat: "YYYY/MMM/MM-DD-YY",
+  home: { name: "Los Angeles", lat: 34.05223, lon: -118.24368, tz: "America/Los_Angeles" },
+  units: "f",
+  booksFolder: "Books",
+  showReading: true,
+  showOnThisDay: true,
+  fields: { rating: true, sleep: true, exercise: true, food: true },
+  prompts: [
+    { text: "How was your day?", level: 0 },
+    { text: "What was the best part of your day?", level: 1 },
+    { text: "What was the worst part of your day?", level: 1 }
+  ],
+  fillNewEntries: true,
+  useAsDailyTemplate: true,
+  hideNoteChrome: true
+};
+
 // src/weather.ts
 var import_obsidian2 = require("obsidian");
 function entryPlace(fm, home) {
@@ -239,6 +260,107 @@ var PlaceModal = class extends import_obsidian3.Modal {
     this.contentEl.empty();
   }
 };
+var PromptsModal = class extends import_obsidian3.Modal {
+  constructor(app, prompts, onSave) {
+    super(app);
+    this.onSave = onSave;
+    this.items = prompts.map((p) => ({ ...p }));
+  }
+  onOpen() {
+    this.modalEl.addClass("dj-modal", "dj-prompts-modal");
+    this.titleEl.setText("Writing prompts");
+    this.contentEl.createDiv({ cls: "dj-prompts-hint", text: "Drag to reorder. Indent to make a prompt a sub-heading of the one above." });
+    this.list = this.contentEl.createDiv({ cls: "dj-prompts" });
+    const add = this.contentEl.createEl("button", { cls: "dj-prompt-add" });
+    (0, import_obsidian3.setIcon)(add.createSpan(), "plus");
+    add.createSpan({ text: "Add prompt" });
+    add.onclick = () => {
+      var _a, _b, _c;
+      this.items.push({ text: "", level: (_b = (_a = this.items[this.items.length - 1]) == null ? void 0 : _a.level) != null ? _b : 0 });
+      this.render();
+      (_c = this.list.querySelector(".dj-prompt-row:last-child input")) == null ? void 0 : _c.focus();
+    };
+    const footer = this.contentEl.createDiv({ cls: "dj-prompts-footer" });
+    footer.createEl("button", { text: "Cancel" }).onclick = () => this.close();
+    const save = footer.createEl("button", { cls: "mod-cta", text: "Save" });
+    save.onclick = () => {
+      this.onSave(this.items.map((p) => ({ text: p.text.trim(), level: p.level })).filter((p) => p.text));
+      this.close();
+    };
+    this.render();
+  }
+  render() {
+    this.list.empty();
+    this.items.forEach((item, index) => {
+      const row = this.list.createDiv({ cls: "dj-prompt-row" });
+      row.style.setProperty("--dj-level", String(item.level));
+      const handle = row.createDiv({ cls: "dj-prompt-handle", attr: { "aria-label": "Drag to reorder" } });
+      (0, import_obsidian3.setIcon)(handle, "grip-vertical");
+      handle.addEventListener("pointerdown", (e) => this.startDrag(e, row, item));
+      row.createSpan({ cls: "dj-prompt-level", text: "#".repeat(2 + item.level) });
+      const input = row.createEl("input", { type: "text", attr: { placeholder: "Prompt" } });
+      input.value = item.text;
+      input.addEventListener("input", () => {
+        item.text = input.value;
+      });
+      const button = (icon, label, disabled, run) => {
+        const b = row.createEl("button", { cls: "dj-prompt-btn", attr: { "aria-label": label } });
+        (0, import_obsidian3.setIcon)(b, icon);
+        b.disabled = disabled;
+        b.onclick = run;
+      };
+      button("indent-decrease", "Outdent", item.level === 0, () => {
+        item.level--;
+        this.render();
+      });
+      button("indent-increase", "Indent", item.level >= MAX_PROMPT_LEVEL, () => {
+        item.level++;
+        this.render();
+      });
+      button("minus", "Remove", false, () => {
+        this.items.splice(index, 1);
+        this.render();
+      });
+    });
+  }
+  /** Pointer-based dragging (works with mouse and touch): rows move live, order is read back on release. */
+  startDrag(e, row, item) {
+    e.preventDefault();
+    const handle = e.currentTarget;
+    handle.setPointerCapture(e.pointerId);
+    row.addClass("is-dragging");
+    const rowItem = /* @__PURE__ */ new Map();
+    Array.from(this.list.children).forEach((el, i) => rowItem.set(el, this.items[i]));
+    const move = (ev) => {
+      const others = Array.from(this.list.children).filter((el) => el !== row);
+      const before = others.find((el) => {
+        const r = el.getBoundingClientRect();
+        return ev.clientY < r.top + r.height / 2;
+      });
+      if (before)
+        this.list.insertBefore(row, before);
+      else
+        this.list.appendChild(row);
+    };
+    const end = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", end);
+      handle.removeEventListener("pointercancel", end);
+      row.removeClass("is-dragging");
+      this.items = Array.from(this.list.children).map((el) => {
+        var _a;
+        return (_a = rowItem.get(el)) != null ? _a : item;
+      });
+      this.render();
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", end);
+    handle.addEventListener("pointercancel", end);
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
 
 // src/render.ts
 var import_obsidian5 = require("obsidian");
@@ -338,11 +460,11 @@ async function renderSection(host, section, el, file) {
     case "header":
       return renderHeader(host, el, file, date, fm);
     case "reading":
-      return renderReading(host, el, file, date, fm);
+      return host.settings.showReading ? renderReading(host, el, file, date, fm) : void 0;
     case "checkin":
       return renderCheckIn(host, el, file, fm);
     case "onthisday":
-      return renderOnThisDay(host, el, date);
+      return host.settings.showOnThisDay ? renderOnThisDay(host, el, date) : void 0;
   }
 }
 async function renderHeader(host, el, file, date, fm) {
@@ -557,25 +679,6 @@ function renderOnThisDay(host, el, date) {
     link(host.app, row, d.date.format("MMM D, YYYY"), d.file, "dj-chip");
 }
 
-// src/settings.ts
-var DEFAULT_SETTINGS = {
-  folder: "Daily Notes",
-  dateFormat: "YYYY/MMM/MM-DD-YY",
-  home: { name: "Los Angeles", lat: 34.05223, lon: -118.24368, tz: "America/Los_Angeles" },
-  units: "f",
-  booksFolder: "Books",
-  showReading: true,
-  fields: { rating: true, sleep: true, exercise: true, food: true },
-  prompts: [
-    "How was your day?",
-    "What was the best part of your day?",
-    "What was the worst part of your day?"
-  ],
-  fillNewEntries: true,
-  useAsDailyTemplate: true,
-  hideNoteChrome: true
-};
-
 // src/settings-tab.ts
 var import_obsidian6 = require("obsidian");
 var JournalSettingTab = class extends import_obsidian6.PluginSettingTab {
@@ -605,15 +708,21 @@ var JournalSettingTab = class extends import_obsidian6.PluginSettingTab {
       s.useAsDailyTemplate = v;
       await save();
     }));
-    new import_obsidian6.Setting(containerEl).setName("Writing prompts").setDesc("One per line. The first becomes the main heading; the rest are sub-headings. Used for new entries.").addTextArea((t) => {
-      t.setValue(s.prompts.join("\n")).onChange(async (v) => {
-        s.prompts = v.split("\n").map((l) => l.trim()).filter(Boolean);
+    new import_obsidian6.Setting(containerEl).setName("Writing prompts").setDesc(s.prompts.map((p) => p.text).join(" \xB7 ") || "None").addButton((b) => b.setButtonText("Edit\u2026").onClick(() => {
+      new PromptsModal(this.app, s.prompts, async (prompts) => {
+        s.prompts = prompts;
         await save();
-      });
-      t.inputEl.rows = 4;
-    });
-    new import_obsidian6.Setting(containerEl).setName("Weather & location").setHeading();
-    const home = new import_obsidian6.Setting(containerEl).setName("Default location").setDesc(s.home.name);
+        this.display();
+      }).open();
+    }));
+    new import_obsidian6.Setting(containerEl).setName("Cards").setHeading();
+    const sub = (setting, visible = true) => {
+      setting.settingEl.addClass("dj-setting-sub");
+      setting.settingEl.toggle(visible);
+      return setting;
+    };
+    new import_obsidian6.Setting(containerEl).setName("Header").setDesc("The date, previous/next entry links, that day's weather, and the entry's location. Always shown.");
+    const home = sub(new import_obsidian6.Setting(containerEl).setName("Default location").setDesc(s.home.name));
     home.addButton((b) => b.setButtonText("Change\u2026").onClick(() => {
       new PlaceModal(this.app, null, async (place) => {
         if (!place)
@@ -623,19 +732,20 @@ var JournalSettingTab = class extends import_obsidian6.PluginSettingTab {
         this.display();
       }, "Default location").open();
     }));
-    new import_obsidian6.Setting(containerEl).setName("Temperature").addDropdown((d) => d.addOption("f", "Fahrenheit (\xB0F)").addOption("c", "Celsius (\xB0C)").setValue(s.units).onChange(async (v) => {
+    sub(new import_obsidian6.Setting(containerEl).setName("Temperature")).addDropdown((d) => d.addOption("f", "Fahrenheit (\xB0F)").addOption("c", "Celsius (\xB0C)").setValue(s.units).onChange(async (v) => {
       s.units = v === "c" ? "c" : "f";
       await save();
     }));
-    new import_obsidian6.Setting(containerEl).setName("Cards").setHeading();
-    new import_obsidian6.Setting(containerEl).setName("Reading card").setDesc("Show your current book, its progress, and highlights made that day (from book notes, e.g. MoonSync).").addToggle((t) => t.setValue(s.showReading).onChange(async (v) => {
+    new import_obsidian6.Setting(containerEl).setName("Reading").setDesc("Your current book, its progress, and highlights made that day (from book notes, e.g. MoonSync).").addToggle((t) => t.setValue(s.showReading).onChange(async (v) => {
       s.showReading = v;
       await save();
+      this.display();
     }));
-    new import_obsidian6.Setting(containerEl).setName("Books folder").setDesc("Where book notes live.").addText((t) => t.setPlaceholder("Books").setValue(s.booksFolder).onChange(async (v) => {
+    sub(new import_obsidian6.Setting(containerEl).setName("Books folder").setDesc("Where book notes live."), s.showReading).addText((t) => t.setPlaceholder("Books").setValue(s.booksFolder).onChange(async (v) => {
       s.booksFolder = (0, import_obsidian6.normalizePath)(v || "Books");
       await save();
     }));
+    new import_obsidian6.Setting(containerEl).setName("Check-in").setDesc("Fields saved as properties, so Bases can chart and query them. Hidden when all are off.");
     const fields = [
       ["rating", "Day rating (1\u201310)"],
       ["sleep", "Sleep (hours)"],
@@ -643,11 +753,15 @@ var JournalSettingTab = class extends import_obsidian6.PluginSettingTab {
       ["food", "Food (breakfast, lunch, dinner)"]
     ];
     for (const [key, name] of fields) {
-      new import_obsidian6.Setting(containerEl).setName(`Check-in: ${name}`).addToggle((t) => t.setValue(s.fields[key]).onChange(async (v) => {
+      sub(new import_obsidian6.Setting(containerEl).setName(name)).addToggle((t) => t.setValue(s.fields[key]).onChange(async (v) => {
         s.fields[key] = v;
         await save();
       }));
     }
+    new import_obsidian6.Setting(containerEl).setName("On this day").setDesc("Links to entries from the same date in earlier months and years.").addToggle((t) => t.setValue(s.showOnThisDay).onChange(async (v) => {
+      s.showOnThisDay = v;
+      await save();
+    }));
     new import_obsidian6.Setting(containerEl).setName("Appearance").setHeading();
     new import_obsidian6.Setting(containerEl).setName("Hide title and properties in entries").setDesc("The cards already show the date and check-in data.").addToggle((t) => t.setValue(s.hideNoteChrome).onChange(async (v) => {
       s.hideNoteChrome = v;
@@ -664,10 +778,11 @@ function entryTemplate(settings) {
   if (settings.showReading)
     parts.push(block("reading"));
   parts.push(block("checkin"));
-  settings.prompts.forEach((prompt, i) => {
-    parts.push(`${i === 0 ? "##" : "###"} ${prompt}`, "", "");
-  });
-  parts.push(block("onthisday"));
+  for (const prompt of settings.prompts) {
+    parts.push(`${"#".repeat(2 + prompt.level)} ${prompt.text}`, "", "");
+  }
+  if (settings.showOnThisDay)
+    parts.push(block("onthisday"));
   return parts.join("\n");
 }
 
@@ -766,6 +881,7 @@ var DailyJournal = class extends import_obsidian7.Plugin {
     var _a, _b, _c, _d, _e;
     const saved = await this.loadData();
     this.settings = { ...DEFAULT_SETTINGS, ...saved != null ? saved : {}, fields: { ...DEFAULT_SETTINGS.fields, ...(_a = saved == null ? void 0 : saved.fields) != null ? _a : {} } };
+    this.settings.prompts = this.settings.prompts.map((p, i) => typeof p === "string" ? { text: p, level: i === 0 ? 0 : 1 } : p);
     if (!saved) {
       const daily = (_e = (_d = (_c = (_b = this.app.internalPlugins) == null ? void 0 : _b.getPluginById) == null ? void 0 : _c.call(_b, "daily-notes")) == null ? void 0 : _d.instance) == null ? void 0 : _e.options;
       if (daily == null ? void 0 : daily.folder)

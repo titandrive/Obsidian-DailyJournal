@@ -149,3 +149,28 @@ a.dj-book-title { font-weight: 650; font-size: 1.05em; color: var(--text-normal)
 .dj-modal button.dj-place-option:hover { background: var(--background-secondary); }
 .dj-place-detail, .dj-place-empty { color: var(--text-muted); font-size: .85em; }
 .dj-place-empty { padding: .3em .8em; }
+
+/* ---- Writing prompts dialog ------------------------------------------- */
+
+.dj-prompts-modal { width: min(560px, 94vw); }
+.dj-prompts-hint { font-size: .85em; color: var(--text-muted); margin-bottom: .8em; }
+.dj-prompts { display: flex; flex-direction: column; gap: .35em; }
+.dj-prompt-row {
+	display: flex; align-items: center; gap: .4em; padding: .3em .4em;
+	margin-left: calc(var(--dj-level, 0) * 1.6em);
+	border-radius: 9px; background: var(--background-secondary); border: 1px solid transparent;
+}
+.dj-prompt-row.is-dragging { border-color: var(--interactive-accent); box-shadow: 0 6px 18px -8px rgba(0, 0, 0, .5); opacity: .95; }
+.dj-prompt-handle { display: flex; color: var(--text-faint); cursor: grab; touch-action: none; padding: .2em; }
+.dj-prompt-row.is-dragging .dj-prompt-handle { cursor: grabbing; }
+.dj-prompt-level { font-family: var(--font-monospace); font-size: .8em; color: var(--text-faint); min-width: 2.6em; }
+.dj-prompt-row input[type="text"] { flex: 1; min-width: 0; }
+.dj-prompt-btn { display: flex; padding: .3em; height: auto; background: transparent; box-shadow: none; border: none; color: var(--text-muted); cursor: pointer; }
+.dj-prompt-btn:hover:not(:disabled) { color: var(--text-normal); }
+.dj-prompt-btn:disabled { opacity: .3; cursor: default; }
+button.dj-prompt-add { display: flex; align-items: center; gap: .4em; margin-top: .6em; }
+.dj-prompts-footer { display: flex; justify-content: flex-end; gap: .5em; margin-top: 1.2em; }
+
+/* ---- Settings: a card's own settings, indented under it ----------------- */
+
+.setting-item.dj-setting-sub { margin-left: 1.6em; padding-left: 1em; border-top: none; border-left: 2px solid var(--background-modifier-border); }

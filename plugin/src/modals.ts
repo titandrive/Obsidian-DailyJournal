@@ -1,6 +1,6 @@
-import { App, Modal, moment } from "obsidian";
+import { App, Modal, moment, setIcon } from "obsidian";
 import { Moment } from "./dates";
-import { Place } from "./settings";
+import { MAX_PROMPT_LEVEL, Place, Prompt } from "./settings";
 import { PlaceResult, searchPlaces } from "./weather";
 
 /** Month calendar for choosing a date. Days that already have an entry are marked (and can't be picked unless allowTaken). */
@@ -116,6 +116,105 @@ export class PlaceModal extends Modal {
 
 	onClose(): void {
 		window.clearTimeout(this.timer);
+		this.contentEl.empty();
+	}
+}
+
+/** Edit writing prompts: reorder by dragging, set heading level with indent/outdent, add and remove. */
+export class PromptsModal extends Modal {
+	private items: Prompt[];
+	private list!: HTMLElement;
+
+	constructor(app: App, prompts: Prompt[], private onSave: (prompts: Prompt[]) => void) {
+		super(app);
+		this.items = prompts.map((p) => ({ ...p }));
+	}
+
+	onOpen(): void {
+		this.modalEl.addClass("dj-modal", "dj-prompts-modal");
+		this.titleEl.setText("Writing prompts");
+		this.contentEl.createDiv({ cls: "dj-prompts-hint", text: "Drag to reorder. Indent to make a prompt a sub-heading of the one above." });
+		this.list = this.contentEl.createDiv({ cls: "dj-prompts" });
+
+		const add = this.contentEl.createEl("button", { cls: "dj-prompt-add" });
+		setIcon(add.createSpan(), "plus");
+		add.createSpan({ text: "Add prompt" });
+		add.onclick = () => {
+			this.items.push({ text: "", level: this.items[this.items.length - 1]?.level ?? 0 });
+			this.render();
+			this.list.querySelector<HTMLInputElement>(".dj-prompt-row:last-child input")?.focus();
+		};
+
+		const footer = this.contentEl.createDiv({ cls: "dj-prompts-footer" });
+		footer.createEl("button", { text: "Cancel" }).onclick = () => this.close();
+		const save = footer.createEl("button", { cls: "mod-cta", text: "Save" });
+		save.onclick = () => {
+			this.onSave(this.items.map((p) => ({ text: p.text.trim(), level: p.level })).filter((p) => p.text));
+			this.close();
+		};
+
+		this.render();
+	}
+
+	private render(): void {
+		this.list.empty();
+		this.items.forEach((item, index) => {
+			const row = this.list.createDiv({ cls: "dj-prompt-row" });
+			row.style.setProperty("--dj-level", String(item.level));
+
+			const handle = row.createDiv({ cls: "dj-prompt-handle", attr: { "aria-label": "Drag to reorder" } });
+			setIcon(handle, "grip-vertical");
+			handle.addEventListener("pointerdown", (e) => this.startDrag(e, row, item));
+
+			row.createSpan({ cls: "dj-prompt-level", text: "#".repeat(2 + item.level) });
+			const input = row.createEl("input", { type: "text", attr: { placeholder: "Prompt" } });
+			input.value = item.text;
+			input.addEventListener("input", () => { item.text = input.value; });
+
+			const button = (icon: string, label: string, disabled: boolean, run: () => void) => {
+				const b = row.createEl("button", { cls: "dj-prompt-btn", attr: { "aria-label": label } });
+				setIcon(b, icon);
+				b.disabled = disabled;
+				b.onclick = run;
+			};
+			button("indent-decrease", "Outdent", item.level === 0, () => { item.level--; this.render(); });
+			button("indent-increase", "Indent", item.level >= MAX_PROMPT_LEVEL, () => { item.level++; this.render(); });
+			button("minus", "Remove", false, () => { this.items.splice(index, 1); this.render(); });
+		});
+	}
+
+	/** Pointer-based dragging (works with mouse and touch): rows move live, order is read back on release. */
+	private startDrag(e: PointerEvent, row: HTMLElement, item: Prompt): void {
+		e.preventDefault();
+		const handle = e.currentTarget as HTMLElement;
+		handle.setPointerCapture(e.pointerId);
+		row.addClass("is-dragging");
+		const rowItem = new Map<HTMLElement, Prompt>();
+		Array.from(this.list.children).forEach((el, i) => rowItem.set(el as HTMLElement, this.items[i]));
+
+		const move = (ev: PointerEvent) => {
+			const others = Array.from(this.list.children).filter((el) => el !== row) as HTMLElement[];
+			const before = others.find((el) => {
+				const r = el.getBoundingClientRect();
+				return ev.clientY < r.top + r.height / 2;
+			});
+			if (before) this.list.insertBefore(row, before);
+			else this.list.appendChild(row);
+		};
+		const end = () => {
+			handle.removeEventListener("pointermove", move);
+			handle.removeEventListener("pointerup", end);
+			handle.removeEventListener("pointercancel", end);
+			row.removeClass("is-dragging");
+			this.items = Array.from(this.list.children).map((el) => rowItem.get(el as HTMLElement) ?? item);
+			this.render();
+		};
+		handle.addEventListener("pointermove", move);
+		handle.addEventListener("pointerup", end);
+		handle.addEventListener("pointercancel", end);
+	}
+
+	onClose(): void {
 		this.contentEl.empty();
 	}
 }

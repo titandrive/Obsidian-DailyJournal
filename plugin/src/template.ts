@@ -8,9 +8,9 @@ export function entryTemplate(settings: JournalSettings): string {
 	parts.push(block("header"));
 	if (settings.showReading) parts.push(block("reading"));
 	parts.push(block("checkin"));
-	settings.prompts.forEach((prompt, i) => {
-		parts.push(`${i === 0 ? "##" : "###"} ${prompt}`, "", "");
-	});
-	parts.push(block("onthisday"));
+	for (const prompt of settings.prompts) {
+		parts.push(`${"#".repeat(2 + prompt.level)} ${prompt.text}`, "", "");
+	}
+	if (settings.showOnThisDay) parts.push(block("onthisday"));
 	return parts.join("\n");
 }

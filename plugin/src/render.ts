@@ -42,9 +42,9 @@ export async function renderSection(host: JournalHost, section: string, el: HTML
 
 	switch (section) {
 		case "header": return renderHeader(host, el, file, date, fm);
-		case "reading": return renderReading(host, el, file, date, fm);
+		case "reading": return host.settings.showReading ? renderReading(host, el, file, date, fm) : undefined;
 		case "checkin": return renderCheckIn(host, el, file, fm);
-		case "onthisday": return renderOnThisDay(host, el, date);
+		case "onthisday": return host.settings.showOnThisDay ? renderOnThisDay(host, el, date) : undefined;
 	}
 }
 

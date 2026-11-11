@@ -24,7 +24,9 @@ Daily Journal uses the same folder and date format as Daily notes (copied on fir
 
 ## Settings
 
-Journal folder and date format, writing prompts, default location, °F/°C, which check-in fields to show, the reading card and books folder, and whether to hide the title and Properties box in entries.
+- **Entries**: journal folder and date format, using the layout as Daily notes' template, filling new entries, and writing prompts (edited in a dialog: drag to reorder, indent to make sub-headings).
+- **Cards**: each card with its own settings: Header (default location, °F/°C), Reading (books folder), Check-in (which fields to show), and On this day.
+- **Appearance**: hide the title and Properties box in entries.
 
 ## Data
 

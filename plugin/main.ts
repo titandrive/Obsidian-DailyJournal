@@ -2,7 +2,7 @@ import { MarkdownRenderChild, Notice, normalizePath, Plugin, TAbstractFile, TFil
 import { entryDate, entryPath, Moment } from "./src/dates";
 import { MonthPicker, PlaceModal } from "./src/modals";
 import { JournalHost, renderSection } from "./src/render";
-import { DEFAULT_SETTINGS, JournalSettings, Place } from "./src/settings";
+import { DEFAULT_SETTINGS, JournalSettings, Place, Prompt } from "./src/settings";
 import { JournalSettingTab } from "./src/settings-tab";
 import { entryTemplate } from "./src/template";
 import { entryPlace, fetchWeather, hasOwnPlace } from "./src/weather";
@@ -103,6 +103,9 @@ export default class DailyJournal extends Plugin implements JournalHost {
 	async loadSettings(): Promise<void> {
 		const saved = await this.loadData();
 		this.settings = { ...DEFAULT_SETTINGS, ...(saved ?? {}), fields: { ...DEFAULT_SETTINGS.fields, ...(saved?.fields ?? {}) } };
+		// Earlier versions stored prompts as plain strings: first one main heading, the rest sub-headings.
+		this.settings.prompts = (this.settings.prompts as Array<Prompt | string>).map((p, i) =>
+			typeof p === "string" ? { text: p, level: i === 0 ? 0 : 1 } : p);
 		if (!saved) {
 			// First run: use the same folder and date format as Obsidian's Daily notes, so they agree.
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
