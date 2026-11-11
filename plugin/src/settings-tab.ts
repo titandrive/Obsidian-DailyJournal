@@ -42,15 +42,15 @@ export class JournalSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl).setName("Weather & location").setHeading();
 		const home = new Setting(containerEl)
-			.setName("Home location")
-			.setDesc(`Used for entries without their own location. Currently: ${s.home.name}.`);
+			.setName("Default location")
+			.setDesc(s.home.name);
 		home.addButton((b) => b.setButtonText("Change…").onClick(() => {
 			new PlaceModal(this.app, null, async (place) => {
 				if (!place) return;
 				s.home = place;
 				await save();
 				this.display();
-			}, "Home location").open();
+			}, "Default location").open();
 		}));
 		new Setting(containerEl)
 			.setName("Temperature")

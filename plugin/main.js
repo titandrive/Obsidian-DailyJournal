@@ -608,7 +608,7 @@ var JournalSettingTab = class extends import_obsidian6.PluginSettingTab {
       t.inputEl.rows = 4;
     });
     new import_obsidian6.Setting(containerEl).setName("Weather & location").setHeading();
-    const home = new import_obsidian6.Setting(containerEl).setName("Home location").setDesc(`Used for entries without their own location. Currently: ${s.home.name}.`);
+    const home = new import_obsidian6.Setting(containerEl).setName("Default location").setDesc(s.home.name);
     home.addButton((b) => b.setButtonText("Change\u2026").onClick(() => {
       new PlaceModal(this.app, null, async (place) => {
         if (!place)
@@ -616,7 +616,7 @@ var JournalSettingTab = class extends import_obsidian6.PluginSettingTab {
         s.home = place;
         await save();
         this.display();
-      }, "Home location").open();
+      }, "Default location").open();
     }));
     new import_obsidian6.Setting(containerEl).setName("Temperature").addDropdown((d) => d.addOption("f", "Fahrenheit (\xB0F)").addOption("c", "Celsius (\xB0C)").setValue(s.units).onChange(async (v) => {
       s.units = v === "c" ? "c" : "f";
