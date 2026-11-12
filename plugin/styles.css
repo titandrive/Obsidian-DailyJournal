@@ -30,6 +30,8 @@ a.dj-chip { text-decoration: none; cursor: pointer; }
 a.dj-chip:hover { border-color: var(--interactive-accent); }
 .dj-icon { display: inline-flex; color: var(--interactive-accent); }
 .dj-icon svg { width: 1em; height: 1em; }
+/* Meteocons have built-in padding, so they're drawn larger than text and pulled in with negative margins. */
+.dj-weather-icon { width: 1.7em; height: 1.7em; margin: -.35em -.1em -.35em -.3em; }
 
 /* Header */
 .dj-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 1em; flex-wrap: wrap; }

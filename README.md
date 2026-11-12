@@ -32,6 +32,8 @@ Each entry keeps the layout it was created with (its cards, weather on/off, chec
 
 ## Data
 
+Weather icons are [Meteocons](https://github.com/basmilius/weather-icons) by Bas Milius (MIT License).
+
 Weather comes from [Open-Meteo](https://open-meteo.com) (no account needed). Location search uses Open-Meteo's geocoding API. Each entry stores its weather once, so past entries don't change.
 
 ## Install with BRAT

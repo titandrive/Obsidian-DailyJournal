@@ -20,12 +20,12 @@ export function hasOwnPlace(fm: Record<string, unknown> | undefined): boolean {
 	return !!(fm && fm.location && fm.latitude != null && fm.longitude != null);
 }
 
-// Open-Meteo weather codes (up to the first number) → label and Lucide icon. Saved text is plain;
-// the header draws the icon from the label.
+// Open-Meteo weather codes (up to the first number) → icon (see meteocons.ts) and label.
+// Saved text is plain; the header draws the icon from the label.
 const CONDITIONS: Array<[number, string, string]> = [
-	[0, "sun", "Clear"], [2, "cloud-sun", "Partly cloudy"], [3, "cloud", "Overcast"], [48, "cloud-fog", "Fog"],
-	[57, "cloud-drizzle", "Drizzle"], [67, "cloud-rain", "Rain"], [77, "cloud-snow", "Snow"], [82, "cloud-rain-wind", "Showers"],
-	[86, "cloud-snow", "Snow showers"], [Infinity, "cloud-lightning", "Thunderstorm"],
+	[0, "clear", "Clear"], [2, "partly-cloudy", "Partly cloudy"], [3, "overcast", "Overcast"], [48, "fog", "Fog"],
+	[57, "drizzle", "Drizzle"], [67, "rain", "Rain"], [77, "snow", "Snow"], [82, "showers", "Showers"],
+	[86, "snow-showers", "Snow showers"], [Infinity, "thunderstorm", "Thunderstorm"],
 ];
 
 /** Saved weather without any leading emoji (entries saved before weather was plain text had one). */
@@ -33,11 +33,11 @@ export function weatherText(saved: string): string {
 	return saved.replace(/^[^\p{L}\p{N}]+/u, "");
 }
 
-/** Lucide icon for a saved weather line, from its condition label. */
+/** Icon name (in METEOCONS) for a saved weather line, from its condition label. */
 export function weatherIcon(saved: string): string {
 	const text = weatherText(saved);
 	const match = [...CONDITIONS].sort((a, b) => b[2].length - a[2].length).find(([, , label]) => text.startsWith(label));
-	return match ? match[1] : "cloud";
+	return match ? match[1] : "overcast";
 }
 
 /** One line of weather for a day at a place, e.g. "Partly cloudy · H 84° / L 60°". Null on failure. */
