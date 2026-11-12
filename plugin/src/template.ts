@@ -13,7 +13,7 @@ import { CheckInFields, JournalSettings } from "./settings";
 export const SHOW_CHROME = "dj-show-chrome";
 
 export const FIELD_KEYS: Array<keyof CheckInFields> = ["rating", "sleep", "work", "exercise", "food", "tags"];
-type Section = "header" | "reading" | "checkin" | "onthisday";
+type Section = "header" | "reading" | "hardcover" | "checkin" | "onthisday";
 
 const block = (line: string) => "```journal\n" + line + "\n```\n";
 
@@ -40,6 +40,7 @@ function layoutLines(settings: JournalSettings): Record<Section, string | null> 
 	return {
 		header: settings.showWeather ? "header weather" : "header no-weather",
 		reading: settings.showReading ? "reading" : null,
+		hardcover: settings.showHardcover ? "hardcover" : null,
 		checkin: fields.length ? "checkin " + fields.join(" ") : null,
 		onthisday: settings.showOnThisDay ? "onthisday" : null,
 	};
@@ -57,7 +58,7 @@ export function entryTemplate(settings: JournalSettings): string {
 		`location: ${JSON.stringify(home.name)}`, `latitude: ${home.lat}`, `longitude: ${home.lon}`, `timezone: ${JSON.stringify(home.tz)}`,
 		"---", "",
 	];
-	for (const section of ["header", "reading", "checkin"] as Section[]) {
+	for (const section of ["header", "reading", "hardcover", "checkin"] as Section[]) {
 		const line = lines[section];
 		if (line) parts.push(block(line));
 	}
@@ -80,14 +81,16 @@ export function applyLayout(text: string, settings: JournalSettings): string {
 	const lines = layoutLines(settings);
 	let out = text.replace(BLOCK("header"), block(lines.header as string));
 
-	// Cards between the header and the writing, in order: reading, then check-in.
-	for (const section of ["reading", "checkin"] as Section[]) {
+	// Cards between the header and the writing, in order: reading, Hardcover reading, then check-in.
+	const order: Section[] = ["header", "reading", "hardcover", "checkin"];
+	for (const section of ["reading", "hardcover", "checkin"] as Section[]) {
 		const line = lines[section];
 		if (line && BLOCK(section).test(out)) {
 			out = out.replace(BLOCK(section), block(line));
 		} else if (line) {
-			const after = section === "checkin" && BLOCK("reading").test(out) ? BLOCK("reading") : BLOCK("header");
-			out = out.replace(after, (m) => m + "\n" + block(line));
+			// Insert after the nearest earlier card that's present.
+			const before = order.slice(0, order.indexOf(section)).reverse().find((s) => BLOCK(s).test(out)) ?? "header";
+			out = out.replace(BLOCK(before), (m) => m + "\n" + block(line));
 		} else {
 			out = out.replace(new RegExp(BLOCK(section).source + "\\n?"), "");
 		}

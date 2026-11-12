@@ -3,6 +3,7 @@ import { bookFromLink, bookLink, currentBook, highlightsOn, pct } from "./books"
 import { entryDate, Moment } from "./dates";
 import { PlaceModal } from "./modals";
 import { CheckInFields, JournalSettings, Place } from "./settings";
+import { hardcoverDay } from "./hardcover";
 import { meteoconSvg } from "./meteocons";
 import { blockFields, blockShowsWeather, parseBlock } from "./template";
 import { entryPlace, fetchWeather, PIN_ICON, weatherIcon, weatherText } from "./weather";
@@ -46,6 +47,7 @@ export async function renderSection(host: JournalHost, source: string, el: HTMLE
 	switch (section) {
 		case "header": return renderHeader(host, el, file, date, fm, blockShowsWeather(options));
 		case "reading": return renderReading(host, el, file, date, fm);
+		case "hardcover": return renderHardcover(host, el, date);
 		case "checkin": return renderCheckIn(host, el, file, fm, blockFields(options));
 		case "onthisday": return renderOnThisDay(host, el, date);
 	}
@@ -169,6 +171,49 @@ async function renderReading(host: JournalHost, el: HTMLElement, file: TFile, da
 			const title = app.metadataCache.getFileCache(q.file)?.frontmatter?.title ?? q.file.basename;
 			link(app, bq.createDiv({ cls: "dj-quote-source" }), "— " + title, q.file);
 		}
+	}
+}
+
+async function renderHardcover(host: JournalHost, el: HTMLElement, date: Moment): Promise<void> {
+	const token = host.settings.hardcoverToken;
+	if (!token) {
+		card(el, "Reading").createDiv({ cls: "dj-muted", text: "Add your Hardcover API token in Daily Journal's settings to show what you read." });
+		return;
+	}
+	let day;
+	try {
+		day = await hardcoverDay(token, date);
+	} catch (e) {
+		card(el, "Reading").createDiv({ cls: "dj-muted", text: `Couldn't load from Hardcover: ${e instanceof Error ? e.message : String(e)}` });
+		return;
+	}
+	if (!day.books.length && !day.quotes.length) return;
+
+	const c = card(el, "Reading");
+	for (const b of day.books) {
+		const row = c.createDiv({ cls: "dj-book" });
+		const initials = b.title.split(/[\s:]+/).filter((w) => /^[A-Za-z0-9]/.test(w)).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
+		const fallback = () => { img?.remove(); row.prepend(createDiv({ cls: "dj-cover dj-cover-fallback", text: initials })); };
+		const img = b.cover ? row.createEl("img", { cls: "dj-cover", attr: { src: b.cover, alt: b.title } }) : null;
+		if (img) img.onerror = fallback; else fallback();
+
+		const info = row.createDiv({ cls: "dj-book-info" });
+		const title = info.createEl("a", { cls: "dj-book-title", text: b.title, href: b.url ?? "#" });
+		if (!b.url) title.removeAttribute("href");
+		if (b.author) info.createDiv({ cls: "dj-book-author", text: b.author });
+		const badges = info.createDiv({ cls: "dj-row" });
+		if (b.started) badges.createSpan({ cls: "dj-badge", text: "Started" });
+		if (b.finished) badges.createSpan({ cls: "dj-badge", text: "Finished" });
+		if (b.to !== null) {
+			info.createDiv({ cls: "dj-bar" }).createDiv().style.width = `${Math.min(100, b.to)}%`;
+			const line = info.createDiv({ cls: "dj-progress" });
+			line.createSpan({ cls: "dj-progress-pct", text: b.from !== null && b.from !== b.to ? `${b.from}% → ${b.to}%` : `${b.to}%` });
+			if (b.from !== null && b.to > b.from) line.createSpan({ text: `+${b.to - b.from}% that day` });
+		}
+	}
+	for (const q of day.quotes) {
+		const bq = c.createEl("blockquote", { cls: "dj-quote", text: q.text });
+		bq.createDiv({ cls: "dj-quote-source", text: "— " + q.book });
 	}
 }
 

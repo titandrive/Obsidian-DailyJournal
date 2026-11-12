@@ -63,6 +63,11 @@ a.dj-book-title { font-weight: 650; font-size: 1.05em; color: var(--text-normal)
 .dj-quote { margin: 0; padding: .1em 0 .1em .9em; border-left: 3px solid var(--interactive-accent); font-style: italic; white-space: pre-line; line-height: 1.5; }
 .dj-quote-source a { font-style: normal; font-size: .85em; color: var(--text-muted); }
 
+.dj-badge { font-size: .7em; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; padding: .15em .6em; border-radius: 999px;
+	background: color-mix(in srgb, var(--interactive-accent) 20%, transparent); color: var(--interactive-accent); }
+.dj-muted { font-size: .9em; color: var(--text-muted); }
+.dj-quote-source { font-style: normal; font-size: .85em; color: var(--text-muted); }
+
 /* Check-in */
 .dj-list { display: flex; flex-direction: column; }
 .dj-item {

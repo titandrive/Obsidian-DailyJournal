@@ -30,6 +30,8 @@ export interface JournalSettings {
 	units: "f" | "c";
 	booksFolder: string;
 	showReading: boolean;
+	showHardcover: boolean;
+	hardcoverToken: string;
 	showOnThisDay: boolean;
 	fields: CheckInFields;
 	prompts: Prompt[];
@@ -46,6 +48,8 @@ export const DEFAULT_SETTINGS: JournalSettings = {
 	units: "f",
 	booksFolder: "Books",
 	showReading: true,
+	showHardcover: false,
+	hardcoverToken: "",
 	showOnThisDay: true,
 	fields: { rating: true, sleep: true, work: true, exercise: true, food: true, tags: true },
 	prompts: [

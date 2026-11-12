@@ -1,6 +1,7 @@
 import { App, normalizePath, Notice, PluginSettingTab, Setting } from "obsidian";
 import type DailyJournal from "../main";
 import { ConfirmModal, PlaceModal, PromptsModal } from "./modals";
+import { hardcoverUser } from "./hardcover";
 import { CheckInFields } from "./settings";
 
 export class JournalSettingTab extends PluginSettingTab {
@@ -79,6 +80,27 @@ export class JournalSettingTab extends PluginSettingTab {
 		sub(new Setting(group).setName("Books folder").setDesc("Where book notes live."), s.showReading)
 			.addText((t) => t.setPlaceholder("Books").setValue(s.booksFolder)
 				.onChange(async (v) => { s.booksFolder = normalizePath(v || "Books"); await save(); }));
+
+		new Setting(card())
+			.setName("Reading (Hardcover)")
+			.setDesc("What you read that day from your Hardcover reading journal: progress per book, books started or finished, and quotes. Works for past days too.")
+			.addToggle((t) => t.setValue(s.showHardcover).onChange(async (v) => { s.showHardcover = v; await save(); this.display(); }));
+		sub(new Setting(group).setName("Hardcover API token")
+			.setDesc("From hardcover.app: Settings → Hardcover API. Stored in this plugin's settings."), s.showHardcover)
+			.addText((t) => {
+				t.inputEl.type = "password";
+				t.setPlaceholder("Paste your token").setValue(s.hardcoverToken)
+					.onChange(async (v) => { s.hardcoverToken = v.trim(); await save(); });
+			})
+			.addButton((b) => b.setButtonText("Test").onClick(async () => {
+				if (!s.hardcoverToken) { new Notice("Paste your Hardcover API token first."); return; }
+				try {
+					const user = await hardcoverUser(s.hardcoverToken);
+					new Notice(`Connected to Hardcover as ${user.username}.`);
+				} catch (e) {
+					new Notice(`Hardcover: ${e instanceof Error ? e.message : String(e)}`);
+				}
+			}));
 
 		new Setting(card()).setName("Check-in").setDesc("Fields saved as properties, so Bases can chart and query them. Hidden when all are off.");
 		const fields: Array<[keyof CheckInFields, string]> = [
