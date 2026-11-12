@@ -12,7 +12,7 @@ import { CheckInFields, JournalSettings } from "./settings";
 
 export const SHOW_CHROME = "dj-show-chrome";
 
-export const FIELD_KEYS: Array<keyof CheckInFields> = ["rating", "sleep", "exercise", "food"];
+export const FIELD_KEYS: Array<keyof CheckInFields> = ["rating", "sleep", "exercise", "food", "tags"];
 type Section = "header" | "reading" | "checkin" | "onthisday";
 
 const block = (line: string) => "```journal\n" + line + "\n```\n";
@@ -28,8 +28,10 @@ export function blockShowsWeather(options: string[]): boolean {
 
 export function blockFields(options: string[]): CheckInFields {
 	const listed = options.filter((o): o is keyof CheckInFields => (FIELD_KEYS as string[]).includes(o));
-	if (!listed.length) return { rating: true, sleep: true, exercise: true, food: true };
-	return { rating: listed.includes("rating"), sleep: listed.includes("sleep"), exercise: listed.includes("exercise"), food: listed.includes("food") };
+	// Entries from before field options existed had exactly these four.
+	if (!listed.length) return { rating: true, sleep: true, exercise: true, food: true, tags: false };
+	const has = (k: keyof CheckInFields) => listed.includes(k);
+	return { rating: has("rating"), sleep: has("sleep"), exercise: has("exercise"), food: has("food"), tags: has("tags") };
 }
 
 /** The block line for each card under the current settings, or null when the card is off. */

@@ -104,6 +104,18 @@ a.dj-book-title { font-weight: 650; font-size: 1.05em; color: var(--text-normal)
 .dj-meal { display: grid; grid-template-columns: 5.5em 1fr; align-items: baseline; gap: .8em; }
 .dj-meal > span { font-size: .8em; color: var(--text-faint); }
 
+.dj-tags { display: flex; flex-direction: column; gap: .5em; }
+.dj-tag { gap: .3em; padding-right: .35em; }
+.dj-tag-remove { display: inline-flex; align-items: center; justify-content: center; width: 1.3em; height: 1.3em; padding: 0;
+	border: none; border-radius: 50%; box-shadow: none; background: transparent; color: var(--text-muted); cursor: pointer; font-size: 1em; }
+.dj-tag-remove:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
+.dj-card input.dj-tag-input, .dj-card input.dj-tag-input:hover {
+	width: 100%; box-sizing: border-box; height: 2.1em; padding: 0 .1em; border: none; border-radius: 0;
+	border-bottom: 1px solid var(--background-modifier-border); background: transparent; color: var(--text-normal);
+	font-family: inherit; font-size: .95em; box-shadow: none;
+}
+.dj-card input.dj-tag-input:focus { border-bottom-color: var(--interactive-accent); outline: none; box-shadow: none; }
+
 /* Narrow cards (phones, sidebars, split panes): stack labels above controls. Must stay last. */
 @container (max-width: 520px) {
 	.dj-item { grid-template-columns: 1fr; gap: .55em; }

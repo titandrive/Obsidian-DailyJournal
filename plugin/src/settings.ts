@@ -18,6 +18,7 @@ export interface CheckInFields {
 	sleep: boolean;
 	exercise: boolean;
 	food: boolean;
+	tags: boolean;
 }
 
 export interface JournalSettings {
@@ -45,7 +46,7 @@ export const DEFAULT_SETTINGS: JournalSettings = {
 	booksFolder: "Books",
 	showReading: true,
 	showOnThisDay: true,
-	fields: { rating: true, sleep: true, exercise: true, food: true },
+	fields: { rating: true, sleep: true, exercise: true, food: true, tags: true },
 	prompts: [
 		{ text: "How was your day?", level: 0 },
 		{ text: "What was the best part of your day?", level: 1 },

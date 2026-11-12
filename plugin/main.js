@@ -61,7 +61,7 @@ var DEFAULT_SETTINGS = {
   booksFolder: "Books",
   showReading: true,
   showOnThisDay: true,
-  fields: { rating: true, sleep: true, exercise: true, food: true },
+  fields: { rating: true, sleep: true, exercise: true, food: true, tags: true },
   prompts: [
     { text: "How was your day?", level: 0 },
     { text: "What was the best part of your day?", level: 1 },
@@ -453,7 +453,7 @@ async function highlightsOn(app, folder, day) {
 
 // src/template.ts
 var SHOW_CHROME = "dj-show-chrome";
-var FIELD_KEYS = ["rating", "sleep", "exercise", "food"];
+var FIELD_KEYS = ["rating", "sleep", "exercise", "food", "tags"];
 var block = (line) => "```journal\n" + line + "\n```\n";
 function parseBlock(source) {
   const [section = "", ...options] = source.trim().split(/\s+/);
@@ -465,8 +465,9 @@ function blockShowsWeather(options) {
 function blockFields(options) {
   const listed = options.filter((o) => FIELD_KEYS.includes(o));
   if (!listed.length)
-    return { rating: true, sleep: true, exercise: true, food: true };
-  return { rating: listed.includes("rating"), sleep: listed.includes("sleep"), exercise: listed.includes("exercise"), food: listed.includes("food") };
+    return { rating: true, sleep: true, exercise: true, food: true, tags: false };
+  const has = (k) => listed.includes(k);
+  return { rating: has("rating"), sleep: has("sleep"), exercise: has("exercise"), food: has("food"), tags: has("tags") };
 }
 function layoutLines(settings) {
   const fields = FIELD_KEYS.filter((k) => settings.fields[k]);
@@ -683,8 +684,9 @@ async function renderReading(host, el, file, date, fm) {
   }
 }
 function renderCheckIn(host, el, file, fm, fields) {
+  var _a, _b, _c;
   const { app } = host;
-  if (!fields.rating && !fields.sleep && !fields.exercise && !fields.food)
+  if (!Object.values(fields).some(Boolean))
     return;
   const save = (key, value) => app.fileManager.processFrontMatter(file, (f) => {
     if (value === null)
@@ -770,6 +772,58 @@ function renderCheckIn(host, el, file, fm, fields) {
     meal("Dinner", "dinner", "What did you have for dinner?");
     if (fm.ate)
       meal("Other", "ate", "");
+  }
+  if (fields.tags) {
+    const box = item("Tags");
+    box.addClass("dj-tags");
+    const chips = box.createDiv({ cls: "dj-row" });
+    const input = box.createEl("input", { cls: "dj-tag-input", type: "text", attr: { placeholder: "Add a tag\u2026", list: "dj-tag-list" } });
+    if (!document.getElementById("dj-tag-list")) {
+      const list2 = document.body.createEl("datalist", { attr: { id: "dj-tag-list" } });
+      const vaultTags = (_c = (_b = (_a = app.metadataCache).getTags) == null ? void 0 : _b.call(_a)) != null ? _c : {};
+      for (const tag of Object.keys(vaultTags))
+        list2.createEl("option", { attr: { value: tag.replace(/^#/, "") } });
+    }
+    const current = () => {
+      var _a2, _b2;
+      const t = (_b2 = (_a2 = app.metadataCache.getFileCache(file)) == null ? void 0 : _a2.frontmatter) == null ? void 0 : _b2.tags;
+      return (Array.isArray(t) ? t : t ? [t] : []).map(String);
+    };
+    let tags = current().filter((t) => t !== "journal");
+    const store = () => app.fileManager.processFrontMatter(file, (f) => {
+      const keep = (Array.isArray(f.tags) ? f.tags : f.tags ? [f.tags] : []).map(String).filter((t) => t === "journal");
+      f.tags = [...keep.length ? keep : ["journal"], ...tags];
+    });
+    const paint = () => {
+      chips.empty();
+      chips.toggle(tags.length > 0);
+      for (const tag of tags) {
+        const chip = chips.createSpan({ cls: "dj-chip dj-tag", text: "#" + tag });
+        const x = chip.createEl("button", { cls: "dj-tag-remove", text: "\xD7", attr: { "aria-label": `Remove #${tag}` } });
+        x.onclick = () => {
+          tags = tags.filter((t) => t !== tag);
+          paint();
+          void store();
+        };
+      }
+    };
+    const add = () => {
+      const fresh = input.value.split(/[,\s]+/).map((t) => t.replace(/^#+/, "").trim()).filter(Boolean).filter((t) => t !== "journal" && !tags.includes(t));
+      input.value = "";
+      if (!fresh.length)
+        return;
+      tags = [...tags, ...fresh];
+      paint();
+      void store();
+    };
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === ",") {
+        e.preventDefault();
+        add();
+      }
+    });
+    input.addEventListener("change", add);
+    paint();
   }
 }
 function renderOnThisDay(host, el, date) {
@@ -862,7 +916,8 @@ var JournalSettingTab = class extends import_obsidian6.PluginSettingTab {
       ["rating", "Day rating (1\u201310)"],
       ["sleep", "Sleep (hours)"],
       ["exercise", "Exercise"],
-      ["food", "Food (breakfast, lunch, dinner)"]
+      ["food", "Food (breakfast, lunch, dinner)"],
+      ["tags", "Tags"]
     ];
     for (const [key, name] of fields) {
       sub(new import_obsidian6.Setting(group).setName(name)).addToggle((t) => t.setValue(s.fields[key]).onChange(async (v) => {

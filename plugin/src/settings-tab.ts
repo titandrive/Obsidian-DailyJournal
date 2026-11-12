@@ -82,7 +82,7 @@ export class JournalSettingTab extends PluginSettingTab {
 
 		new Setting(card()).setName("Check-in").setDesc("Fields saved as properties, so Bases can chart and query them. Hidden when all are off.");
 		const fields: Array<[keyof CheckInFields, string]> = [
-			["rating", "Day rating (1–10)"], ["sleep", "Sleep (hours)"], ["exercise", "Exercise"], ["food", "Food (breakfast, lunch, dinner)"],
+			["rating", "Day rating (1–10)"], ["sleep", "Sleep (hours)"], ["exercise", "Exercise"], ["food", "Food (breakfast, lunch, dinner)"], ["tags", "Tags"],
 		];
 		for (const [key, name] of fields) {
 			sub(new Setting(group).setName(name))

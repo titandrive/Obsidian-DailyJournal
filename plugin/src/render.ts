@@ -168,7 +168,7 @@ async function renderReading(host: JournalHost, el: HTMLElement, file: TFile, da
 
 function renderCheckIn(host: JournalHost, el: HTMLElement, file: TFile, fm: Frontmatter, fields: CheckInFields): void {
 	const { app } = host;
-	if (!fields.rating && !fields.sleep && !fields.exercise && !fields.food) return;
+	if (!Object.values(fields).some(Boolean)) return;
 	const save = (key: string, value: unknown) => app.fileManager.processFrontMatter(file, (f) => {
 		if (value === null) delete f[key]; else f[key] = value;
 	});
@@ -248,6 +248,50 @@ function renderCheckIn(host: JournalHost, el: HTMLElement, file: TFile, fm: Fron
 		meal("Dinner", "dinner", "What did you have for dinner?");
 		// Older entries kept food in a single "ate" property; still show it so nothing disappears.
 		if (fm.ate) meal("Other", "ate", "");
+	}
+
+	if (fields.tags) {
+		// Tags go in the note's own `tags` property (next to "journal"), so they work in search, the tag pane and Bases.
+		const box = item("Tags");
+		box.addClass("dj-tags");
+		const chips = box.createDiv({ cls: "dj-row" });
+		const input = box.createEl("input", { cls: "dj-tag-input", type: "text", attr: { placeholder: "Add a tag…", list: "dj-tag-list" } });
+		if (!document.getElementById("dj-tag-list")) {
+			const list = document.body.createEl("datalist", { attr: { id: "dj-tag-list" } });
+			// getTags() exists in Obsidian but isn't in its published types.
+			const vaultTags = (app.metadataCache as unknown as { getTags?: () => Record<string, number> }).getTags?.() ?? {};
+			for (const tag of Object.keys(vaultTags)) list.createEl("option", { attr: { value: tag.replace(/^#/, "") } });
+		}
+		const current = (): string[] => {
+			const t = app.metadataCache.getFileCache(file)?.frontmatter?.tags;
+			return (Array.isArray(t) ? t : t ? [t] : []).map(String);
+		};
+		let tags = current().filter((t) => t !== "journal");
+		const store = () => app.fileManager.processFrontMatter(file, (f) => {
+			const keep = (Array.isArray(f.tags) ? f.tags : f.tags ? [f.tags] : []).map(String).filter((t: string) => t === "journal");
+			f.tags = [...(keep.length ? keep : ["journal"]), ...tags];
+		});
+		const paint = () => {
+			chips.empty();
+			chips.toggle(tags.length > 0);
+			for (const tag of tags) {
+				const chip = chips.createSpan({ cls: "dj-chip dj-tag", text: "#" + tag });
+				const x = chip.createEl("button", { cls: "dj-tag-remove", text: "×", attr: { "aria-label": `Remove #${tag}` } });
+				x.onclick = () => { tags = tags.filter((t) => t !== tag); paint(); void store(); };
+			}
+		};
+		const add = () => {
+			const fresh = input.value.split(/[,\s]+/).map((t) => t.replace(/^#+/, "").trim()).filter(Boolean)
+				.filter((t) => t !== "journal" && !tags.includes(t));
+			input.value = "";
+			if (!fresh.length) return;
+			tags = [...tags, ...fresh];
+			paint();
+			void store();
+		};
+		input.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); add(); } });
+		input.addEventListener("change", add);
+		paint();
 	}
 }
 

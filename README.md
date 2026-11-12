@@ -4,7 +4,7 @@ A daily journal for Obsidian. Each entry gets a set of cards above your writing:
 
 - **Header**: the date, links to your previous and next entries, that day's weather, and the entry's location (defaults to your default location; change it per entry while traveling).
 - **Reading**: your current book with its cover, progress change since your last entry, and any highlights you made that day (from book notes such as [MoonSync](https://github.com/titandrive/Obsidian-MoonSync)'s).
-- **Check-in**: day rating (1–10), sleep, exercise, and food (breakfast, lunch, dinner), saved as note properties so you can chart or query them with Bases.
+- **Check-in**: day rating (1–10), sleep, exercise, food (breakfast, lunch, dinner) and tags, saved as note properties so you can chart or query them with Bases.
 - **On this day**: links to entries from the same date in earlier months and years.
 
 Works on desktop and mobile; the cards adapt to narrow screens.
