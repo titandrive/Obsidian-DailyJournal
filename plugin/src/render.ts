@@ -261,12 +261,18 @@ function renderCheckIn(host: JournalHost, el: HTMLElement, file: TFile, fm: Fron
 		box.addClass("dj-tags");
 		const chips = box.createDiv({ cls: "dj-row" });
 		const input = box.createEl("input", { cls: "dj-tag-input", type: "text", attr: { placeholder: "Add a tag…", list: "dj-tag-list" } });
-		if (!document.getElementById("dj-tag-list")) {
-			const list = document.body.createEl("datalist", { attr: { id: "dj-tag-list" } });
+		// Suggest every tag in the vault, rebuilt on each focus so tags added elsewhere show up right away.
+		const refreshSuggestions = () => {
+			const list = document.getElementById("dj-tag-list") ?? document.body.createEl("datalist", { attr: { id: "dj-tag-list" } });
+			list.empty();
 			// getTags() exists in Obsidian but isn't in its published types.
 			const vaultTags = (app.metadataCache as unknown as { getTags?: () => Record<string, number> }).getTags?.() ?? {};
-			for (const tag of Object.keys(vaultTags)) list.createEl("option", { attr: { value: tag.replace(/^#/, "") } });
-		}
+			for (const tag of Object.keys(vaultTags).sort()) {
+				const name = tag.replace(/^#/, "");
+				if (name !== "journal") list.createEl("option", { attr: { value: name } });
+			}
+		};
+		refreshSuggestions();
 		const current = (): string[] => {
 			const t = app.metadataCache.getFileCache(file)?.frontmatter?.tags;
 			return (Array.isArray(t) ? t : t ? [t] : []).map(String);
@@ -294,6 +300,7 @@ function renderCheckIn(host: JournalHost, el: HTMLElement, file: TFile, fm: Fron
 			paint();
 			void store();
 		};
+		input.addEventListener("focus", refreshSuggestions);
 		input.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); add(); } });
 		input.addEventListener("change", add);
 		paint();

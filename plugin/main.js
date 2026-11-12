@@ -716,7 +716,6 @@ async function renderReading(host, el, file, date, fm) {
   }
 }
 function renderCheckIn(host, el, file, fm, fields) {
-  var _a, _b, _c;
   const { app } = host;
   if (!Object.values(fields).some(Boolean))
     return;
@@ -810,15 +809,21 @@ function renderCheckIn(host, el, file, fm, fields) {
     box.addClass("dj-tags");
     const chips = box.createDiv({ cls: "dj-row" });
     const input = box.createEl("input", { cls: "dj-tag-input", type: "text", attr: { placeholder: "Add a tag\u2026", list: "dj-tag-list" } });
-    if (!document.getElementById("dj-tag-list")) {
-      const list2 = document.body.createEl("datalist", { attr: { id: "dj-tag-list" } });
-      const vaultTags = (_c = (_b = (_a = app.metadataCache).getTags) == null ? void 0 : _b.call(_a)) != null ? _c : {};
-      for (const tag of Object.keys(vaultTags))
-        list2.createEl("option", { attr: { value: tag.replace(/^#/, "") } });
-    }
+    const refreshSuggestions = () => {
+      var _a, _b, _c, _d;
+      const list2 = (_a = document.getElementById("dj-tag-list")) != null ? _a : document.body.createEl("datalist", { attr: { id: "dj-tag-list" } });
+      list2.empty();
+      const vaultTags = (_d = (_c = (_b = app.metadataCache).getTags) == null ? void 0 : _c.call(_b)) != null ? _d : {};
+      for (const tag of Object.keys(vaultTags).sort()) {
+        const name = tag.replace(/^#/, "");
+        if (name !== "journal")
+          list2.createEl("option", { attr: { value: name } });
+      }
+    };
+    refreshSuggestions();
     const current = () => {
-      var _a2, _b2;
-      const t = (_b2 = (_a2 = app.metadataCache.getFileCache(file)) == null ? void 0 : _a2.frontmatter) == null ? void 0 : _b2.tags;
+      var _a, _b;
+      const t = (_b = (_a = app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter) == null ? void 0 : _b.tags;
       return (Array.isArray(t) ? t : t ? [t] : []).map(String);
     };
     let tags = current().filter((t) => t !== "journal");
@@ -848,6 +853,7 @@ function renderCheckIn(host, el, file, fm, fields) {
       paint();
       void store();
     };
+    input.addEventListener("focus", refreshSuggestions);
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === ",") {
         e.preventDefault();
