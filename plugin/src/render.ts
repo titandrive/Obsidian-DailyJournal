@@ -1,5 +1,4 @@
 import { App, moment, TFile } from "obsidian";
-import { bookFromLink, bookLink, currentBook, highlightsOn, pct } from "./books";
 import { entryDate, Moment } from "./dates";
 import { PlaceModal } from "./modals";
 import { CheckInFields, JournalSettings, Place } from "./settings";
@@ -46,8 +45,9 @@ export async function renderSection(host: JournalHost, source: string, el: HTMLE
 
 	switch (section) {
 		case "header": return renderHeader(host, el, file, date, fm, blockShowsWeather(options));
-		case "reading": return renderReading(host, el, file, date, fm);
-		case "hardcover": return renderHardcover(host, el, date);
+		case "reading":
+		case "hardcover": // the block's name before it replaced the book-notes card
+			return renderHardcover(host, el, date);
 		case "checkin": return renderCheckIn(host, el, file, fm, blockFields(options));
 		case "onthisday": return renderOnThisDay(host, el, date);
 	}
@@ -104,72 +104,6 @@ async function renderHeader(host: JournalHost, el: HTMLElement, file: TFile, dat
 		if (weather) {
 			showWeather(weather);
 			await app.fileManager.processFrontMatter(file, (f) => { f.weather = weather; });
-		}
-	}
-}
-
-async function renderReading(host: JournalHost, el: HTMLElement, file: TFile, date: Moment, fm: Frontmatter): Promise<void> {
-	const { app, settings } = host;
-	let book = bookFromLink(app, fm.book, file.path);
-	let progress = pct(fm.book_progress);
-
-	// While it's still that day, keep the snapshot in step with the reader.
-	if (date.isSame(moment(), "day")) {
-		const live = currentBook(app, settings.booksFolder);
-		if (live && (live.file !== book || live.progress !== progress)) {
-			await app.fileManager.processFrontMatter(file, (f) => {
-				f.book = bookLink(app, live.file);
-				f.book_progress = live.progress;
-			});
-			book = live.file;
-			progress = live.progress;
-		}
-	}
-
-	// Progress change since the previous entry that read the same book.
-	let before: number | null = null;
-	for (const d of [...host.journalEntries()].reverse()) {
-		if (!d.date.isBefore(date, "day")) continue;
-		const pfm = app.metadataCache.getFileCache(d.file)?.frontmatter ?? {};
-		if (pct(pfm.book_progress) === null) continue;
-		if (bookFromLink(app, pfm.book, d.file.path) === book) before = pct(pfm.book_progress);
-		break;
-	}
-
-	const quotes = await highlightsOn(app, settings.booksFolder, date.format("MMM D, YYYY"));
-	if (!book && !quotes.length) return;
-
-	const c = card(el, "Reading");
-	if (book) {
-		const bfm = app.metadataCache.getFileCache(book)?.frontmatter ?? {};
-		const row = c.createDiv({ cls: "dj-book" });
-		const cover = bfm.cover && app.metadataCache.getFirstLinkpathDest(String(bfm.cover), book.path);
-		if (cover) {
-			row.createEl("img", { cls: "dj-cover", attr: { src: app.vault.getResourcePath(cover), alt: bfm.title ?? "" } });
-		} else {
-			// No cover downloaded: show the title's initials instead.
-			const initials = String(bfm.title ?? book.basename).split(/[\s:]+/).filter((w) => /^[A-Za-z0-9]/.test(w))
-				.slice(0, 2).map((w) => w[0].toUpperCase()).join("");
-			row.createDiv({ cls: "dj-cover dj-cover-fallback", text: initials });
-		}
-		const info = row.createDiv({ cls: "dj-book-info" });
-		link(app, info, String(bfm.title ?? book.basename), book, "dj-book-title");
-		if (bfm.author) info.createDiv({ cls: "dj-book-author", text: String(bfm.author) });
-		if (progress !== null) {
-			info.createDiv({ cls: "dj-bar" }).createDiv().style.width = `${progress}%`;
-			const line = info.createDiv({ cls: "dj-progress" });
-			line.createSpan({ cls: "dj-progress-pct", text: `${progress}%` });
-			if (before !== null && before !== progress) {
-				const diff = progress - before;
-				line.createSpan({ text: `${diff > 0 ? "+" : ""}${diff.toFixed(1)}% today` });
-			}
-		}
-	}
-	for (const q of quotes) {
-		const bq = c.createEl("blockquote", { cls: "dj-quote", text: q.text });
-		if (q.file !== book) {
-			const title = app.metadataCache.getFileCache(q.file)?.frontmatter?.title ?? q.file.basename;
-			link(app, bq.createDiv({ cls: "dj-quote-source" }), "— " + title, q.file);
 		}
 	}
 }

@@ -75,18 +75,10 @@ export class JournalSettingTab extends PluginSettingTab {
 
 		new Setting(card())
 			.setName("Reading")
-			.setDesc("Your current book, its progress, and highlights made that day (from book notes, e.g. MoonSync).")
+			.setDesc("What you read that day, from your Hardcover reading journal: pages per book, books started or finished, and quotes. Works for past days too.")
 			.addToggle((t) => t.setValue(s.showReading).onChange(async (v) => { s.showReading = v; await save(); this.display(); }));
-		sub(new Setting(group).setName("Books folder").setDesc("Where book notes live."), s.showReading)
-			.addText((t) => t.setPlaceholder("Books").setValue(s.booksFolder)
-				.onChange(async (v) => { s.booksFolder = normalizePath(v || "Books"); await save(); }));
-
-		new Setting(card())
-			.setName("Reading (Hardcover)")
-			.setDesc("What you read that day from your Hardcover reading journal: progress per book, books started or finished, and quotes. Works for past days too.")
-			.addToggle((t) => t.setValue(s.showHardcover).onChange(async (v) => { s.showHardcover = v; await save(); this.display(); }));
 		sub(new Setting(group).setName("Hardcover API token")
-			.setDesc("From hardcover.app: Settings → Hardcover API. Stored in this plugin's settings."), s.showHardcover)
+			.setDesc("From hardcover.app: Settings → Hardcover API. Stored in this plugin's settings."), s.showReading)
 			.addText((t) => {
 				t.inputEl.type = "password";
 				t.setPlaceholder("Paste your token").setValue(s.hardcoverToken)

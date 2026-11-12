@@ -28,9 +28,7 @@ export interface JournalSettings {
 	home: Place;
 	showWeather: boolean;
 	units: "f" | "c";
-	booksFolder: string;
 	showReading: boolean;
-	showHardcover: boolean;
 	hardcoverToken: string;
 	showOnThisDay: boolean;
 	fields: CheckInFields;
@@ -46,9 +44,7 @@ export const DEFAULT_SETTINGS: JournalSettings = {
 	home: { name: "Los Angeles", lat: 34.05223, lon: -118.24368, tz: "America/Los_Angeles" },
 	showWeather: true,
 	units: "f",
-	booksFolder: "Books",
 	showReading: true,
-	showHardcover: false,
 	hardcoverToken: "",
 	showOnThisDay: true,
 	fields: { rating: true, sleep: true, work: true, exercise: true, food: true, tags: true },

@@ -3,7 +3,7 @@
 A daily journal for Obsidian. Each entry gets a set of cards above your writing:
 
 - **Header**: the date, links to your previous and next entries, that day's weather, and the entry's location (defaults to your default location; change it per entry while traveling).
-- **Reading**: your current book with its cover, progress change since your last entry, and any highlights you made that day (from book notes such as [MoonSync](https://github.com/titandrive/Obsidian-MoonSync)'s).
+- **Reading**: what you read that day, from your [Hardcover](https://hardcover.app) reading journal: each book's cover, progress and pages read, books started or finished (with your rating), and quotes you saved. On days with no reading it shows when you last read. Works for past entries too. Needs a Hardcover API token. Run **Refresh reading** to reload it right away.
 - **Check-in**: day rating (1–10), sleep, whether you worked, exercise, food (breakfast, lunch, dinner) and tags, saved as note properties so you can chart or query them with Bases.
 - **On this day**: links to entries from the same date in earlier months and years.
 
@@ -25,7 +25,7 @@ Daily Journal uses the same folder and date format as Daily notes (copied on fir
 ## Settings
 
 - **Entries**: journal folder and date format, using the layout as Daily notes' template, filling new entries, and writing prompts (edited in a dialog: drag to reorder, indent to make sub-headings).
-- **Cards**: each card with its own settings: Weather (on/off, default location, °F/°C), Reading (books folder), Check-in (which fields to show), and On this day.
+- **Cards**: each card with its own settings: Weather (on/off, default location, °F/°C), Reading (Hardcover API token), Check-in (which fields to show), and On this day.
 - **Appearance**: hide the title and Properties box in entries.
 
 Each entry keeps the layout it was created with (its cards, weather on/off, check-in fields, location, and whether its title and Properties show), so changing settings only affects new entries. **Apply to existing entries** updates older ones to the current settings without touching your writing.

@@ -27,7 +27,7 @@ __export(main_exports, {
   default: () => DailyJournal
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian8 = require("obsidian");
+var import_obsidian7 = require("obsidian");
 
 // src/dates.ts
 var import_obsidian = require("obsidian");
@@ -234,9 +234,7 @@ var DEFAULT_SETTINGS = {
   home: { name: "Los Angeles", lat: 34.05223, lon: -118.24368, tz: "America/Los_Angeles" },
   showWeather: true,
   units: "f",
-  booksFolder: "Books",
   showReading: true,
-  showHardcover: false,
   hardcoverToken: "",
   showOnThisDay: true,
   fields: { rating: true, sleep: true, work: true, exercise: true, food: true, tags: true },
@@ -570,72 +568,7 @@ var ConfirmModal = class extends import_obsidian4.Modal {
 };
 
 // src/render.ts
-var import_obsidian6 = require("obsidian");
-
-// src/books.ts
 var import_obsidian5 = require("obsidian");
-function pct(v) {
-  const n = parseFloat(String(v != null ? v : "").replace("%", ""));
-  return isNaN(n) ? null : n;
-}
-function bookNotes(app, folder) {
-  const prefix = (0, import_obsidian5.normalizePath)(folder) + "/";
-  return app.vault.getMarkdownFiles().filter((f) => f.path.startsWith(prefix));
-}
-function currentBook(app, folder) {
-  const best = bookNotes(app, folder).map((file) => {
-    var _a, _b;
-    return { file, fm: (_b = (_a = app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter) != null ? _b : {} };
-  }).filter((b) => b.fm.title && pct(b.fm.progress) !== null).filter((b) => {
-    var _a;
-    return b.fm.reading_status !== "finished" && ((_a = pct(b.fm.progress)) != null ? _a : 0) < 100;
-  }).sort((a, b) => {
-    var _a, _b;
-    return String((_a = b.fm.last_read) != null ? _a : "").localeCompare(String((_b = a.fm.last_read) != null ? _b : "")) || b.file.stat.mtime - a.file.stat.mtime;
-  })[0];
-  return best ? { file: best.file, progress: pct(best.fm.progress) } : null;
-}
-function bookFromLink(app, value, from) {
-  const m = String(value != null ? value : "").match(/\[\[([^\]|]+)/);
-  return m ? app.metadataCache.getFirstLinkpathDest(m[1], from) : null;
-}
-function bookLink(app, file) {
-  var _a, _b, _c;
-  const title = (_c = (_b = (_a = app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter) == null ? void 0 : _b.title) != null ? _c : file.basename;
-  return `[[${file.path.replace(/\.md$/, "")}|${title}]]`;
-}
-function quotesOn(text, day) {
-  const out = [];
-  let cur = null;
-  for (const line of text.split("\n")) {
-    const head = line.match(/^>\s*\[!quote\][-+]?\s*(.*)$/i);
-    if (head) {
-      if (cur)
-        out.push(cur);
-      cur = head[1].includes(day) ? [] : null;
-      continue;
-    }
-    if (cur && line.startsWith(">")) {
-      cur.push(line.replace(/^>\s?/, ""));
-      continue;
-    }
-    if (cur) {
-      out.push(cur);
-      cur = null;
-    }
-  }
-  if (cur)
-    out.push(cur);
-  return out.map((l) => l.join("\n").trim()).filter(Boolean);
-}
-async function highlightsOn(app, folder, day) {
-  const found = [];
-  for (const file of bookNotes(app, folder)) {
-    for (const text of quotesOn(await app.vault.cachedRead(file), day))
-      found.push({ text, file });
-  }
-  return found;
-}
 
 // src/meteocons.ts
 var METEOCONS = {
@@ -680,7 +613,6 @@ function layoutLines(settings) {
   return {
     header: settings.showWeather ? "header weather" : "header no-weather",
     reading: settings.showReading ? "reading" : null,
-    hardcover: settings.showHardcover ? "hardcover" : null,
     checkin: fields.length ? "checkin " + fields.join(" ") : null,
     onthisday: settings.showOnThisDay ? "onthisday" : null
   };
@@ -704,7 +636,7 @@ function entryTemplate(settings) {
     "---",
     ""
   ];
-  for (const section of ["header", "reading", "hardcover", "checkin"]) {
+  for (const section of ["header", "reading", "checkin"]) {
     const line = lines[section];
     if (line)
       parts.push(block(line));
@@ -723,8 +655,12 @@ function applyLayout(text, settings) {
     return text;
   const lines = layoutLines(settings);
   let out = text.replace(BLOCK("header"), block(lines.header));
-  const order = ["header", "reading", "hardcover", "checkin"];
-  for (const section of ["reading", "hardcover", "checkin"]) {
+  const HARDCOVER = /```journal\nhardcover(?:[ \t][^\n]*)?\n```\n?/;
+  if (HARDCOVER.test(out)) {
+    out = BLOCK("reading").test(out) ? out.replace(new RegExp(HARDCOVER.source + "\\n?"), "") : out.replace(HARDCOVER, block("reading"));
+  }
+  const order = ["header", "reading", "checkin"];
+  for (const section of ["reading", "checkin"]) {
     const line = lines[section];
     if (line && BLOCK(section).test(out)) {
       out = out.replace(BLOCK(section), block(line));
@@ -773,7 +709,6 @@ async function renderSection(host, source, el, file) {
     case "header":
       return renderHeader(host, el, file, date, fm, blockShowsWeather(options));
     case "reading":
-      return renderReading(host, el, file, date, fm);
     case "hardcover":
       return renderHardcover(host, el, date);
     case "checkin":
@@ -824,7 +759,7 @@ async function renderHeader(host, el, file, date, fm, weatherOn) {
       showWeather(weatherOn ? weather : null);
     }).open();
   };
-  if (weatherOn && !fm.weather && !host.weatherTried.has(file.path) && !date.isAfter((0, import_obsidian6.moment)(), "day")) {
+  if (weatherOn && !fm.weather && !host.weatherTried.has(file.path) && !date.isAfter((0, import_obsidian5.moment)(), "day")) {
     host.weatherTried.add(file.path);
     const weather = await fetchWeather(place, date, settings.units);
     if (weather) {
@@ -832,69 +767,6 @@ async function renderHeader(host, el, file, date, fm, weatherOn) {
       await app.fileManager.processFrontMatter(file, (f) => {
         f.weather = weather;
       });
-    }
-  }
-}
-async function renderReading(host, el, file, date, fm) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
-  const { app, settings } = host;
-  let book = bookFromLink(app, fm.book, file.path);
-  let progress = pct(fm.book_progress);
-  if (date.isSame((0, import_obsidian6.moment)(), "day")) {
-    const live = currentBook(app, settings.booksFolder);
-    if (live && (live.file !== book || live.progress !== progress)) {
-      await app.fileManager.processFrontMatter(file, (f) => {
-        f.book = bookLink(app, live.file);
-        f.book_progress = live.progress;
-      });
-      book = live.file;
-      progress = live.progress;
-    }
-  }
-  let before = null;
-  for (const d of [...host.journalEntries()].reverse()) {
-    if (!d.date.isBefore(date, "day"))
-      continue;
-    const pfm = (_b = (_a = app.metadataCache.getFileCache(d.file)) == null ? void 0 : _a.frontmatter) != null ? _b : {};
-    if (pct(pfm.book_progress) === null)
-      continue;
-    if (bookFromLink(app, pfm.book, d.file.path) === book)
-      before = pct(pfm.book_progress);
-    break;
-  }
-  const quotes = await highlightsOn(app, settings.booksFolder, date.format("MMM D, YYYY"));
-  if (!book && !quotes.length)
-    return;
-  const c = card(el, "Reading");
-  if (book) {
-    const bfm = (_d = (_c = app.metadataCache.getFileCache(book)) == null ? void 0 : _c.frontmatter) != null ? _d : {};
-    const row = c.createDiv({ cls: "dj-book" });
-    const cover = bfm.cover && app.metadataCache.getFirstLinkpathDest(String(bfm.cover), book.path);
-    if (cover) {
-      row.createEl("img", { cls: "dj-cover", attr: { src: app.vault.getResourcePath(cover), alt: (_e = bfm.title) != null ? _e : "" } });
-    } else {
-      const initials = String((_f = bfm.title) != null ? _f : book.basename).split(/[\s:]+/).filter((w) => /^[A-Za-z0-9]/.test(w)).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
-      row.createDiv({ cls: "dj-cover dj-cover-fallback", text: initials });
-    }
-    const info = row.createDiv({ cls: "dj-book-info" });
-    link(app, info, String((_g = bfm.title) != null ? _g : book.basename), book, "dj-book-title");
-    if (bfm.author)
-      info.createDiv({ cls: "dj-book-author", text: String(bfm.author) });
-    if (progress !== null) {
-      info.createDiv({ cls: "dj-bar" }).createDiv().style.width = `${progress}%`;
-      const line = info.createDiv({ cls: "dj-progress" });
-      line.createSpan({ cls: "dj-progress-pct", text: `${progress}%` });
-      if (before !== null && before !== progress) {
-        const diff = progress - before;
-        line.createSpan({ text: `${diff > 0 ? "+" : ""}${diff.toFixed(1)}% today` });
-      }
-    }
-  }
-  for (const q of quotes) {
-    const bq = c.createEl("blockquote", { cls: "dj-quote", text: q.text });
-    if (q.file !== book) {
-      const title = (_j = (_i = (_h = app.metadataCache.getFileCache(q.file)) == null ? void 0 : _h.frontmatter) == null ? void 0 : _i.title) != null ? _j : q.file.basename;
-      link(app, bq.createDiv({ cls: "dj-quote-source" }), "\u2014 " + title, q.file);
     }
   }
 }
@@ -1123,8 +995,8 @@ function renderOnThisDay(host, el, date) {
 }
 
 // src/settings-tab.ts
-var import_obsidian7 = require("obsidian");
-var JournalSettingTab = class extends import_obsidian7.PluginSettingTab {
+var import_obsidian6 = require("obsidian");
+var JournalSettingTab = class extends import_obsidian6.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -1134,31 +1006,31 @@ var JournalSettingTab = class extends import_obsidian7.PluginSettingTab {
     const s = this.plugin.settings;
     const save = () => this.plugin.saveSettings();
     containerEl.empty();
-    new import_obsidian7.Setting(containerEl).setName("Entries").setHeading();
-    new import_obsidian7.Setting(containerEl).setName("Journal folder").setDesc("Where journal entries live. Usually the same as Obsidian's Daily notes folder.").addText((t) => t.setPlaceholder("Daily Notes").setValue(s.folder).onChange(async (v) => {
-      s.folder = (0, import_obsidian7.normalizePath)(v || "/");
+    new import_obsidian6.Setting(containerEl).setName("Entries").setHeading();
+    new import_obsidian6.Setting(containerEl).setName("Journal folder").setDesc("Where journal entries live. Usually the same as Obsidian's Daily notes folder.").addText((t) => t.setPlaceholder("Daily Notes").setValue(s.folder).onChange(async (v) => {
+      s.folder = (0, import_obsidian6.normalizePath)(v || "/");
       await save();
     }));
-    new import_obsidian7.Setting(containerEl).setName("Date format").setDesc("Path and filename format for entries (Moment.js), e.g. YYYY/MMM/MM-DD-YY. Usually the same as Daily notes.").addText((t) => t.setPlaceholder("YYYY-MM-DD").setValue(s.dateFormat).onChange(async (v) => {
+    new import_obsidian6.Setting(containerEl).setName("Date format").setDesc("Path and filename format for entries (Moment.js), e.g. YYYY/MMM/MM-DD-YY. Usually the same as Daily notes.").addText((t) => t.setPlaceholder("YYYY-MM-DD").setValue(s.dateFormat).onChange(async (v) => {
       s.dateFormat = v.trim() || "YYYY-MM-DD";
       await save();
     }));
-    new import_obsidian7.Setting(containerEl).setName("Fill new entries").setDesc("When an empty entry is created (Daily notes, a calendar, Hearth), fill it with the journal layout.").addToggle((t) => t.setValue(s.fillNewEntries).onChange(async (v) => {
+    new import_obsidian6.Setting(containerEl).setName("Fill new entries").setDesc("When an empty entry is created (Daily notes, a calendar, Hearth), fill it with the journal layout.").addToggle((t) => t.setValue(s.fillNewEntries).onChange(async (v) => {
       s.fillNewEntries = v;
       await save();
     }));
-    new import_obsidian7.Setting(containerEl).setName("Use as Daily notes template").setDesc(`Keeps the journal layout in ${this.plugin.templatePath()} and sets it as Daily notes' template, so Obsidian's own daily-note command uses it.`).addToggle((t) => t.setValue(s.useAsDailyTemplate).onChange(async (v) => {
+    new import_obsidian6.Setting(containerEl).setName("Use as Daily notes template").setDesc(`Keeps the journal layout in ${this.plugin.templatePath()} and sets it as Daily notes' template, so Obsidian's own daily-note command uses it.`).addToggle((t) => t.setValue(s.useAsDailyTemplate).onChange(async (v) => {
       s.useAsDailyTemplate = v;
       await save();
     }));
-    new import_obsidian7.Setting(containerEl).setName("Writing prompts").setDesc(s.prompts.map((p) => p.text).join(" \xB7 ") || "None").addButton((b) => b.setButtonText("Edit\u2026").onClick(() => {
+    new import_obsidian6.Setting(containerEl).setName("Writing prompts").setDesc(s.prompts.map((p) => p.text).join(" \xB7 ") || "None").addButton((b) => b.setButtonText("Edit\u2026").onClick(() => {
       new PromptsModal(this.app, s.prompts, async (prompts) => {
         s.prompts = prompts;
         await save();
         this.display();
       }).open();
     }));
-    new import_obsidian7.Setting(containerEl).setName("Cards").setHeading().setDesc('Changes apply to new entries. Use "Apply to existing entries" at the bottom to update older ones.');
+    new import_obsidian6.Setting(containerEl).setName("Cards").setHeading().setDesc('Changes apply to new entries. Use "Apply to existing entries" at the bottom to update older ones.');
     let group = containerEl;
     const card2 = () => {
       group = containerEl.createDiv({ cls: "dj-setting-group" });
@@ -1169,12 +1041,12 @@ var JournalSettingTab = class extends import_obsidian7.PluginSettingTab {
       setting.settingEl.toggle(visible);
       return setting;
     };
-    new import_obsidian7.Setting(card2()).setName("Weather").setDesc("That day's weather in each entry's header, for the entry's location.").addToggle((t) => t.setValue(s.showWeather).onChange(async (v) => {
+    new import_obsidian6.Setting(card2()).setName("Weather").setDesc("That day's weather in each entry's header, for the entry's location.").addToggle((t) => t.setValue(s.showWeather).onChange(async (v) => {
       s.showWeather = v;
       await save();
       this.display();
     }));
-    const home = sub(new import_obsidian7.Setting(group).setName("Default location").setDesc(s.home.name));
+    const home = sub(new import_obsidian6.Setting(group).setName("Default location").setDesc(s.home.name));
     home.addButton((b) => b.setButtonText("Change\u2026").onClick(() => {
       new PlaceModal(this.app, null, async (place) => {
         if (!place)
@@ -1184,25 +1056,16 @@ var JournalSettingTab = class extends import_obsidian7.PluginSettingTab {
         this.display();
       }, "Default location").open();
     }));
-    sub(new import_obsidian7.Setting(group).setName("Temperature"), s.showWeather).addDropdown((d) => d.addOption("f", "Fahrenheit (\xB0F)").addOption("c", "Celsius (\xB0C)").setValue(s.units).onChange(async (v) => {
+    sub(new import_obsidian6.Setting(group).setName("Temperature"), s.showWeather).addDropdown((d) => d.addOption("f", "Fahrenheit (\xB0F)").addOption("c", "Celsius (\xB0C)").setValue(s.units).onChange(async (v) => {
       s.units = v === "c" ? "c" : "f";
       await save();
     }));
-    new import_obsidian7.Setting(card2()).setName("Reading").setDesc("Your current book, its progress, and highlights made that day (from book notes, e.g. MoonSync).").addToggle((t) => t.setValue(s.showReading).onChange(async (v) => {
+    new import_obsidian6.Setting(card2()).setName("Reading").setDesc("What you read that day, from your Hardcover reading journal: pages per book, books started or finished, and quotes. Works for past days too.").addToggle((t) => t.setValue(s.showReading).onChange(async (v) => {
       s.showReading = v;
       await save();
       this.display();
     }));
-    sub(new import_obsidian7.Setting(group).setName("Books folder").setDesc("Where book notes live."), s.showReading).addText((t) => t.setPlaceholder("Books").setValue(s.booksFolder).onChange(async (v) => {
-      s.booksFolder = (0, import_obsidian7.normalizePath)(v || "Books");
-      await save();
-    }));
-    new import_obsidian7.Setting(card2()).setName("Reading (Hardcover)").setDesc("What you read that day from your Hardcover reading journal: progress per book, books started or finished, and quotes. Works for past days too.").addToggle((t) => t.setValue(s.showHardcover).onChange(async (v) => {
-      s.showHardcover = v;
-      await save();
-      this.display();
-    }));
-    sub(new import_obsidian7.Setting(group).setName("Hardcover API token").setDesc("From hardcover.app: Settings \u2192 Hardcover API. Stored in this plugin's settings."), s.showHardcover).addText((t) => {
+    sub(new import_obsidian6.Setting(group).setName("Hardcover API token").setDesc("From hardcover.app: Settings \u2192 Hardcover API. Stored in this plugin's settings."), s.showReading).addText((t) => {
       t.inputEl.type = "password";
       t.setPlaceholder("Paste your token").setValue(s.hardcoverToken).onChange(async (v) => {
         s.hardcoverToken = v.trim();
@@ -1210,17 +1073,17 @@ var JournalSettingTab = class extends import_obsidian7.PluginSettingTab {
       });
     }).addButton((b) => b.setButtonText("Test").onClick(async () => {
       if (!s.hardcoverToken) {
-        new import_obsidian7.Notice("Paste your Hardcover API token first.");
+        new import_obsidian6.Notice("Paste your Hardcover API token first.");
         return;
       }
       try {
         const user = await hardcoverUser(s.hardcoverToken);
-        new import_obsidian7.Notice(`Connected to Hardcover as ${user.username}.`);
+        new import_obsidian6.Notice(`Connected to Hardcover as ${user.username}.`);
       } catch (e) {
-        new import_obsidian7.Notice(`Hardcover: ${e instanceof Error ? e.message : String(e)}`);
+        new import_obsidian6.Notice(`Hardcover: ${e instanceof Error ? e.message : String(e)}`);
       }
     }));
-    new import_obsidian7.Setting(card2()).setName("Check-in").setDesc("Fields saved as properties, so Bases can chart and query them. Hidden when all are off.");
+    new import_obsidian6.Setting(card2()).setName("Check-in").setDesc("Fields saved as properties, so Bases can chart and query them. Hidden when all are off.");
     const fields = [
       ["rating", "Day rating (1\u201310)"],
       ["sleep", "Sleep (hours)"],
@@ -1230,25 +1093,25 @@ var JournalSettingTab = class extends import_obsidian7.PluginSettingTab {
       ["tags", "Tags"]
     ];
     for (const [key, name] of fields) {
-      sub(new import_obsidian7.Setting(group).setName(name)).addToggle((t) => t.setValue(s.fields[key]).onChange(async (v) => {
+      sub(new import_obsidian6.Setting(group).setName(name)).addToggle((t) => t.setValue(s.fields[key]).onChange(async (v) => {
         s.fields[key] = v;
         await save();
       }));
     }
-    new import_obsidian7.Setting(card2()).setName("On this day").setDesc("Links to entries from the same date in earlier months and years.").addToggle((t) => t.setValue(s.showOnThisDay).onChange(async (v) => {
+    new import_obsidian6.Setting(card2()).setName("On this day").setDesc("Links to entries from the same date in earlier months and years.").addToggle((t) => t.setValue(s.showOnThisDay).onChange(async (v) => {
       s.showOnThisDay = v;
       await save();
     }));
-    new import_obsidian7.Setting(containerEl).setName("Appearance").setHeading();
-    new import_obsidian7.Setting(containerEl).setName("Hide title and properties in entries").setDesc("The cards already show the date and check-in data.").addToggle((t) => t.setValue(s.hideNoteChrome).onChange(async (v) => {
+    new import_obsidian6.Setting(containerEl).setName("Appearance").setHeading();
+    new import_obsidian6.Setting(containerEl).setName("Hide title and properties in entries").setDesc("The cards already show the date and check-in data.").addToggle((t) => t.setValue(s.hideNoteChrome).onChange(async (v) => {
       s.hideNoteChrome = v;
       await save();
     }));
-    new import_obsidian7.Setting(containerEl).setName("Existing entries").setHeading();
-    new import_obsidian7.Setting(containerEl).setName("Apply to existing entries").setDesc("Settings above only apply to new entries. This updates older entries to match them: cards, weather, check-in fields and whether the title and Properties show, and gives entries without a location the default one. Your writing and headings aren't changed.").addButton((b) => b.setButtonText("Apply\u2026").onClick(async () => {
+    new import_obsidian6.Setting(containerEl).setName("Existing entries").setHeading();
+    new import_obsidian6.Setting(containerEl).setName("Apply to existing entries").setDesc("Settings above only apply to new entries. This updates older entries to match them: cards, weather, check-in fields and whether the title and Properties show, and gives entries without a location the default one. Your writing and headings aren't changed.").addButton((b) => b.setButtonText("Apply\u2026").onClick(async () => {
       const files = await this.plugin.entriesNeedingLayout();
       if (!files.length) {
-        new import_obsidian7.Notice("All entries already match the current settings.");
+        new import_obsidian6.Notice("All entries already match the current settings.");
         return;
       }
       const n = files.length;
@@ -1266,7 +1129,7 @@ var JournalSettingTab = class extends import_obsidian7.PluginSettingTab {
 };
 
 // main.ts
-var JournalBlock = class extends import_obsidian8.MarkdownRenderChild {
+var JournalBlock = class extends import_obsidian7.MarkdownRenderChild {
   constructor(plugin, containerEl, section, file) {
     super(containerEl);
     this.plugin = plugin;
@@ -1303,7 +1166,7 @@ var JournalBlock = class extends import_obsidian8.MarkdownRenderChild {
     void renderSection(this.plugin, this.section, this.containerEl, this.file);
   }
 };
-var DailyJournal = class extends import_obsidian8.Plugin {
+var DailyJournal = class extends import_obsidian7.Plugin {
   constructor() {
     super(...arguments);
     this.weatherTried = /* @__PURE__ */ new Set();
@@ -1314,18 +1177,18 @@ var DailyJournal = class extends import_obsidian8.Plugin {
     this.addSettingTab(new JournalSettingTab(this.app, this));
     this.registerMarkdownCodeBlockProcessor("journal", (source, el, ctx) => {
       const file = this.app.vault.getAbstractFileByPath(ctx.sourcePath);
-      if (file instanceof import_obsidian8.TFile)
+      if (file instanceof import_obsidian7.TFile)
         ctx.addChild(new JournalBlock(this, el, source.trim(), file));
     });
     this.addCommand({
       id: "open-today",
       name: "Open today's entry",
-      callback: () => this.openEntry((0, import_obsidian8.moment)())
+      callback: () => this.openEntry((0, import_obsidian7.moment)())
     });
     this.addCommand({
       id: "create-yesterday",
       name: "Create Journal (Yesterday)",
-      callback: () => this.openEntry((0, import_obsidian8.moment)().subtract(1, "day"))
+      callback: () => this.openEntry((0, import_obsidian7.moment)().subtract(1, "day"))
     });
     this.addCommand({
       id: "create-choose",
@@ -1360,7 +1223,7 @@ var DailyJournal = class extends import_obsidian8.Plugin {
             n++;
           }
         }
-        new import_obsidian8.Notice(n ? "Reading updated." : "This entry has no reading card.");
+        new import_obsidian7.Notice(n ? "Reading updated." : "This entry has no reading card.");
       })
     });
     this.addCommand({
@@ -1370,7 +1233,7 @@ var DailyJournal = class extends import_obsidian8.Plugin {
     });
     this.registerEvent(this.app.workspace.on("file-menu", (menu, file) => {
       const date = entryDate(this.settings, file);
-      if (!date || !(file instanceof import_obsidian8.TFile))
+      if (!date || !(file instanceof import_obsidian7.TFile))
         return;
       menu.addItem((item) => item.setTitle("Change date (yesterday)").setIcon("calendar-minus").setSection("action").onClick(() => this.moveEntry(file, date.clone().subtract(1, "day"))));
       menu.addItem((item) => item.setTitle("Change date (choose date)").setIcon("calendar-days").setSection("action").onClick(() => this.pickDate(file, date)));
@@ -1388,7 +1251,7 @@ var DailyJournal = class extends import_obsidian8.Plugin {
   }
   onunload() {
     this.app.workspace.iterateAllLeaves((leaf) => {
-      if (leaf.view instanceof import_obsidian8.MarkdownView)
+      if (leaf.view instanceof import_obsidian7.MarkdownView)
         leaf.view.contentEl.removeClass("dj-chrome-hidden");
     });
   }
@@ -1397,7 +1260,7 @@ var DailyJournal = class extends import_obsidian8.Plugin {
     this.app.workspace.iterateAllLeaves((leaf) => {
       var _a;
       const view = leaf.view;
-      if (!(view instanceof import_obsidian8.MarkdownView))
+      if (!(view instanceof import_obsidian7.MarkdownView))
         return;
       const fm = view.file ? (_a = this.app.metadataCache.getFileCache(view.file)) == null ? void 0 : _a.frontmatter : void 0;
       const classes = Array.isArray(fm == null ? void 0 : fm.cssclasses) ? fm.cssclasses : [fm == null ? void 0 : fm.cssclasses];
@@ -1412,7 +1275,7 @@ var DailyJournal = class extends import_obsidian8.Plugin {
     if (!saved) {
       const daily = (_e = (_d = (_c = (_b = this.app.internalPlugins) == null ? void 0 : _b.getPluginById) == null ? void 0 : _c.call(_b, "daily-notes")) == null ? void 0 : _d.instance) == null ? void 0 : _e.options;
       if (daily == null ? void 0 : daily.folder)
-        this.settings.folder = (0, import_obsidian8.normalizePath)(daily.folder);
+        this.settings.folder = (0, import_obsidian7.normalizePath)(daily.folder);
       if (daily == null ? void 0 : daily.format)
         this.settings.dateFormat = daily.format;
     }
@@ -1430,7 +1293,7 @@ var DailyJournal = class extends import_obsidian8.Plugin {
   templatePath() {
     var _a, _b;
     const folder = (_b = (_a = this.corePlugin("templates")) == null ? void 0 : _a.options) == null ? void 0 : _b.folder;
-    return (0, import_obsidian8.normalizePath)(`${folder ? folder + "/" : ""}Daily Journal.md`);
+    return (0, import_obsidian7.normalizePath)(`${folder ? folder + "/" : ""}Daily Journal.md`);
   }
   /**
    * With "Use as Daily notes template" on, keep the template file in step with the settings and
@@ -1451,7 +1314,7 @@ var DailyJournal = class extends import_obsidian8.Plugin {
     if (this.settings.useAsDailyTemplate) {
       const text = entryTemplate(this.settings);
       const existing = this.app.vault.getAbstractFileByPath(path);
-      if (existing instanceof import_obsidian8.TFile) {
+      if (existing instanceof import_obsidian7.TFile) {
         if (await this.app.vault.read(existing) !== text)
           await this.app.vault.modify(existing, text);
       } else {
@@ -1459,7 +1322,7 @@ var DailyJournal = class extends import_obsidian8.Plugin {
         await this.app.vault.create(path, text);
       }
       await setDailyTemplate(name);
-    } else if ((0, import_obsidian8.normalizePath)((_b = (_a = daily == null ? void 0 : daily.options) == null ? void 0 : _a.template) != null ? _b : "") === name) {
+    } else if ((0, import_obsidian7.normalizePath)((_b = (_a = daily == null ? void 0 : daily.options) == null ? void 0 : _a.template) != null ? _b : "") === name) {
       await setDailyTemplate("");
     }
   }
@@ -1528,12 +1391,12 @@ var DailyJournal = class extends import_obsidian8.Plugin {
         fm.cssclasses = classes;
       });
     }
-    new import_obsidian8.Notice(`Updated ${files.length} entr${files.length === 1 ? "y" : "ies"}.`);
+    new import_obsidian7.Notice(`Updated ${files.length} entr${files.length === 1 ? "y" : "ies"}.`);
   }
   async openEntry(date) {
     const path = entryPath(this.settings, date);
     let file = this.app.vault.getAbstractFileByPath(path);
-    if (!(file instanceof import_obsidian8.TFile)) {
+    if (!(file instanceof import_obsidian7.TFile)) {
       await this.ensureFolder(path);
       file = await this.app.vault.create(path, entryTemplate(this.settings));
     }
@@ -1545,7 +1408,7 @@ var DailyJournal = class extends import_obsidian8.Plugin {
       await this.app.vault.createFolder(folder);
   }
   fillIfEmpty(file) {
-    if (!this.settings.fillNewEntries || !entryDate(this.settings, file) || !(file instanceof import_obsidian8.TFile))
+    if (!this.settings.fillNewEntries || !entryDate(this.settings, file) || !(file instanceof import_obsidian7.TFile))
       return;
     window.setTimeout(async () => {
       if ((await this.app.vault.read(file)).trim() === "")
@@ -1559,30 +1422,30 @@ var DailyJournal = class extends import_obsidian8.Plugin {
     if (target === file.path)
       return;
     if (this.app.vault.getAbstractFileByPath(target)) {
-      new import_obsidian8.Notice(`There's already a journal entry for ${date.format("MMM D, YYYY")}.`);
+      new import_obsidian7.Notice(`There's already a journal entry for ${date.format("MMM D, YYYY")}.`);
       return;
     }
     await this.ensureFolder(target);
     await this.app.fileManager.renameFile(file, target);
     const place = entryPlace((_a = this.app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter, this.settings.home);
     if (!await this.entryShowsWeather(file)) {
-      new import_obsidian8.Notice(`Moved entry to ${date.format("dddd, MMM D, YYYY")}.`);
+      new import_obsidian7.Notice(`Moved entry to ${date.format("dddd, MMM D, YYYY")}.`);
       return;
     }
-    const weather = date.isAfter((0, import_obsidian8.moment)(), "day") ? null : await fetchWeather(place, date, this.settings.units);
+    const weather = date.isAfter((0, import_obsidian7.moment)(), "day") ? null : await fetchWeather(place, date, this.settings.units);
     await this.app.fileManager.processFrontMatter(file, (fm) => {
       if (weather)
         fm.weather = weather;
       else
         delete fm.weather;
     });
-    new import_obsidian8.Notice(`Moved entry to ${date.format("dddd, MMM D, YYYY")}${weather ? "" : " (weather unavailable)"}.`);
+    new import_obsidian7.Notice(`Moved entry to ${date.format("dddd, MMM D, YYYY")}${weather ? "" : " (weather unavailable)"}.`);
   }
   /** Sets an entry's location (null = the default location) and refreshes its weather. Returns the new weather. */
   async setEntryPlace(file, place, withWeather) {
     const chosen = place != null ? place : this.settings.home;
     const date = entryDate(this.settings, file);
-    const weather = withWeather && date && !date.isAfter((0, import_obsidian8.moment)(), "day") ? await fetchWeather(chosen, date, this.settings.units) : null;
+    const weather = withWeather && date && !date.isAfter((0, import_obsidian7.moment)(), "day") ? await fetchWeather(chosen, date, this.settings.units) : null;
     await this.app.fileManager.processFrontMatter(file, (fm) => {
       Object.assign(fm, { location: chosen.name, latitude: chosen.lat, longitude: chosen.lon, timezone: chosen.tz });
       if (!withWeather)
