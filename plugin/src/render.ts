@@ -187,9 +187,19 @@ async function renderHardcover(host: JournalHost, el: HTMLElement, date: Moment)
 		card(el, "Reading").createDiv({ cls: "dj-muted", text: `Couldn't load from Hardcover: ${e instanceof Error ? e.message : String(e)}` });
 		return;
 	}
-	if (!day.books.length && !day.quotes.length) return;
 
 	const c = card(el, "Reading");
+	if (!day.books.length && !day.quotes.length) {
+		const text = day.lastRead
+			? `No reading logged. Last read ${day.lastRead.title}, ${day.lastRead.date.format("MMM D")} (${date.clone().startOf("day").diff(day.lastRead.date.clone().startOf("day"), "days")} days earlier).`
+			: "No reading logged.";
+		c.createDiv({ cls: "dj-muted", text });
+		return;
+	}
+
+	// Day total, when more than one book (or time) is involved.
+	if (day.pages && day.books.length > 1) c.createDiv({ cls: "dj-day-total", text: `${day.pages} pages` });
+
 	for (const b of day.books) {
 		const row = c.createDiv({ cls: "dj-book" });
 		const initials = b.title.split(/[\s:]+/).filter((w) => /^[A-Za-z0-9]/.test(w)).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
@@ -203,12 +213,12 @@ async function renderHardcover(host: JournalHost, el: HTMLElement, date: Moment)
 		if (b.author) info.createDiv({ cls: "dj-book-author", text: b.author });
 		const badges = info.createDiv({ cls: "dj-row" });
 		if (b.started) badges.createSpan({ cls: "dj-badge", text: "Started" });
-		if (b.finished) badges.createSpan({ cls: "dj-badge", text: "Finished" });
+		if (b.finished) badges.createSpan({ cls: "dj-badge", text: b.rating ? `Finished · rated ${b.rating}` : "Finished" });
 		if (b.to !== null) {
 			info.createDiv({ cls: "dj-bar" }).createDiv().style.width = `${Math.min(100, b.to)}%`;
 			const line = info.createDiv({ cls: "dj-progress" });
-			line.createSpan({ cls: "dj-progress-pct", text: b.from !== null && b.from !== b.to ? `${b.from}% → ${b.to}%` : `${b.to}%` });
-			if (b.from !== null && b.to > b.from) line.createSpan({ text: `+${b.to - b.from}% that day` });
+			line.createSpan({ cls: "dj-progress-pct", text: b.from !== null && b.from !== b.to ? `${Math.round(b.from)}% → ${Math.round(b.to)}%` : `${Math.round(b.to)}%` });
+			if (b.pages) line.createSpan({ text: `+${b.pages} pages` });
 		}
 	}
 	for (const q of day.quotes) {

@@ -10,14 +10,24 @@ export interface HardcoverBookDay {
 	url: string | null;
 	from: number | null; // progress % at the start of the day
 	to: number | null; // progress % at the end of the day
+	pages: number; // pages read that day
+	page: number | null; // page reached by the end of the day
 	started: boolean;
 	finished: boolean;
+	rating: number | null; // your rating, shown when the book was finished that day
 	realStart?: string; // internal: start date from a finish event, when it isn't this day
+	bookPages?: number; // internal: the book's page count, to cap odd completion jumps
+	bookId?: number; // internal: Hardcover book id
+	lastPage?: number | null; // internal: page reached by the previous progress entry today
+	finishPage?: number | null; // internal: page Hardcover set when the book was marked finished
+	needsBase?: boolean; // internal: finished with no progress entry earlier that day
 }
 
 export interface HardcoverDay {
 	books: HardcoverBookDay[];
 	quotes: Array<{ text: string; book: string }>;
+	pages: number; // total pages read that day
+	lastRead: { title: string; date: Moment } | null; // most recent reading before this day, when none on it
 }
 
 async function query<T>(token: string, gql: string, variables: Record<string, unknown> = {}): Promise<T> {
@@ -47,6 +57,12 @@ export async function hardcoverUser(token: string): Promise<{ id: number; userna
 const userIds = new Map<string, number>();
 const days = new Map<string, { at: number; day: HardcoverDay }>();
 
+/** Drop the cached reading for a day, so the next render fetches it from Hardcover again. */
+export function forgetHardcoverDay(date: Moment): void {
+	const suffix = `|${date.format("YYYY-MM-DD")}`;
+	for (const key of [...days.keys()]) if (key.endsWith(suffix)) days.delete(key);
+}
+
 /**
  * What you read on a day, from your Hardcover reading journal. Hardcover keeps one progress
  * entry per book per day (updated as you read), timestamped in UTC when it was created.
@@ -55,8 +71,9 @@ const days = new Map<string, { at: number; day: HardcoverDay }>();
 export async function hardcoverDay(token: string, date: Moment): Promise<HardcoverDay> {
 	const key = `${token.slice(-8)}|${date.format("YYYY-MM-DD")}`;
 	const cached = days.get(key);
-	const isToday = date.isSame(window.moment(), "day");
-	if (cached && (!isToday || Date.now() - cached.at < 10 * 60 * 1000)) return cached.day;
+	// A day is final once fetched after it ended; until then, refetch after 10 minutes.
+	const dayEnd = date.clone().add(1, "day").startOf("day").valueOf();
+	if (cached && (cached.at >= dayEnd || Date.now() - cached.at < 10 * 60 * 1000)) return cached.day;
 
 	let userId = userIds.get(token);
 	if (userId === undefined) {
@@ -68,7 +85,7 @@ export async function hardcoverDay(token: string, date: Moment): Promise<Hardcov
 		query($user: Int!, $from: timestamp!, $to: timestamp!) {
 			reading_journals(where: { user_id: { _eq: $user }, created_at: { _gte: $from, _lt: $to } }, order_by: { created_at: asc }) {
 				event entry metadata
-				book { title slug cached_image contributions(limit: 1) { author { name } } }
+				book { id title slug pages cached_image contributions(limit: 1) { author { name } } user_books(where: { user_id: { _eq: $user } }) { rating } }
 			}
 		}`, { user: userId, from: utc(date.clone().startOf("day")), to: utc(date.clone().add(1, "day").startOf("day")) });
 
@@ -83,7 +100,11 @@ export async function hardcoverDay(token: string, date: Moment): Promise<Hardcov
 			author: b.contributions?.[0]?.author?.name ?? null,
 			cover: b.cached_image?.url ?? null,
 			url: b.slug ? `https://hardcover.app/books/${b.slug}` : null,
-			from: null, to: null, started: false, finished: false,
+			from: null, to: null, pages: 0, page: null, started: false, finished: false,
+			rating: b.user_books?.[0]?.rating ?? null,
+			bookPages: Number(b.pages) || undefined,
+			bookId: Number(b.id) || undefined,
+			lastPage: null,
 		};
 		if (row.event === "user_book_read_started") book.started = true;
 		if (row.event === "user_book_read_finished") {
@@ -94,23 +115,73 @@ export async function hardcoverDay(token: string, date: Moment): Promise<Hardcov
 			if (startedAt && startedAt !== date.format("YYYY-MM-DD")) book.realStart = startedAt;
 		}
 		if (row.event === "progress_updated") {
-			const was = Number(row.metadata?.progress_was), now = Number(row.metadata?.progress);
-			if (!isNaN(was) && !isNaN(now)) {
-				book.from = book.from ?? was;
-				book.to = now;
+			const m = row.metadata ?? {};
+			const was = Number(m.progress_was), now = Number(m.progress);
+			const page = Number(m.progress_pages) > 0 ? Number(m.progress_pages) : null;
+			if (m.source === "completion") {
+				// Marking a book finished logs its jump to 100% against a fresh read, as if from 0%.
+				// Count it from the page you'd actually reached instead.
+				if (!isNaN(now)) book.to = now;
+				if (book.from === null) book.needsBase = true;
+				else if (page !== null && book.lastPage) book.pages += Math.max(0, page - book.lastPage);
+				book.finishPage = page;
+			} else {
+				if (!isNaN(was) && !isNaN(now)) {
+					book.from = book.from ?? was;
+					book.to = now;
+				}
+				if (Number(m.pages_delta) > 0) book.pages += Number(m.pages_delta);
 			}
+			if (page !== null) { book.page = page; book.lastPage = page; }
 		}
 		books.set(b.title, book);
 	}
+	// Books finished with no progress entry earlier that day: measure from their last entry before it.
+	const needBase = [...books.values()].filter((b) => b.needsBase && b.bookId);
+	if (needBase.length) {
+		const prior = await query<{ reading_journals: Array<Record<string, any>> }>(token, `
+			query($user: Int!, $books: [Int!]!, $before: timestamp!) {
+				reading_journals(where: { user_id: { _eq: $user }, book_id: { _in: $books }, event: { _eq: "progress_updated" }, created_at: { _lt: $before } },
+					distinct_on: book_id, order_by: [{ book_id: asc }, { created_at: desc }]) { book_id metadata }
+			}`, { user: userId, books: needBase.map((b) => b.bookId), before: utc(date.clone().startOf("day")) });
+		for (const book of needBase) {
+			const m = (prior.reading_journals ?? []).find((r) => r.book_id === book.bookId)?.metadata;
+			const basePct = Number(m?.progress), basePage = Number(m?.progress_pages);
+			if (m && !isNaN(basePct)) book.from = basePct;
+			if (book.finishPage && basePage > 0) book.pages += Math.max(0, book.finishPage - basePage);
+			else if (book.bookPages && book.from !== null && book.to !== null) book.pages += Math.max(0, Math.round((book.to - book.from) / 100 * book.bookPages));
+		}
+	}
 	for (const book of books.values()) {
 		if (book.realStart) book.started = false;
+		// Finishing can log a page jump bigger than the book; never count more than its length.
+		if (book.bookPages && book.pages > book.bookPages) book.pages = book.bookPages;
+		if (!book.finished) book.rating = null;
 		delete book.realStart;
+		delete book.bookPages;
+		delete book.bookId;
+		delete book.lastPage;
+		delete book.finishPage;
+		delete book.needsBase;
 	}
 	// Keep books that moved forward, or were started or finished. Drops no-change and backwards blips.
+	const kept = [...books.values()].filter((b) => b.started || b.finished || (b.from !== null && b.to !== null && b.to > b.from));
 	const day: HardcoverDay = {
-		books: [...books.values()].filter((b) => b.started || b.finished || (b.from !== null && b.to !== null && b.to > b.from)),
+		books: kept,
 		quotes,
+		pages: kept.reduce((n, b) => n + b.pages, 0),
+		lastRead: null,
 	};
+	if (!kept.length) {
+		// Nothing that day: find the most recent day you made progress, so the card can say so.
+		const before = await query<{ reading_journals: Array<Record<string, any>> }>(token, `
+			query($user: Int!, $before: timestamp!) {
+				reading_journals(where: { user_id: { _eq: $user }, event: { _eq: "progress_updated" }, created_at: { _lt: $before } },
+					order_by: { created_at: desc }, limit: 50) { created_at metadata book { title } }
+			}`, { user: userId, before: utc(date.clone().startOf("day")) });
+		const hit = (before.reading_journals ?? []).find((r) => Number(r.metadata?.progress) > Number(r.metadata?.progress_was));
+		if (hit?.book?.title) day.lastRead = { title: hit.book.title, date: window.moment.utc(hit.created_at).local() };
+	}
 	days.set(key, { at: Date.now(), day });
 	return day;
 }

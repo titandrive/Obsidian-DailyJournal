@@ -1,5 +1,6 @@
 import { MarkdownRenderChild, MarkdownView, Notice, normalizePath, Plugin, TAbstractFile, TFile, moment } from "obsidian";
 import { entryDate, entryPath, Moment } from "./src/dates";
+import { forgetHardcoverDay } from "./src/hardcover";
 import { MonthPicker, PlaceModal } from "./src/modals";
 import { JournalHost, renderSection } from "./src/render";
 import { DEFAULT_SETTINGS, JournalSettings, Place, Prompt } from "./src/settings";
@@ -15,7 +16,12 @@ class JournalBlock extends MarkdownRenderChild {
 		super(containerEl);
 	}
 
+	/** The entry this block belongs to and its card type (first word of the block). */
+	get path(): string { return this.file.path; }
+	get kind(): string { return this.section.split(/\s+/)[0]; }
+
 	onload(): void {
+		this.plugin.blocks.add(this);
 		this.render();
 		this.registerEvent(this.plugin.app.metadataCache.on("changed", (changed) => {
 			if (changed.path !== this.file.path) return;
@@ -28,9 +34,10 @@ class JournalBlock extends MarkdownRenderChild {
 
 	onunload(): void {
 		window.clearTimeout(this.timer);
+		this.plugin.blocks.delete(this);
 	}
 
-	private render(): void {
+	render(): void {
 		this.containerEl.empty();
 		this.containerEl.addClass("dj-block");
 		void renderSection(this.plugin, this.section, this.containerEl, this.file);
@@ -40,6 +47,7 @@ class JournalBlock extends MarkdownRenderChild {
 export default class DailyJournal extends Plugin implements JournalHost {
 	settings!: JournalSettings;
 	weatherTried = new Set<string>();
+	blocks = new Set<JournalBlock>();
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
@@ -75,6 +83,18 @@ export default class DailyJournal extends Plugin implements JournalHost {
 			id: "change-date-choose",
 			name: "Change date (choose date)",
 			checkCallback: (checking) => this.withActiveEntry(checking, (file, date) => this.pickDate(file, date)),
+		});
+		this.addCommand({
+			id: "refresh-reading",
+			name: "Refresh reading",
+			checkCallback: (checking) => this.withActiveEntry(checking, (file, date) => {
+				forgetHardcoverDay(date);
+				let n = 0;
+				for (const block of this.blocks) {
+					if (block.path === file.path && (block.kind === "hardcover" || block.kind === "reading")) { block.render(); n++; }
+				}
+				new Notice(n ? "Reading updated." : "This entry has no reading card.");
+			}),
 		});
 		this.addCommand({
 			id: "change-location",

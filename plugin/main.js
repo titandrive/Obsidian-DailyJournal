@@ -47,8 +47,184 @@ function entryPath(settings, date) {
   return (0, import_obsidian.normalizePath)(`${folder === "/" ? "" : folder + "/"}${date.format(settings.dateFormat)}.md`);
 }
 
+// src/hardcover.ts
+var import_obsidian2 = require("obsidian");
+var API = "https://api.hardcover.app/v1/graphql";
+async function query(token, gql, variables = {}) {
+  var _a;
+  const auth = /^bearer\s/i.test(token.trim()) ? token.trim() : `Bearer ${token.trim()}`;
+  const res = await (0, import_obsidian2.requestUrl)({
+    url: API,
+    method: "POST",
+    contentType: "application/json",
+    headers: { Authorization: auth },
+    body: JSON.stringify({ query: gql, variables }),
+    throw: false
+  });
+  if (res.status === 401 || res.status === 403)
+    throw new Error("Hardcover rejected the API token.");
+  if (res.status === 429)
+    throw new Error("Hardcover is limiting requests right now. Try again in a minute.");
+  if (res.status >= 400)
+    throw new Error(`Hardcover error (${res.status}).`);
+  if ((_a = res.json.errors) == null ? void 0 : _a.length)
+    throw new Error(res.json.errors[0].message);
+  return res.json.data;
+}
+async function hardcoverUser(token) {
+  var _a;
+  const data = await query(token, "{ me { id username } }");
+  if (!((_a = data.me) == null ? void 0 : _a.length))
+    throw new Error("Hardcover didn't return a user for this token.");
+  return data.me[0];
+}
+var userIds = /* @__PURE__ */ new Map();
+var days = /* @__PURE__ */ new Map();
+function forgetHardcoverDay(date) {
+  const suffix = `|${date.format("YYYY-MM-DD")}`;
+  for (const key of [...days.keys()])
+    if (key.endsWith(suffix))
+      days.delete(key);
+}
+async function hardcoverDay(token, date) {
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r;
+  const key = `${token.slice(-8)}|${date.format("YYYY-MM-DD")}`;
+  const cached = days.get(key);
+  const dayEnd = date.clone().add(1, "day").startOf("day").valueOf();
+  if (cached && (cached.at >= dayEnd || Date.now() - cached.at < 10 * 60 * 1e3))
+    return cached.day;
+  let userId = userIds.get(token);
+  if (userId === void 0) {
+    userId = (await hardcoverUser(token)).id;
+    userIds.set(token, userId);
+  }
+  const utc = (m) => m.clone().utc().format("YYYY-MM-DDTHH:mm:ss");
+  const data = await query(token, `
+		query($user: Int!, $from: timestamp!, $to: timestamp!) {
+			reading_journals(where: { user_id: { _eq: $user }, created_at: { _gte: $from, _lt: $to } }, order_by: { created_at: asc }) {
+				event entry metadata
+				book { id title slug pages cached_image contributions(limit: 1) { author { name } } user_books(where: { user_id: { _eq: $user } }) { rating } }
+			}
+		}`, { user: userId, from: utc(date.clone().startOf("day")), to: utc(date.clone().add(1, "day").startOf("day")) });
+  const books = /* @__PURE__ */ new Map();
+  const quotes = [];
+  for (const row of (_a = data.reading_journals) != null ? _a : []) {
+    const b = row.book;
+    if (!(b == null ? void 0 : b.title))
+      continue;
+    if (row.event === "quote" && row.entry) {
+      quotes.push({ text: String(row.entry), book: b.title });
+      continue;
+    }
+    const book = (_k = books.get(b.title)) != null ? _k : {
+      title: b.title,
+      author: (_e = (_d = (_c = (_b = b.contributions) == null ? void 0 : _b[0]) == null ? void 0 : _c.author) == null ? void 0 : _d.name) != null ? _e : null,
+      cover: (_g = (_f = b.cached_image) == null ? void 0 : _f.url) != null ? _g : null,
+      url: b.slug ? `https://hardcover.app/books/${b.slug}` : null,
+      from: null,
+      to: null,
+      pages: 0,
+      page: null,
+      started: false,
+      finished: false,
+      rating: (_j = (_i = (_h = b.user_books) == null ? void 0 : _h[0]) == null ? void 0 : _i.rating) != null ? _j : null,
+      bookPages: Number(b.pages) || void 0,
+      bookId: Number(b.id) || void 0,
+      lastPage: null
+    };
+    if (row.event === "user_book_read_started")
+      book.started = true;
+    if (row.event === "user_book_read_finished") {
+      book.finished = true;
+      const startedAt = (_l = row.metadata) == null ? void 0 : _l.started_at;
+      if (startedAt && startedAt !== date.format("YYYY-MM-DD"))
+        book.realStart = startedAt;
+    }
+    if (row.event === "progress_updated") {
+      const m = (_m = row.metadata) != null ? _m : {};
+      const was = Number(m.progress_was), now = Number(m.progress);
+      const page = Number(m.progress_pages) > 0 ? Number(m.progress_pages) : null;
+      if (m.source === "completion") {
+        if (!isNaN(now))
+          book.to = now;
+        if (book.from === null)
+          book.needsBase = true;
+        else if (page !== null && book.lastPage)
+          book.pages += Math.max(0, page - book.lastPage);
+        book.finishPage = page;
+      } else {
+        if (!isNaN(was) && !isNaN(now)) {
+          book.from = (_n = book.from) != null ? _n : was;
+          book.to = now;
+        }
+        if (Number(m.pages_delta) > 0)
+          book.pages += Number(m.pages_delta);
+      }
+      if (page !== null) {
+        book.page = page;
+        book.lastPage = page;
+      }
+    }
+    books.set(b.title, book);
+  }
+  const needBase = [...books.values()].filter((b) => b.needsBase && b.bookId);
+  if (needBase.length) {
+    const prior = await query(token, `
+			query($user: Int!, $books: [Int!]!, $before: timestamp!) {
+				reading_journals(where: { user_id: { _eq: $user }, book_id: { _in: $books }, event: { _eq: "progress_updated" }, created_at: { _lt: $before } },
+					distinct_on: book_id, order_by: [{ book_id: asc }, { created_at: desc }]) { book_id metadata }
+			}`, { user: userId, books: needBase.map((b) => b.bookId), before: utc(date.clone().startOf("day")) });
+    for (const book of needBase) {
+      const m = (_p = ((_o = prior.reading_journals) != null ? _o : []).find((r) => r.book_id === book.bookId)) == null ? void 0 : _p.metadata;
+      const basePct = Number(m == null ? void 0 : m.progress), basePage = Number(m == null ? void 0 : m.progress_pages);
+      if (m && !isNaN(basePct))
+        book.from = basePct;
+      if (book.finishPage && basePage > 0)
+        book.pages += Math.max(0, book.finishPage - basePage);
+      else if (book.bookPages && book.from !== null && book.to !== null)
+        book.pages += Math.max(0, Math.round((book.to - book.from) / 100 * book.bookPages));
+    }
+  }
+  for (const book of books.values()) {
+    if (book.realStart)
+      book.started = false;
+    if (book.bookPages && book.pages > book.bookPages)
+      book.pages = book.bookPages;
+    if (!book.finished)
+      book.rating = null;
+    delete book.realStart;
+    delete book.bookPages;
+    delete book.bookId;
+    delete book.lastPage;
+    delete book.finishPage;
+    delete book.needsBase;
+  }
+  const kept = [...books.values()].filter((b) => b.started || b.finished || b.from !== null && b.to !== null && b.to > b.from);
+  const day = {
+    books: kept,
+    quotes,
+    pages: kept.reduce((n, b) => n + b.pages, 0),
+    lastRead: null
+  };
+  if (!kept.length) {
+    const before = await query(token, `
+			query($user: Int!, $before: timestamp!) {
+				reading_journals(where: { user_id: { _eq: $user }, event: { _eq: "progress_updated" }, created_at: { _lt: $before } },
+					order_by: { created_at: desc }, limit: 50) { created_at metadata book { title } }
+			}`, { user: userId, before: utc(date.clone().startOf("day")) });
+    const hit = ((_q = before.reading_journals) != null ? _q : []).find((r) => {
+      var _a2, _b2;
+      return Number((_a2 = r.metadata) == null ? void 0 : _a2.progress) > Number((_b2 = r.metadata) == null ? void 0 : _b2.progress_was);
+    });
+    if ((_r = hit == null ? void 0 : hit.book) == null ? void 0 : _r.title)
+      day.lastRead = { title: hit.book.title, date: window.moment.utc(hit.created_at).local() };
+  }
+  days.set(key, { at: Date.now(), day });
+  return day;
+}
+
 // src/modals.ts
-var import_obsidian3 = require("obsidian");
+var import_obsidian4 = require("obsidian");
 
 // src/settings.ts
 var MAX_PROMPT_LEVEL = 3;
@@ -75,7 +251,7 @@ var DEFAULT_SETTINGS = {
 };
 
 // src/weather.ts
-var import_obsidian2 = require("obsidian");
+var import_obsidian3 = require("obsidian");
 function entryPlace(fm, home) {
   if (fm && fm.location && fm.latitude != null && fm.longitude != null) {
     return {
@@ -111,7 +287,7 @@ async function fetchWeather(place, date, units) {
   var _a;
   try {
     const day = date.format("YYYY-MM-DD");
-    const res = await (0, import_obsidian2.requestUrl)({
+    const res = await (0, import_obsidian3.requestUrl)({
       url: `https://api.open-meteo.com/v1/forecast?latitude=${place.lat}&longitude=${place.lon}&daily=weather_code,temperature_2m_max,temperature_2m_min&temperature_unit=${units === "f" ? "fahrenheit" : "celsius"}&timezone=${encodeURIComponent(place.tz)}&start_date=${day}&end_date=${day}`
     });
     const w = res.json.daily;
@@ -124,7 +300,7 @@ async function fetchWeather(place, date, units) {
 }
 async function searchPlaces(query2) {
   var _a;
-  const res = await (0, import_obsidian2.requestUrl)({
+  const res = await (0, import_obsidian3.requestUrl)({
     url: `https://geocoding-api.open-meteo.com/v1/search?count=6&language=en&name=${encodeURIComponent(query2)}`
   });
   const results = (_a = res.json.results) != null ? _a : [];
@@ -142,14 +318,14 @@ async function searchPlaces(query2) {
 var PIN_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.97 9.304A8 8 0 0 0 2 10c0 4.69 4.887 9.562 7.022 11.468"/><path d="M21.378 16.626a1 1 0 0 0-3.004-3.004l-4.01 4.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/><circle cx="10" cy="10" r="3"/></svg>';
 
 // src/modals.ts
-var MonthPicker = class extends import_obsidian3.Modal {
+var MonthPicker = class extends import_obsidian4.Modal {
   constructor(app, current, isTaken, onPick, options = {}) {
     super(app);
     this.current = current;
     this.isTaken = isTaken;
     this.onPick = onPick;
     this.options = options;
-    this.month = (current != null ? current : (0, import_obsidian3.moment)()).clone().startOf("month");
+    this.month = (current != null ? current : (0, import_obsidian4.moment)()).clone().startOf("month");
   }
   onOpen() {
     var _a;
@@ -171,11 +347,11 @@ var MonthPicker = class extends import_obsidian3.Modal {
       this.render();
     };
     const grid = contentEl.createDiv({ cls: "dj-picker-grid" });
-    for (const d of import_obsidian3.moment.weekdaysMin())
+    for (const d of import_obsidian4.moment.weekdaysMin())
       grid.createDiv({ cls: "dj-picker-dow", text: d });
     for (let i = 0; i < this.month.day(); i++)
       grid.createDiv();
-    const today = (0, import_obsidian3.moment)();
+    const today = (0, import_obsidian4.moment)();
     for (const day = this.month.clone(); day.isSame(this.month, "month"); day.add(1, "day")) {
       const date = day.clone();
       const btn = grid.createEl("button", { cls: "dj-picker-day", text: String(date.date()) });
@@ -204,7 +380,7 @@ var MonthPicker = class extends import_obsidian3.Modal {
     this.contentEl.empty();
   }
 };
-var PlaceModal = class extends import_obsidian3.Modal {
+var PlaceModal = class extends import_obsidian4.Modal {
   constructor(app, home, onChoose, title = "Change location") {
     super(app);
     this.home = home;
@@ -268,7 +444,7 @@ var PlaceModal = class extends import_obsidian3.Modal {
     this.contentEl.empty();
   }
 };
-var PromptsModal = class extends import_obsidian3.Modal {
+var PromptsModal = class extends import_obsidian4.Modal {
   constructor(app, prompts, onSave) {
     super(app);
     this.onSave = onSave;
@@ -280,7 +456,7 @@ var PromptsModal = class extends import_obsidian3.Modal {
     this.contentEl.createDiv({ cls: "dj-prompts-hint", text: "Drag to reorder. Indent to make a prompt a sub-heading of the one above." });
     this.list = this.contentEl.createDiv({ cls: "dj-prompts" });
     const add = this.contentEl.createEl("button", { cls: "dj-prompt-add" });
-    (0, import_obsidian3.setIcon)(add.createSpan(), "plus");
+    (0, import_obsidian4.setIcon)(add.createSpan(), "plus");
     add.createSpan({ text: "Add prompt" });
     add.onclick = () => {
       var _a, _b, _c;
@@ -303,7 +479,7 @@ var PromptsModal = class extends import_obsidian3.Modal {
       const row = this.list.createDiv({ cls: "dj-prompt-row" });
       row.style.setProperty("--dj-level", String(item.level));
       const handle = row.createDiv({ cls: "dj-prompt-handle", attr: { "aria-label": "Drag to reorder" } });
-      (0, import_obsidian3.setIcon)(handle, "grip-vertical");
+      (0, import_obsidian4.setIcon)(handle, "grip-vertical");
       handle.addEventListener("pointerdown", (e) => this.startDrag(e, row, item));
       row.createSpan({ cls: "dj-prompt-level", text: "#".repeat(2 + item.level) });
       const input = row.createEl("input", { type: "text", attr: { placeholder: "Prompt" } });
@@ -313,7 +489,7 @@ var PromptsModal = class extends import_obsidian3.Modal {
       });
       const button = (icon, label, disabled, run) => {
         const b = row.createEl("button", { cls: "dj-prompt-btn", attr: { "aria-label": label } });
-        (0, import_obsidian3.setIcon)(b, icon);
+        (0, import_obsidian4.setIcon)(b, icon);
         b.disabled = disabled;
         b.onclick = run;
       };
@@ -369,7 +545,7 @@ var PromptsModal = class extends import_obsidian3.Modal {
     this.contentEl.empty();
   }
 };
-var ConfirmModal = class extends import_obsidian3.Modal {
+var ConfirmModal = class extends import_obsidian4.Modal {
   constructor(app, heading, message, confirmText, onConfirm) {
     super(app);
     this.heading = heading;
@@ -397,13 +573,13 @@ var ConfirmModal = class extends import_obsidian3.Modal {
 var import_obsidian6 = require("obsidian");
 
 // src/books.ts
-var import_obsidian4 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 function pct(v) {
   const n = parseFloat(String(v != null ? v : "").replace("%", ""));
   return isNaN(n) ? null : n;
 }
 function bookNotes(app, folder) {
-  const prefix = (0, import_obsidian4.normalizePath)(folder) + "/";
+  const prefix = (0, import_obsidian5.normalizePath)(folder) + "/";
   return app.vault.getMarkdownFiles().filter((f) => f.path.startsWith(prefix));
 }
 function currentBook(app, folder) {
@@ -459,109 +635,6 @@ async function highlightsOn(app, folder, day) {
       found.push({ text, file });
   }
   return found;
-}
-
-// src/hardcover.ts
-var import_obsidian5 = require("obsidian");
-var API = "https://api.hardcover.app/v1/graphql";
-async function query(token, gql, variables = {}) {
-  var _a;
-  const auth = /^bearer\s/i.test(token.trim()) ? token.trim() : `Bearer ${token.trim()}`;
-  const res = await (0, import_obsidian5.requestUrl)({
-    url: API,
-    method: "POST",
-    contentType: "application/json",
-    headers: { Authorization: auth },
-    body: JSON.stringify({ query: gql, variables }),
-    throw: false
-  });
-  if (res.status === 401 || res.status === 403)
-    throw new Error("Hardcover rejected the API token.");
-  if (res.status === 429)
-    throw new Error("Hardcover is limiting requests right now. Try again in a minute.");
-  if (res.status >= 400)
-    throw new Error(`Hardcover error (${res.status}).`);
-  if ((_a = res.json.errors) == null ? void 0 : _a.length)
-    throw new Error(res.json.errors[0].message);
-  return res.json.data;
-}
-async function hardcoverUser(token) {
-  var _a;
-  const data = await query(token, "{ me { id username } }");
-  if (!((_a = data.me) == null ? void 0 : _a.length))
-    throw new Error("Hardcover didn't return a user for this token.");
-  return data.me[0];
-}
-var userIds = /* @__PURE__ */ new Map();
-var days = /* @__PURE__ */ new Map();
-async function hardcoverDay(token, date) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l;
-  const key = `${token.slice(-8)}|${date.format("YYYY-MM-DD")}`;
-  const cached = days.get(key);
-  const isToday = date.isSame(window.moment(), "day");
-  if (cached && (!isToday || Date.now() - cached.at < 10 * 60 * 1e3))
-    return cached.day;
-  let userId = userIds.get(token);
-  if (userId === void 0) {
-    userId = (await hardcoverUser(token)).id;
-    userIds.set(token, userId);
-  }
-  const utc = (m) => m.clone().utc().format("YYYY-MM-DDTHH:mm:ss");
-  const data = await query(token, `
-		query($user: Int!, $from: timestamp!, $to: timestamp!) {
-			reading_journals(where: { user_id: { _eq: $user }, created_at: { _gte: $from, _lt: $to } }, order_by: { created_at: asc }) {
-				event entry metadata
-				book { title slug cached_image contributions(limit: 1) { author { name } } }
-			}
-		}`, { user: userId, from: utc(date.clone().startOf("day")), to: utc(date.clone().add(1, "day").startOf("day")) });
-  const books = /* @__PURE__ */ new Map();
-  const quotes = [];
-  for (const row of (_a = data.reading_journals) != null ? _a : []) {
-    const b = row.book;
-    if (!(b == null ? void 0 : b.title))
-      continue;
-    if (row.event === "quote" && row.entry) {
-      quotes.push({ text: String(row.entry), book: b.title });
-      continue;
-    }
-    const book = (_h = books.get(b.title)) != null ? _h : {
-      title: b.title,
-      author: (_e = (_d = (_c = (_b = b.contributions) == null ? void 0 : _b[0]) == null ? void 0 : _c.author) == null ? void 0 : _d.name) != null ? _e : null,
-      cover: (_g = (_f = b.cached_image) == null ? void 0 : _f.url) != null ? _g : null,
-      url: b.slug ? `https://hardcover.app/books/${b.slug}` : null,
-      from: null,
-      to: null,
-      started: false,
-      finished: false
-    };
-    if (row.event === "user_book_read_started")
-      book.started = true;
-    if (row.event === "user_book_read_finished") {
-      book.finished = true;
-      const startedAt = (_i = row.metadata) == null ? void 0 : _i.started_at;
-      if (startedAt && startedAt !== date.format("YYYY-MM-DD"))
-        book.realStart = startedAt;
-    }
-    if (row.event === "progress_updated") {
-      const was = Number((_j = row.metadata) == null ? void 0 : _j.progress_was), now = Number((_k = row.metadata) == null ? void 0 : _k.progress);
-      if (!isNaN(was) && !isNaN(now)) {
-        book.from = (_l = book.from) != null ? _l : was;
-        book.to = now;
-      }
-    }
-    books.set(b.title, book);
-  }
-  for (const book of books.values()) {
-    if (book.realStart)
-      book.started = false;
-    delete book.realStart;
-  }
-  const day = {
-    books: [...books.values()].filter((b) => b.started || b.finished || b.from !== null && b.to !== null && b.to > b.from),
-    quotes
-  };
-  days.set(key, { at: Date.now(), day });
-  return day;
 }
 
 // src/meteocons.ts
@@ -839,9 +912,14 @@ async function renderHardcover(host, el, date) {
     card(el, "Reading").createDiv({ cls: "dj-muted", text: `Couldn't load from Hardcover: ${e instanceof Error ? e.message : String(e)}` });
     return;
   }
-  if (!day.books.length && !day.quotes.length)
-    return;
   const c = card(el, "Reading");
+  if (!day.books.length && !day.quotes.length) {
+    const text = day.lastRead ? `No reading logged. Last read ${day.lastRead.title}, ${day.lastRead.date.format("MMM D")} (${date.clone().startOf("day").diff(day.lastRead.date.clone().startOf("day"), "days")} days earlier).` : "No reading logged.";
+    c.createDiv({ cls: "dj-muted", text });
+    return;
+  }
+  if (day.pages && day.books.length > 1)
+    c.createDiv({ cls: "dj-day-total", text: `${day.pages} pages` });
   for (const b of day.books) {
     const row = c.createDiv({ cls: "dj-book" });
     const initials = b.title.split(/[\s:]+/).filter((w) => /^[A-Za-z0-9]/.test(w)).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
@@ -864,13 +942,13 @@ async function renderHardcover(host, el, date) {
     if (b.started)
       badges.createSpan({ cls: "dj-badge", text: "Started" });
     if (b.finished)
-      badges.createSpan({ cls: "dj-badge", text: "Finished" });
+      badges.createSpan({ cls: "dj-badge", text: b.rating ? `Finished \xB7 rated ${b.rating}` : "Finished" });
     if (b.to !== null) {
       info.createDiv({ cls: "dj-bar" }).createDiv().style.width = `${Math.min(100, b.to)}%`;
       const line = info.createDiv({ cls: "dj-progress" });
-      line.createSpan({ cls: "dj-progress-pct", text: b.from !== null && b.from !== b.to ? `${b.from}% \u2192 ${b.to}%` : `${b.to}%` });
-      if (b.from !== null && b.to > b.from)
-        line.createSpan({ text: `+${b.to - b.from}% that day` });
+      line.createSpan({ cls: "dj-progress-pct", text: b.from !== null && b.from !== b.to ? `${Math.round(b.from)}% \u2192 ${Math.round(b.to)}%` : `${Math.round(b.to)}%` });
+      if (b.pages)
+        line.createSpan({ text: `+${b.pages} pages` });
     }
   }
   for (const q of day.quotes) {
@@ -1196,7 +1274,15 @@ var JournalBlock = class extends import_obsidian8.MarkdownRenderChild {
     this.file = file;
     this.timer = 0;
   }
+  /** The entry this block belongs to and its card type (first word of the block). */
+  get path() {
+    return this.file.path;
+  }
+  get kind() {
+    return this.section.split(/\s+/)[0];
+  }
   onload() {
+    this.plugin.blocks.add(this);
     this.render();
     this.registerEvent(this.plugin.app.metadataCache.on("changed", (changed) => {
       if (changed.path !== this.file.path)
@@ -1209,6 +1295,7 @@ var JournalBlock = class extends import_obsidian8.MarkdownRenderChild {
   }
   onunload() {
     window.clearTimeout(this.timer);
+    this.plugin.blocks.delete(this);
   }
   render() {
     this.containerEl.empty();
@@ -1220,6 +1307,7 @@ var DailyJournal = class extends import_obsidian8.Plugin {
   constructor() {
     super(...arguments);
     this.weatherTried = /* @__PURE__ */ new Set();
+    this.blocks = /* @__PURE__ */ new Set();
   }
   async onload() {
     await this.loadSettings();
@@ -1259,6 +1347,21 @@ var DailyJournal = class extends import_obsidian8.Plugin {
       id: "change-date-choose",
       name: "Change date (choose date)",
       checkCallback: (checking) => this.withActiveEntry(checking, (file, date) => this.pickDate(file, date))
+    });
+    this.addCommand({
+      id: "refresh-reading",
+      name: "Refresh reading",
+      checkCallback: (checking) => this.withActiveEntry(checking, (file, date) => {
+        forgetHardcoverDay(date);
+        let n = 0;
+        for (const block2 of this.blocks) {
+          if (block2.path === file.path && (block2.kind === "hardcover" || block2.kind === "reading")) {
+            block2.render();
+            n++;
+          }
+        }
+        new import_obsidian8.Notice(n ? "Reading updated." : "This entry has no reading card.");
+      })
     });
     this.addCommand({
       id: "change-location",
