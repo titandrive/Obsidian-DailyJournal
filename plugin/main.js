@@ -1040,9 +1040,33 @@ var DailyJournal = class extends import_obsidian7.Plugin {
       menu.addItem((item) => item.setTitle("Change date (yesterday)").setIcon("calendar-minus").setSection("action").onClick(() => this.moveEntry(file, date.clone().subtract(1, "day"))));
       menu.addItem((item) => item.setTitle("Change date (choose date)").setIcon("calendar-days").setSection("action").onClick(() => this.pickDate(file, date)));
     }));
+    const refresh = () => this.refreshChrome();
+    this.registerEvent(this.app.workspace.on("layout-change", refresh));
+    this.registerEvent(this.app.workspace.on("active-leaf-change", refresh));
+    this.registerEvent(this.app.workspace.on("file-open", refresh));
+    this.registerEvent(this.app.metadataCache.on("changed", refresh));
     this.app.workspace.onLayoutReady(() => {
+      this.refreshChrome();
       this.registerEvent(this.app.vault.on("create", (file) => this.fillIfEmpty(file)));
       void this.syncDailyTemplate();
+    });
+  }
+  onunload() {
+    this.app.workspace.iterateAllLeaves((leaf) => {
+      if (leaf.view instanceof import_obsidian7.MarkdownView)
+        leaf.view.contentEl.removeClass("dj-chrome-hidden");
+    });
+  }
+  /** Marks each open journal entry whose title and Properties should be hidden. */
+  refreshChrome() {
+    this.app.workspace.iterateAllLeaves((leaf) => {
+      var _a;
+      const view = leaf.view;
+      if (!(view instanceof import_obsidian7.MarkdownView))
+        return;
+      const fm = view.file ? (_a = this.app.metadataCache.getFileCache(view.file)) == null ? void 0 : _a.frontmatter : void 0;
+      const classes = Array.isArray(fm == null ? void 0 : fm.cssclasses) ? fm.cssclasses : [fm == null ? void 0 : fm.cssclasses];
+      view.contentEl.toggleClass("dj-chrome-hidden", classes.includes("journal") && !classes.includes(SHOW_CHROME));
     });
   }
   async loadSettings() {

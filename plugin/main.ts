@@ -1,4 +1,4 @@
-import { MarkdownRenderChild, Notice, normalizePath, Plugin, TAbstractFile, TFile, moment } from "obsidian";
+import { MarkdownRenderChild, MarkdownView, Notice, normalizePath, Plugin, TAbstractFile, TFile, moment } from "obsidian";
 import { entryDate, entryPath, Moment } from "./src/dates";
 import { MonthPicker, PlaceModal } from "./src/modals";
 import { JournalHost, renderSection } from "./src/render";
@@ -92,10 +92,36 @@ export default class DailyJournal extends Plugin implements JournalHost {
 				.onClick(() => this.pickDate(file, date)));
 		}));
 
+		// Hide the title and Properties in open journal entries (the same way Frontmatter Hider does it:
+		// a class on each open note's content area, refreshed whenever notes or their properties change).
+		const refresh = () => this.refreshChrome();
+		this.registerEvent(this.app.workspace.on("layout-change", refresh));
+		this.registerEvent(this.app.workspace.on("active-leaf-change", refresh));
+		this.registerEvent(this.app.workspace.on("file-open", refresh));
+		this.registerEvent(this.app.metadataCache.on("changed", refresh));
+
 		// Fill new, empty entries (e.g. from Obsidian's Daily notes or the Hearth "Today" card) with the template.
 		this.app.workspace.onLayoutReady(() => {
+			this.refreshChrome();
 			this.registerEvent(this.app.vault.on("create", (file) => this.fillIfEmpty(file)));
 			void this.syncDailyTemplate();
+		});
+	}
+
+	onunload(): void {
+		this.app.workspace.iterateAllLeaves((leaf) => {
+			if (leaf.view instanceof MarkdownView) leaf.view.contentEl.removeClass("dj-chrome-hidden");
+		});
+	}
+
+	/** Marks each open journal entry whose title and Properties should be hidden. */
+	private refreshChrome(): void {
+		this.app.workspace.iterateAllLeaves((leaf) => {
+			const view = leaf.view;
+			if (!(view instanceof MarkdownView)) return;
+			const fm = view.file ? this.app.metadataCache.getFileCache(view.file)?.frontmatter : undefined;
+			const classes: unknown[] = Array.isArray(fm?.cssclasses) ? fm.cssclasses : [fm?.cssclasses];
+			view.contentEl.toggleClass("dj-chrome-hidden", classes.includes("journal") && !classes.includes(SHOW_CHROME));
 		});
 	}
 

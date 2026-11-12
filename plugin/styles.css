@@ -1,8 +1,9 @@
 /* ---- Journal notes ---------------------------------------------------- */
 
-/* Title and Properties are hidden in journal entries, unless the entry was made with them shown. */
-.journal:not(.dj-show-chrome) .inline-title,
-.journal:not(.dj-show-chrome) .metadata-container { display: none; }
+/* Title and Properties are hidden in journal entries, unless the entry was made with them shown.
+   The plugin adds dj-chrome-hidden to each such open note (like Frontmatter Hider does). */
+.dj-chrome-hidden .inline-title,
+.dj-chrome-hidden .metadata-container { display: none !important; }
 
 /* No code-block hover outline or </> button around the cards. */
 .cm-preview-code-block:has(.dj-block) .edit-block-button { display: none; }
