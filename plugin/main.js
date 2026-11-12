@@ -1304,6 +1304,9 @@ var DailyJournal = class extends import_obsidian7.Plugin {
     this.weatherTried = /* @__PURE__ */ new Set();
     this.readingTried = /* @__PURE__ */ new Set();
     this.blocks = /* @__PURE__ */ new Set();
+    /** Entries created this session that haven't been opened yet, to start the cursor at the first prompt. */
+    this.newEntries = /* @__PURE__ */ new Set();
+    this.userMovedCursor = false;
   }
   async onload() {
     await this.loadSettings();
@@ -1379,7 +1382,15 @@ var DailyJournal = class extends import_obsidian7.Plugin {
     this.registerEvent(this.app.metadataCache.on("changed", refresh));
     this.app.workspace.onLayoutReady(() => {
       this.refreshChrome();
-      this.registerEvent(this.app.vault.on("create", (file) => this.fillIfEmpty(file)));
+      this.registerEvent(this.app.vault.on("create", (file) => {
+        if (file instanceof import_obsidian7.TFile && entryDate(this.settings, file))
+          this.newEntries.add(file.path);
+        this.fillIfEmpty(file);
+      }));
+      this.registerEvent(this.app.workspace.on("file-open", (file) => {
+        if (file && this.newEntries.delete(file.path))
+          void this.cursorToFirstPrompt(file);
+      }));
       void this.syncDailyTemplate();
       void this.syncJournalBase();
     });
@@ -1594,8 +1605,72 @@ var DailyJournal = class extends import_obsidian7.Plugin {
     if (!(file instanceof import_obsidian7.TFile)) {
       await this.ensureFolder(path);
       file = await this.app.vault.create(path, entryTemplate(this.settings));
+      this.newEntries.add(path);
     }
     await this.app.workspace.getLeaf(false).openFile(file);
+  }
+  /**
+   * Put the cursor on the line under the first writing prompt of a newly created entry, so you can
+   * start typing. Waits briefly for the layout to arrive when the entry is filled after it opens, and
+   * puts the cursor back for a few seconds while the cards save weather and reading into the entry
+   * (those rewrites shift the text under a cursor that stays at the same position), unless you've
+   * moved it yourself by then.
+   */
+  async cursorToFirstPrompt(file) {
+    var _a;
+    const prompt = (_a = this.settings.prompts[0]) == null ? void 0 : _a.text.trim();
+    if (!prompt)
+      return;
+    const heading = new RegExp(`^#{1,6}\\s+${prompt.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`);
+    const editorFor = () => {
+      var _a2;
+      const view = this.app.workspace.getActiveViewOfType(import_obsidian7.MarkdownView);
+      return view && ((_a2 = view.file) == null ? void 0 : _a2.path) === file.path && view.getMode() === "source" ? view.editor : null;
+    };
+    let placed = false;
+    const place = () => {
+      const editor = editorFor();
+      if (!editor)
+        return false;
+      for (let line = 0; line < editor.lineCount(); line++) {
+        if (!heading.test(editor.getLine(line)))
+          continue;
+        if (line + 1 >= editor.lineCount())
+          editor.replaceRange("\n", { line, ch: editor.getLine(line).length });
+        editor.setCursor({ line: line + 1, ch: 0 });
+        editor.scrollIntoView({ from: { line, ch: 0 }, to: { line: line + 1, ch: 0 } }, true);
+        editor.focus();
+        placed = true;
+        return true;
+      }
+      return false;
+    };
+    for (let tries = 0; tries < 20 && !place(); tries++) {
+      if (!editorFor())
+        return;
+      await new Promise((r) => window.setTimeout(r, 150));
+    }
+    if (!placed)
+      return;
+    const ref = this.app.metadataCache.on("changed", (changed) => {
+      if (changed.path !== file.path)
+        return;
+      window.setTimeout(() => {
+        if (!this.userMovedCursor)
+          place();
+      }, 50);
+    });
+    this.userMovedCursor = false;
+    const moved = () => {
+      this.userMovedCursor = true;
+    };
+    window.addEventListener("keydown", moved, { once: true });
+    window.addEventListener("mousedown", moved, { once: true });
+    window.setTimeout(() => {
+      this.app.metadataCache.offref(ref);
+      window.removeEventListener("keydown", moved);
+      window.removeEventListener("mousedown", moved);
+    }, 6e3);
   }
   async ensureFolder(path) {
     const folder = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
