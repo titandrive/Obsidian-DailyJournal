@@ -27,7 +27,34 @@ export interface HardcoverDay {
 	books: HardcoverBookDay[];
 	quotes: Array<{ text: string; book: string }>;
 	pages: number; // total pages read that day
-	lastRead: { title: string; date: Moment } | null; // most recent reading before this day, when none on it
+	lastRead: { title: string; date: string } | null; // most recent reading before this day (YYYY-MM-DD), when none on it
+}
+
+/**
+ * Reading saved in an entry's properties, so the card doesn't ask Hardcover every time it's shown:
+ *   reading:    the card's data (books, quotes, last read)
+ *   books:      titles read that day, for Bases and search
+ *   pages_read: total pages read that day, for Bases
+ */
+export function readingProperties(day: HardcoverDay): Record<string, unknown> {
+	return {
+		reading: { books: day.books, quotes: day.quotes, last_read: day.lastRead },
+		books: day.books.map((b) => b.title),
+		pages_read: day.pages,
+	};
+}
+
+/** The reading saved in an entry, or null when it hasn't been fetched yet. */
+export function savedReading(fm: Record<string, unknown>): HardcoverDay | null {
+	const r = fm.reading as Record<string, any> | undefined;
+	if (!r || typeof r !== "object" || !Array.isArray(r.books)) return null;
+	const books = r.books as HardcoverBookDay[];
+	return {
+		books,
+		quotes: Array.isArray(r.quotes) ? r.quotes : [],
+		pages: Number(fm.pages_read) || books.reduce((n, b) => n + (Number(b.pages) || 0), 0),
+		lastRead: r.last_read?.title ? { title: String(r.last_read.title), date: String(r.last_read.date) } : null,
+	};
 }
 
 async function query<T>(token: string, gql: string, variables: Record<string, unknown> = {}): Promise<T> {
@@ -55,26 +82,13 @@ export async function hardcoverUser(token: string): Promise<{ id: number; userna
 }
 
 const userIds = new Map<string, number>();
-const days = new Map<string, { at: number; day: HardcoverDay }>();
-
-/** Drop the cached reading for a day, so the next render fetches it from Hardcover again. */
-export function forgetHardcoverDay(date: Moment): void {
-	const suffix = `|${date.format("YYYY-MM-DD")}`;
-	for (const key of [...days.keys()]) if (key.endsWith(suffix)) days.delete(key);
-}
 
 /**
  * What you read on a day, from your Hardcover reading journal. Hardcover keeps one progress
  * entry per book per day (updated as you read), timestamped in UTC when it was created.
- * Results are cached; today's are refreshed after 10 minutes.
+ * Always asks Hardcover; callers save the result in the entry.
  */
 export async function hardcoverDay(token: string, date: Moment): Promise<HardcoverDay> {
-	const key = `${token.slice(-8)}|${date.format("YYYY-MM-DD")}`;
-	const cached = days.get(key);
-	// A day is final once fetched after it ended; until then, refetch after 10 minutes.
-	const dayEnd = date.clone().add(1, "day").startOf("day").valueOf();
-	if (cached && (cached.at >= dayEnd || Date.now() - cached.at < 10 * 60 * 1000)) return cached.day;
-
 	let userId = userIds.get(token);
 	if (userId === undefined) {
 		userId = (await hardcoverUser(token)).id;
@@ -180,8 +194,7 @@ export async function hardcoverDay(token: string, date: Moment): Promise<Hardcov
 					order_by: { created_at: desc }, limit: 50) { created_at metadata book { title } }
 			}`, { user: userId, before: utc(date.clone().startOf("day")) });
 		const hit = (before.reading_journals ?? []).find((r) => Number(r.metadata?.progress) > Number(r.metadata?.progress_was));
-		if (hit?.book?.title) day.lastRead = { title: hit.book.title, date: window.moment.utc(hit.created_at).local() };
+		if (hit?.book?.title) day.lastRead = { title: hit.book.title, date: window.moment.utc(hit.created_at).local().format("YYYY-MM-DD") };
 	}
-	days.set(key, { at: Date.now(), day });
 	return day;
 }

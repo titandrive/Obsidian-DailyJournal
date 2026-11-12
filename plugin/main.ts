@@ -1,6 +1,6 @@
 import { MarkdownRenderChild, MarkdownView, Notice, normalizePath, Plugin, TAbstractFile, TFile, moment } from "obsidian";
 import { entryDate, entryPath, Moment } from "./src/dates";
-import { forgetHardcoverDay } from "./src/hardcover";
+import { hardcoverDay, readingProperties } from "./src/hardcover";
 import { MonthPicker, PlaceModal } from "./src/modals";
 import { JournalHost, renderSection } from "./src/render";
 import { DEFAULT_SETTINGS, JournalSettings, Place, Prompt } from "./src/settings";
@@ -16,12 +16,7 @@ class JournalBlock extends MarkdownRenderChild {
 		super(containerEl);
 	}
 
-	/** The entry this block belongs to and its card type (first word of the block). */
-	get path(): string { return this.file.path; }
-	get kind(): string { return this.section.split(/\s+/)[0]; }
-
 	onload(): void {
-		this.plugin.blocks.add(this);
 		this.render();
 		this.registerEvent(this.plugin.app.metadataCache.on("changed", (changed) => {
 			if (changed.path !== this.file.path) return;
@@ -34,10 +29,9 @@ class JournalBlock extends MarkdownRenderChild {
 
 	onunload(): void {
 		window.clearTimeout(this.timer);
-		this.plugin.blocks.delete(this);
 	}
 
-	render(): void {
+	private render(): void {
 		this.containerEl.empty();
 		this.containerEl.addClass("dj-block");
 		void renderSection(this.plugin, this.section, this.containerEl, this.file);
@@ -47,7 +41,7 @@ class JournalBlock extends MarkdownRenderChild {
 export default class DailyJournal extends Plugin implements JournalHost {
 	settings!: JournalSettings;
 	weatherTried = new Set<string>();
-	blocks = new Set<JournalBlock>();
+	readingTried = new Set<string>();
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
@@ -87,13 +81,14 @@ export default class DailyJournal extends Plugin implements JournalHost {
 		this.addCommand({
 			id: "refresh-reading",
 			name: "Refresh reading",
-			checkCallback: (checking) => this.withActiveEntry(checking, (file, date) => {
-				forgetHardcoverDay(date);
-				let n = 0;
-				for (const block of this.blocks) {
-					if (block.path === file.path && (block.kind === "hardcover" || block.kind === "reading")) { block.render(); n++; }
+			checkCallback: (checking) => this.withActiveEntry(checking, async (file, date) => {
+				if (!this.settings.hardcoverToken) { new Notice("Add your Hardcover API token in Daily Journal's settings first."); return; }
+				try {
+					await this.refreshReading(file, date);
+					new Notice("Reading updated from Hardcover.");
+				} catch (e) {
+					new Notice(`Couldn't load from Hardcover: ${e instanceof Error ? e.message : String(e)}`);
 				}
-				new Notice(n ? "Reading updated." : "This entry has no reading card.");
 			}),
 		});
 		this.addCommand({
@@ -211,6 +206,13 @@ export default class DailyJournal extends Plugin implements JournalHost {
 			.map((file) => ({ file, date: entryDate(this.settings, file) }))
 			.filter((e): e is { file: TFile; date: Moment } => e.date !== null)
 			.sort((a, b) => a.date.valueOf() - b.date.valueOf());
+	}
+
+	/** Fetch the entry's reading from Hardcover and save it in the entry's properties. */
+	async refreshReading(file: TFile, date: Moment): Promise<void> {
+		const day = await hardcoverDay(this.settings.hardcoverToken, date);
+		const props = readingProperties(day);
+		await this.app.fileManager.processFrontMatter(file, (f) => { Object.assign(f, props); });
 	}
 
 	private withActiveEntry(checking: boolean, run: (file: TFile, date: Moment) => void): boolean {

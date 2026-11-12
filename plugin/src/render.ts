@@ -2,7 +2,7 @@ import { App, moment, TFile } from "obsidian";
 import { entryDate, Moment } from "./dates";
 import { PlaceModal } from "./modals";
 import { CheckInFields, JournalSettings, Place } from "./settings";
-import { hardcoverDay } from "./hardcover";
+import { HardcoverDay, savedReading } from "./hardcover";
 import { meteoconSvg } from "./meteocons";
 import { blockFields, blockShowsWeather, parseBlock } from "./template";
 import { entryPlace, fetchWeather, PIN_ICON, weatherIcon, weatherText } from "./weather";
@@ -13,6 +13,9 @@ export interface JournalHost {
 	settings: JournalSettings;
 	weatherTried: Set<string>;
 	setEntryPlace(file: TFile, place: Place | null, withWeather: boolean): Promise<string | null>;
+	/** Fetch the entry's reading from Hardcover and save it in the entry. */
+	refreshReading(file: TFile, date: Moment): Promise<void>;
+	readingTried: Set<string>;
 	journalEntries(): Array<{ file: TFile; date: Moment }>;
 }
 
@@ -47,7 +50,7 @@ export async function renderSection(host: JournalHost, source: string, el: HTMLE
 		case "header": return renderHeader(host, el, file, date, fm, blockShowsWeather(options));
 		case "reading":
 		case "hardcover": // the block's name before it replaced the book-notes card
-			return renderHardcover(host, el, date);
+			return renderReading(host, el, file, date, fm);
 		case "checkin": return renderCheckIn(host, el, file, fm, blockFields(options));
 		case "onthisday": return renderOnThisDay(host, el, date);
 	}
@@ -108,24 +111,33 @@ async function renderHeader(host: JournalHost, el: HTMLElement, file: TFile, dat
 	}
 }
 
-async function renderHardcover(host: JournalHost, el: HTMLElement, date: Moment): Promise<void> {
-	const token = host.settings.hardcoverToken;
-	if (!token) {
-		card(el, "Reading").createDiv({ cls: "dj-muted", text: "Add your Hardcover API token in Daily Journal's settings to show what you read." });
-		return;
-	}
-	let day;
-	try {
-		day = await hardcoverDay(token, date);
-	} catch (e) {
-		card(el, "Reading").createDiv({ cls: "dj-muted", text: `Couldn't load from Hardcover: ${e instanceof Error ? e.message : String(e)}` });
-		return;
-	}
+async function renderReading(host: JournalHost, el: HTMLElement, file: TFile, date: Moment, fm: Frontmatter): Promise<void> {
+	const day = savedReading(fm);
+	if (day) return drawReading(el, day, date);
 
+	// Not fetched yet: ask Hardcover once and save it in the entry (the card redraws from that).
+	// After this, only "Refresh reading" asks again. Tried once per entry per session, so a
+	// failed lookup can't turn into a retry loop.
+	const muted = (text: string) => card(el, "Reading").createDiv({ cls: "dj-muted", text });
+	if (!host.settings.hardcoverToken) return void muted("Add your Hardcover API token in Daily Journal's settings to show what you read.");
+	if (date.isAfter(moment(), "day")) return;
+	if (host.readingTried.has(file.path)) return void muted("Couldn't load from Hardcover. Run \"Refresh reading\" to try again.");
+	host.readingTried.add(file.path);
+	const loading = muted("Loading from Hardcover…");
+	try {
+		await host.refreshReading(file, date);
+	} catch (e) {
+		loading.setText(`Couldn't load from Hardcover: ${e instanceof Error ? e.message : String(e)} Run "Refresh reading" to try again.`);
+	}
+}
+
+function drawReading(el: HTMLElement, day: HardcoverDay, date: Moment): void {
 	const c = card(el, "Reading");
 	if (!day.books.length && !day.quotes.length) {
-		const text = day.lastRead
-			? `No reading logged. Last read ${day.lastRead.title}, ${day.lastRead.date.format("MMM D")} (${date.clone().startOf("day").diff(day.lastRead.date.clone().startOf("day"), "days")} days earlier).`
+		const last = day.lastRead ? moment(day.lastRead.date, "YYYY-MM-DD") : null;
+		const gap = last ? date.clone().startOf("day").diff(last, "days") : 0;
+		const text = day.lastRead && last
+			? `No reading logged. Last read ${day.lastRead.title}, ${last.format("MMM D")} (${gap} day${gap === 1 ? "" : "s"} earlier).`
 			: "No reading logged.";
 		c.createDiv({ cls: "dj-muted", text });
 		return;

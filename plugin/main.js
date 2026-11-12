@@ -50,6 +50,26 @@ function entryPath(settings, date) {
 // src/hardcover.ts
 var import_obsidian2 = require("obsidian");
 var API = "https://api.hardcover.app/v1/graphql";
+function readingProperties(day) {
+  return {
+    reading: { books: day.books, quotes: day.quotes, last_read: day.lastRead },
+    books: day.books.map((b) => b.title),
+    pages_read: day.pages
+  };
+}
+function savedReading(fm) {
+  var _a;
+  const r = fm.reading;
+  if (!r || typeof r !== "object" || !Array.isArray(r.books))
+    return null;
+  const books = r.books;
+  return {
+    books,
+    quotes: Array.isArray(r.quotes) ? r.quotes : [],
+    pages: Number(fm.pages_read) || books.reduce((n, b) => n + (Number(b.pages) || 0), 0),
+    lastRead: ((_a = r.last_read) == null ? void 0 : _a.title) ? { title: String(r.last_read.title), date: String(r.last_read.date) } : null
+  };
+}
 async function query(token, gql, variables = {}) {
   var _a;
   const auth = /^bearer\s/i.test(token.trim()) ? token.trim() : `Bearer ${token.trim()}`;
@@ -79,20 +99,8 @@ async function hardcoverUser(token) {
   return data.me[0];
 }
 var userIds = /* @__PURE__ */ new Map();
-var days = /* @__PURE__ */ new Map();
-function forgetHardcoverDay(date) {
-  const suffix = `|${date.format("YYYY-MM-DD")}`;
-  for (const key of [...days.keys()])
-    if (key.endsWith(suffix))
-      days.delete(key);
-}
 async function hardcoverDay(token, date) {
   var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r;
-  const key = `${token.slice(-8)}|${date.format("YYYY-MM-DD")}`;
-  const cached = days.get(key);
-  const dayEnd = date.clone().add(1, "day").startOf("day").valueOf();
-  if (cached && (cached.at >= dayEnd || Date.now() - cached.at < 10 * 60 * 1e3))
-    return cached.day;
   let userId = userIds.get(token);
   if (userId === void 0) {
     userId = (await hardcoverUser(token)).id;
@@ -217,9 +225,8 @@ async function hardcoverDay(token, date) {
       return Number((_a2 = r.metadata) == null ? void 0 : _a2.progress) > Number((_b2 = r.metadata) == null ? void 0 : _b2.progress_was);
     });
     if ((_r = hit == null ? void 0 : hit.book) == null ? void 0 : _r.title)
-      day.lastRead = { title: hit.book.title, date: window.moment.utc(hit.created_at).local() };
+      day.lastRead = { title: hit.book.title, date: window.moment.utc(hit.created_at).local().format("YYYY-MM-DD") };
   }
-  days.set(key, { at: Date.now(), day });
   return day;
 }
 
@@ -710,7 +717,7 @@ async function renderSection(host, source, el, file) {
       return renderHeader(host, el, file, date, fm, blockShowsWeather(options));
     case "reading":
     case "hardcover":
-      return renderHardcover(host, el, date);
+      return renderReading(host, el, file, date, fm);
     case "checkin":
       return renderCheckIn(host, el, file, fm, blockFields(options));
     case "onthisday":
@@ -770,23 +777,32 @@ async function renderHeader(host, el, file, date, fm, weatherOn) {
     }
   }
 }
-async function renderHardcover(host, el, date) {
-  var _a;
-  const token = host.settings.hardcoverToken;
-  if (!token) {
-    card(el, "Reading").createDiv({ cls: "dj-muted", text: "Add your Hardcover API token in Daily Journal's settings to show what you read." });
+async function renderReading(host, el, file, date, fm) {
+  const day = savedReading(fm);
+  if (day)
+    return drawReading(el, day, date);
+  const muted = (text) => card(el, "Reading").createDiv({ cls: "dj-muted", text });
+  if (!host.settings.hardcoverToken)
+    return void muted("Add your Hardcover API token in Daily Journal's settings to show what you read.");
+  if (date.isAfter((0, import_obsidian5.moment)(), "day"))
     return;
-  }
-  let day;
+  if (host.readingTried.has(file.path))
+    return void muted(`Couldn't load from Hardcover. Run "Refresh reading" to try again.`);
+  host.readingTried.add(file.path);
+  const loading = muted("Loading from Hardcover\u2026");
   try {
-    day = await hardcoverDay(token, date);
+    await host.refreshReading(file, date);
   } catch (e) {
-    card(el, "Reading").createDiv({ cls: "dj-muted", text: `Couldn't load from Hardcover: ${e instanceof Error ? e.message : String(e)}` });
-    return;
+    loading.setText(`Couldn't load from Hardcover: ${e instanceof Error ? e.message : String(e)} Run "Refresh reading" to try again.`);
   }
+}
+function drawReading(el, day, date) {
+  var _a;
   const c = card(el, "Reading");
   if (!day.books.length && !day.quotes.length) {
-    const text = day.lastRead ? `No reading logged. Last read ${day.lastRead.title}, ${day.lastRead.date.format("MMM D")} (${date.clone().startOf("day").diff(day.lastRead.date.clone().startOf("day"), "days")} days earlier).` : "No reading logged.";
+    const last = day.lastRead ? (0, import_obsidian5.moment)(day.lastRead.date, "YYYY-MM-DD") : null;
+    const gap = last ? date.clone().startOf("day").diff(last, "days") : 0;
+    const text = day.lastRead && last ? `No reading logged. Last read ${day.lastRead.title}, ${last.format("MMM D")} (${gap} day${gap === 1 ? "" : "s"} earlier).` : "No reading logged.";
     c.createDiv({ cls: "dj-muted", text });
     return;
   }
@@ -1137,15 +1153,7 @@ var JournalBlock = class extends import_obsidian7.MarkdownRenderChild {
     this.file = file;
     this.timer = 0;
   }
-  /** The entry this block belongs to and its card type (first word of the block). */
-  get path() {
-    return this.file.path;
-  }
-  get kind() {
-    return this.section.split(/\s+/)[0];
-  }
   onload() {
-    this.plugin.blocks.add(this);
     this.render();
     this.registerEvent(this.plugin.app.metadataCache.on("changed", (changed) => {
       if (changed.path !== this.file.path)
@@ -1158,7 +1166,6 @@ var JournalBlock = class extends import_obsidian7.MarkdownRenderChild {
   }
   onunload() {
     window.clearTimeout(this.timer);
-    this.plugin.blocks.delete(this);
   }
   render() {
     this.containerEl.empty();
@@ -1170,7 +1177,7 @@ var DailyJournal = class extends import_obsidian7.Plugin {
   constructor() {
     super(...arguments);
     this.weatherTried = /* @__PURE__ */ new Set();
-    this.blocks = /* @__PURE__ */ new Set();
+    this.readingTried = /* @__PURE__ */ new Set();
   }
   async onload() {
     await this.loadSettings();
@@ -1214,16 +1221,17 @@ var DailyJournal = class extends import_obsidian7.Plugin {
     this.addCommand({
       id: "refresh-reading",
       name: "Refresh reading",
-      checkCallback: (checking) => this.withActiveEntry(checking, (file, date) => {
-        forgetHardcoverDay(date);
-        let n = 0;
-        for (const block2 of this.blocks) {
-          if (block2.path === file.path && (block2.kind === "hardcover" || block2.kind === "reading")) {
-            block2.render();
-            n++;
-          }
+      checkCallback: (checking) => this.withActiveEntry(checking, async (file, date) => {
+        if (!this.settings.hardcoverToken) {
+          new import_obsidian7.Notice("Add your Hardcover API token in Daily Journal's settings first.");
+          return;
         }
-        new import_obsidian7.Notice(n ? "Reading updated." : "This entry has no reading card.");
+        try {
+          await this.refreshReading(file, date);
+          new import_obsidian7.Notice("Reading updated from Hardcover.");
+        } catch (e) {
+          new import_obsidian7.Notice(`Couldn't load from Hardcover: ${e instanceof Error ? e.message : String(e)}`);
+        }
       })
     });
     this.addCommand({
@@ -1328,6 +1336,14 @@ var DailyJournal = class extends import_obsidian7.Plugin {
   }
   journalEntries() {
     return this.app.vault.getMarkdownFiles().map((file) => ({ file, date: entryDate(this.settings, file) })).filter((e) => e.date !== null).sort((a, b) => a.date.valueOf() - b.date.valueOf());
+  }
+  /** Fetch the entry's reading from Hardcover and save it in the entry's properties. */
+  async refreshReading(file, date) {
+    const day = await hardcoverDay(this.settings.hardcoverToken, date);
+    const props = readingProperties(day);
+    await this.app.fileManager.processFrontMatter(file, (f) => {
+      Object.assign(f, props);
+    });
   }
   withActiveEntry(checking, run) {
     const file = this.app.workspace.getActiveFile();
