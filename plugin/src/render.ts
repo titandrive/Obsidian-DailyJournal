@@ -3,7 +3,7 @@ import { bookFromLink, bookLink, currentBook, highlightsOn, pct } from "./books"
 import { entryDate, Moment } from "./dates";
 import { PlaceModal } from "./modals";
 import { CheckInFields, JournalSettings, Place } from "./settings";
-import { meteoconUrl } from "./meteocons";
+import { meteoconSvg } from "./meteocons";
 import { blockFields, blockShowsWeather, parseBlock } from "./template";
 import { entryPlace, fetchWeather, PIN_ICON, weatherIcon, weatherText } from "./weather";
 
@@ -69,12 +69,12 @@ async function renderHeader(host: JournalHost, el: HTMLElement, file: TFile, dat
 
 	const chips = c.createDiv({ cls: "dj-row" });
 	const weatherChip = chips.createSpan({ cls: "dj-chip" });
-	const weatherIconEl = weatherChip.createEl("img", { cls: "dj-weather-icon", attr: { alt: "" } });
+	const weatherIconEl = weatherChip.createSpan({ cls: "dj-weather-icon" });
 	const weatherLabel = weatherChip.createSpan();
 	const showWeather = (weather: string | null) => {
 		weatherChip.toggle(!!weather);
 		if (!weather) return;
-		weatherIconEl.src = meteoconUrl(weatherIcon(weather));
+		weatherIconEl.innerHTML = meteoconSvg(weatherIcon(weather));
 		weatherLabel.setText(weatherText(weather));
 	};
 	showWeather(weatherOn && fm.weather ? String(fm.weather) : null);
