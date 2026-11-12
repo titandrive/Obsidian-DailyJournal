@@ -221,22 +221,31 @@ function renderCheckIn(host: JournalHost, el: HTMLElement, file: TFile, fm: Fron
 		};
 	}
 
+	// A Yes/No pill toggle saved as a boolean property. Tracked locally so it updates on click,
+	// not after Obsidian re-reads the file. Tapping the selected pill clears it.
+	const yesNo = (parent: HTMLElement, key: string, onChange?: (value: boolean | null) => void) => {
+		const toggle = parent.createDiv({ cls: "dj-toggle" });
+		let value: boolean | null = typeof fm[key] === "boolean" ? fm[key] as boolean : null;
+		const pills = ([["Yes", true], ["No", false]] as Array<[string, boolean]>).map(([text, v]) => {
+			const b = toggle.createEl("button", { text });
+			b.onclick = () => { value = value === v ? null : v; paint(); save(key, value); };
+			return { b, v };
+		});
+		const paint = () => {
+			for (const { b, v } of pills) b.toggleClass("is-on", value === v);
+			onChange?.(value);
+		};
+		return paint;
+	};
+
+	if (fields.work) yesNo(item("Work"), "worked")();
+
 	if (fields.exercise) {
 		const ex = item("Exercise");
 		ex.addClass("dj-exercise");
-		const toggle = ex.createDiv({ cls: "dj-toggle" });
-		const note = textField(ex, "exercise_note", "What did you do?");
-		// Track the choice locally so the toggle updates on click, not after Obsidian re-reads the file.
-		let exercised: boolean | null = typeof fm.exercise === "boolean" ? fm.exercise : null;
-		const pills = ([["Yes", true], ["No", false]] as Array<[string, boolean]>).map(([text, value]) => {
-			const b = toggle.createEl("button", { text });
-			b.onclick = () => { exercised = exercised === value ? null : value; paint(); save("exercise", exercised); };
-			return { b, value };
-		});
-		const paint = () => {
-			for (const { b, value } of pills) b.toggleClass("is-on", exercised === value);
-			note.toggle(exercised === true);
-		};
+		let note: HTMLTextAreaElement | null = null;
+		const paint = yesNo(ex, "exercise", (value) => note?.toggle(value === true));
+		note = textField(ex, "exercise_note", "What did you do?");
 		paint();
 	}
 

@@ -16,6 +16,7 @@ export const MAX_PROMPT_LEVEL = 3;
 export interface CheckInFields {
 	rating: boolean;
 	sleep: boolean;
+	work: boolean;
 	exercise: boolean;
 	food: boolean;
 	tags: boolean;
@@ -46,7 +47,7 @@ export const DEFAULT_SETTINGS: JournalSettings = {
 	booksFolder: "Books",
 	showReading: true,
 	showOnThisDay: true,
-	fields: { rating: true, sleep: true, exercise: true, food: true, tags: true },
+	fields: { rating: true, sleep: true, work: true, exercise: true, food: true, tags: true },
 	prompts: [
 		{ text: "How was your day?", level: 0 },
 		{ text: "What was the best part of your day?", level: 1 },

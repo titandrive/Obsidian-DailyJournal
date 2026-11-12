@@ -61,7 +61,7 @@ var DEFAULT_SETTINGS = {
   booksFolder: "Books",
   showReading: true,
   showOnThisDay: true,
-  fields: { rating: true, sleep: true, exercise: true, food: true, tags: true },
+  fields: { rating: true, sleep: true, work: true, exercise: true, food: true, tags: true },
   prompts: [
     { text: "How was your day?", level: 0 },
     { text: "What was the best part of your day?", level: 1 },
@@ -481,7 +481,7 @@ function meteoconSvg(name) {
 
 // src/template.ts
 var SHOW_CHROME = "dj-show-chrome";
-var FIELD_KEYS = ["rating", "sleep", "exercise", "food", "tags"];
+var FIELD_KEYS = ["rating", "sleep", "work", "exercise", "food", "tags"];
 var block = (line) => "```journal\n" + line + "\n```\n";
 function parseBlock(source) {
   const [section = "", ...options] = source.trim().split(/\s+/);
@@ -493,9 +493,9 @@ function blockShowsWeather(options) {
 function blockFields(options) {
   const listed = options.filter((o) => FIELD_KEYS.includes(o));
   if (!listed.length)
-    return { rating: true, sleep: true, exercise: true, food: true, tags: false };
+    return { rating: true, sleep: true, work: false, exercise: true, food: true, tags: false };
   const has = (k) => listed.includes(k);
-  return { rating: has("rating"), sleep: has("sleep"), exercise: has("exercise"), food: has("food"), tags: has("tags") };
+  return { rating: has("rating"), sleep: has("sleep"), work: has("work"), exercise: has("exercise"), food: has("food"), tags: has("tags") };
 }
 function layoutLines(settings) {
   const fields = FIELD_KEYS.filter((k) => settings.fields[k]);
@@ -768,26 +768,33 @@ function renderCheckIn(host, el, file, fm, fields) {
       save("sleep", ok ? hours : null);
     };
   }
+  const yesNo = (parent, key, onChange) => {
+    const toggle = parent.createDiv({ cls: "dj-toggle" });
+    let value = typeof fm[key] === "boolean" ? fm[key] : null;
+    const pills = [["Yes", true], ["No", false]].map(([text, v]) => {
+      const b = toggle.createEl("button", { text });
+      b.onclick = () => {
+        value = value === v ? null : v;
+        paint();
+        save(key, value);
+      };
+      return { b, v };
+    });
+    const paint = () => {
+      for (const { b, v } of pills)
+        b.toggleClass("is-on", value === v);
+      onChange == null ? void 0 : onChange(value);
+    };
+    return paint;
+  };
+  if (fields.work)
+    yesNo(item("Work"), "worked")();
   if (fields.exercise) {
     const ex = item("Exercise");
     ex.addClass("dj-exercise");
-    const toggle = ex.createDiv({ cls: "dj-toggle" });
-    const note = textField(ex, "exercise_note", "What did you do?");
-    let exercised = typeof fm.exercise === "boolean" ? fm.exercise : null;
-    const pills = [["Yes", true], ["No", false]].map(([text, value]) => {
-      const b = toggle.createEl("button", { text });
-      b.onclick = () => {
-        exercised = exercised === value ? null : value;
-        paint();
-        save("exercise", exercised);
-      };
-      return { b, value };
-    });
-    const paint = () => {
-      for (const { b, value } of pills)
-        b.toggleClass("is-on", exercised === value);
-      note.toggle(exercised === true);
-    };
+    let note = null;
+    const paint = yesNo(ex, "exercise", (value) => note == null ? void 0 : note.toggle(value === true));
+    note = textField(ex, "exercise_note", "What did you do?");
     paint();
   }
   if (fields.food) {
@@ -953,6 +960,7 @@ var JournalSettingTab = class extends import_obsidian6.PluginSettingTab {
     const fields = [
       ["rating", "Day rating (1\u201310)"],
       ["sleep", "Sleep (hours)"],
+      ["work", "Work (yes/no)"],
       ["exercise", "Exercise"],
       ["food", "Food (breakfast, lunch, dinner)"],
       ["tags", "Tags"]
