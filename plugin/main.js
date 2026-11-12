@@ -29,6 +29,133 @@ __export(main_exports, {
 module.exports = __toCommonJS(main_exports);
 var import_obsidian7 = require("obsidian");
 
+// src/base.ts
+var BASE_NAME = "Journal.base";
+var ICONS_FOLDER = "Weather Icons";
+var SKY = [
+  ["Partly cloudy", "partly-cloudy"],
+  ["Snow showers", "snow-showers"],
+  ["Thunderstorm", "thunderstorm"],
+  ["Overcast", "overcast"],
+  ["Drizzle", "drizzle"],
+  ["Showers", "showers"],
+  ["Clear", "clear"],
+  ["Rain", "rain"],
+  ["Snow", "snow"],
+  ["Fog", "fog"]
+];
+var SKY_ICONS = SKY.map(([, icon]) => icon);
+var q = (s) => JSON.stringify(s);
+function dateFormula(dateFormat) {
+  var _a, _b;
+  const name = (_a = dateFormat.split("/").pop()) != null ? _a : dateFormat;
+  const parts = {};
+  let i = 0;
+  for (const token of (_b = name.match(/YYYY|YY|MM|DD|\[[^\]]*\]|[A-Za-z]+|[^A-Za-z[]+/g)) != null ? _b : []) {
+    if (token === "YYYY")
+      parts.year = `file.name.slice(${i}, ${i + 4})`;
+    else if (token === "YY")
+      parts.year = `"20" + file.name.slice(${i}, ${i + 2})`;
+    else if (token === "MM")
+      parts.month = `file.name.slice(${i}, ${i + 2})`;
+    else if (token === "DD")
+      parts.day = `file.name.slice(${i}, ${i + 2})`;
+    else if (/^[A-Za-z]/.test(token))
+      return "file.ctime";
+    i += token.startsWith("[") ? token.length - 2 : token.length;
+  }
+  if (!parts.year || !parts.month || !parts.day)
+    return "file.ctime";
+  return `date(${parts.year} + "-" + ${parts.month} + "-" + ${parts.day})`;
+}
+function journalBase(settings) {
+  const folder = settings.folder.replace(/\/+$/, "") || "/";
+  const icons = `${folder === "/" ? "" : folder + "/"}${ICONS_FOLDER}`;
+  const f = settings.fields;
+  const columns = [["formula.day", "Day"], ["formula.place", "Location"]];
+  if (settings.showWeather)
+    columns.push(["formula.sky", " "], ["weather", "Weather"]);
+  if (f.rating)
+    columns.push(["day_rating", "Rating"]);
+  if (f.sleep)
+    columns.push(["sleep", "Sleep (h)"]);
+  if (f.work)
+    columns.push(["worked", "Worked"]);
+  if (f.exercise)
+    columns.push(["exercise", "Exercised"], ["exercise_note", "Exercise"]);
+  if (f.food)
+    columns.push(["breakfast", "Breakfast"], ["lunch", "Lunch"], ["dinner", "Dinner"]);
+  if (settings.showReading)
+    columns.push(["books", "Book"], ["pages_read", "Pages"]);
+  const monthly = ["formula.day", ...columns.map(([k]) => k).filter((k) => ["day_rating", "sleep", "worked", "exercise", "pages_read"].includes(k))];
+  const summaries = [
+    f.rating ? "day_rating: Average" : "",
+    f.sleep ? "sleep: Average" : "",
+    settings.showReading ? "pages_read: Sum" : ""
+  ].filter(Boolean);
+  let sky = q("");
+  for (const [label, icon] of [...SKY].reverse())
+    sky = `if(weather.startsWith(${q(label)}), image(${q(`${icons}/${icon}.svg`)}), ${sky})`;
+  const lines = [
+    "filters:",
+    "  and:",
+    folder === "/" ? "    - true" : `    - file.inFolder(${q(folder)})`,
+    `    - file.ext == "md"`,
+    "formulas:",
+    `  entry_date: ${dateFormula(settings.dateFormat)}`,
+    `  day: file.asLink(formula.entry_date.format("ddd, MMM D"))`,
+    `  place: if(location, location, ${q(settings.home.name)})`,
+    ...settings.showWeather ? [`  sky: if(weather, ${sky}, "")`] : [],
+    `  month: formula.entry_date.format("YYYY \xB7 MMMM")`,
+    "properties:",
+    "  formula.month:",
+    "    displayName: Month",
+    // Plain names unquoted, the way Obsidian writes them when it saves the base.
+    ...columns.flatMap(([k, name]) => [`  ${k}:`, `    displayName: ${/^[A-Za-z][\w ()%.-]*$/.test(name) ? name : q(name)}`]),
+    "views:",
+    "  - type: table",
+    "    name: Journal",
+    "    order:",
+    ...columns.map(([k]) => `      - ${k}`),
+    "    sort:",
+    "      - property: formula.entry_date",
+    "        direction: DESC",
+    ...summaries.length ? ["    summaries:", ...summaries.map((s) => "      " + s)] : [],
+    "  - type: table",
+    "    name: By month",
+    "    groupBy:",
+    "      property: formula.month",
+    "      direction: DESC",
+    "    order:",
+    ...monthly.map((k) => `      - ${k}`),
+    "    sort:",
+    "      - property: formula.entry_date",
+    "        direction: DESC",
+    ...summaries.length ? ["    summaries:", ...summaries.map((s) => "      " + s)] : []
+  ];
+  return lines.join("\n") + "\n";
+}
+
+// src/meteocons.ts
+var METEOCONS = {
+  "clear": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="a" x1="26.75" y1="22.91" x2="37.25" y2="41.09" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fbbf24"/><stop offset="0.45" stop-color="#fbbf24"/><stop offset="1" stop-color="#f59e0b"/></linearGradient></defs><circle cx="32" cy="32" r="10.5" stroke="#f8af18" stroke-miterlimit="10" stroke-width="0.5" fill="url(#a)"/><path d="M32,15.71V9.5m0,45V48.29M43.52,20.48l4.39-4.39M16.09,47.91l4.39-4.39m0-23-4.39-4.39M47.91,47.91l-4.39-4.39M15.71,32H9.5m45,0H48.29" fill="none" stroke="#fbbf24" stroke-linecap="round" stroke-miterlimit="10" stroke-width="3"/></svg>',
+  "partly-cloudy": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="a" x1="16.5" y1="19.67" x2="21.5" y2="28.33" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fbbf24"/><stop offset="0.45" stop-color="#fbbf24"/><stop offset="1" stop-color="#f59e0b"/></linearGradient><linearGradient id="b" x1="22.56" y1="21.96" x2="39.2" y2="50.8" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f3f7fe"/><stop offset="0.45" stop-color="#f3f7fe"/><stop offset="1" stop-color="#deeafb"/></linearGradient></defs><circle cx="19" cy="24" r="5" stroke="#f8af18" stroke-miterlimit="10" stroke-width="0.5" fill="url(#a)"/><path d="M19,15.67V12.5m0,23V32.33m5.89-14.22,2.24-2.24M10.87,32.13l2.24-2.24m0-11.78-2.24-2.24M27.13,32.13l-2.24-2.24M7.5,24h3.17M30.5,24H27.33" fill="none" stroke="#fbbf24" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2"/><path d="M46.5,31.5l-.32,0a10.49,10.49,0,0,0-19.11-8,7,7,0,0,0-10.57,6,7.21,7.21,0,0,0,.1,1.14A7.5,7.5,0,0,0,18,45.5a4.19,4.19,0,0,0,.5,0v0h28a7,7,0,0,0,0-14Z" stroke="#e6effc" stroke-miterlimit="10" stroke-width="0.5" fill="url(#b)"/></svg>',
+  "overcast": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="a" x1="40.76" y1="23" x2="50.83" y2="40.46" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#9ca3af"/><stop offset="0.45" stop-color="#9ca3af"/><stop offset="1" stop-color="#6b7280"/></linearGradient><linearGradient id="b" x1="22.56" y1="21.96" x2="39.2" y2="50.8" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f3f7fe"/><stop offset="0.45" stop-color="#f3f7fe"/><stop offset="1" stop-color="#deeafb"/></linearGradient></defs><path d="M34.23,33.45a4.05,4.05,0,0,0,4.05,4H54.79a4.34,4.34,0,0,0,.81-8.61,3.52,3.52,0,0,0,.06-.66,4.06,4.06,0,0,0-6.13-3.48,6.08,6.08,0,0,0-11.25,3.19,6.34,6.34,0,0,0,.18,1.46h-.18A4.05,4.05,0,0,0,34.23,33.45Z" stroke="#848b98" stroke-miterlimit="10" stroke-width="0.5" fill="url(#a)"/><path d="M46.5,31.5l-.32,0a10.49,10.49,0,0,0-19.11-8,7,7,0,0,0-10.57,6,7.21,7.21,0,0,0,.1,1.14A7.5,7.5,0,0,0,18,45.5a4.19,4.19,0,0,0,.5,0v0h28a7,7,0,0,0,0-14Z" stroke="#e6effc" stroke-miterlimit="10" stroke-width="0.5" fill="url(#b)"/></svg>',
+  "fog": '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 64 64"><defs><linearGradient id="a" x1="22.56" y1="21.96" x2="39.2" y2="50.8" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f3f7fe"/><stop offset="0.45" stop-color="#f3f7fe"/><stop offset="1" stop-color="#deeafb"/></linearGradient><linearGradient id="b" x1="27.5" y1="50.21" x2="36.5" y2="65.79" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#d4d7dd"/><stop offset="0.45" stop-color="#d4d7dd"/><stop offset="1" stop-color="#bec1c6"/></linearGradient><linearGradient id="c" y1="44.21" y2="59.79" xlink:href="#b"/></defs><path d="M46.5,31.5l-.32,0a10.49,10.49,0,0,0-19.11-8,7,7,0,0,0-10.57,6,7.21,7.21,0,0,0,.1,1.14A7.5,7.5,0,0,0,18,45.5a4.19,4.19,0,0,0,.5,0v0h28a7,7,0,0,0,0-14Z" stroke="#e6effc" stroke-miterlimit="10" stroke-width="0.5" fill="url(#a)"/><line x1="17" y1="58" x2="47" y2="58" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke-width="3" stroke="url(#b)"/><line x1="17" y1="52" x2="47" y2="52" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke-width="3" stroke="url(#c)"/></svg>',
+  "drizzle": '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 64 64"><defs><linearGradient id="a" x1="22.56" y1="21.96" x2="39.2" y2="50.8" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f3f7fe"/><stop offset="0.45" stop-color="#f3f7fe"/><stop offset="1" stop-color="#deeafb"/></linearGradient><linearGradient id="b" x1="23.31" y1="44.3" x2="24.69" y2="46.7" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#4286ee"/><stop offset="0.45" stop-color="#4286ee"/><stop offset="1" stop-color="#0950bc"/></linearGradient><linearGradient id="c" x1="30.31" y1="44.3" x2="31.69" y2="46.7" xlink:href="#b"/><linearGradient id="d" x1="37.31" y1="44.3" x2="38.69" y2="46.7" xlink:href="#b"/></defs><path d="M46.5,31.5l-.32,0a10.49,10.49,0,0,0-19.11-8,7,7,0,0,0-10.57,6,7.21,7.21,0,0,0,.1,1.14A7.5,7.5,0,0,0,18,45.5a4.19,4.19,0,0,0,.5,0v0h28a7,7,0,0,0,0-14Z" stroke="#e6effc" stroke-miterlimit="10" stroke-width="0.5" fill="url(#a)"/><line x1="24.08" y1="45.01" x2="23.92" y2="45.99" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" stroke="url(#b)"/><line x1="31.08" y1="45.01" x2="30.92" y2="45.99" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" stroke="url(#c)"/><line x1="38.08" y1="45.01" x2="37.92" y2="45.99" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" stroke="url(#d)"/></svg>',
+  "rain": '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 64 64"><defs><linearGradient id="a" x1="22.56" y1="21.96" x2="39.2" y2="50.8" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f3f7fe"/><stop offset="0.45" stop-color="#f3f7fe"/><stop offset="1" stop-color="#deeafb"/></linearGradient><linearGradient id="b" x1="22.53" y1="42.95" x2="25.47" y2="48.05" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#4286ee"/><stop offset="0.45" stop-color="#4286ee"/><stop offset="1" stop-color="#0950bc"/></linearGradient><linearGradient id="c" x1="29.53" y1="42.95" x2="32.47" y2="48.05" xlink:href="#b"/><linearGradient id="d" x1="36.53" y1="42.95" x2="39.47" y2="48.05" xlink:href="#b"/></defs><path d="M46.5,31.5l-.32,0a10.49,10.49,0,0,0-19.11-8,7,7,0,0,0-10.57,6,7.21,7.21,0,0,0,.1,1.14A7.5,7.5,0,0,0,18,45.5a4.19,4.19,0,0,0,.5,0v0h28a7,7,0,0,0,0-14Z" stroke="#e6effc" stroke-miterlimit="10" stroke-width="0.5" fill="url(#a)"/><line x1="24.39" y1="43.03" x2="23.61" y2="47.97" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" stroke="url(#b)"/><line x1="31.39" y1="43.03" x2="30.61" y2="47.97" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" stroke="url(#c)"/><line x1="38.39" y1="43.03" x2="37.61" y2="47.97" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" stroke="url(#d)"/></svg>',
+  "snow": '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 64 64"><defs><linearGradient id="a" x1="22.56" y1="21.96" x2="39.2" y2="50.8" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f3f7fe"/><stop offset="0.45" stop-color="#f3f7fe"/><stop offset="1" stop-color="#deeafb"/></linearGradient><linearGradient id="b" x1="30.12" y1="43.48" x2="31.88" y2="46.52" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#86c3db"/><stop offset="0.45" stop-color="#86c3db"/><stop offset="1" stop-color="#5eafcf"/></linearGradient><linearGradient id="c" x1="29.67" y1="42.69" x2="32.33" y2="47.31" xlink:href="#b"/><linearGradient id="d" x1="23.12" y1="43.48" x2="24.88" y2="46.52" xlink:href="#b"/><linearGradient id="e" x1="22.67" y1="42.69" x2="25.33" y2="47.31" xlink:href="#b"/><linearGradient id="f" x1="37.12" y1="43.48" x2="38.88" y2="46.52" xlink:href="#b"/><linearGradient id="g" x1="36.67" y1="42.69" x2="39.33" y2="47.31" xlink:href="#b"/></defs><path d="M46.5,31.5l-.32,0a10.49,10.49,0,0,0-19.11-8,7,7,0,0,0-10.57,6,7.21,7.21,0,0,0,.1,1.14A7.5,7.5,0,0,0,18,45.5a4.19,4.19,0,0,0,.5,0v0h28a7,7,0,0,0,0-14Z" stroke="#e6effc" stroke-miterlimit="10" stroke-width="0.5" fill="url(#a)"/><circle cx="31" cy="45" r="1.25" fill="none" stroke-miterlimit="10" stroke="url(#b)"/><path d="M33.17,46.25l-1.09-.63m-2.16-1.24-1.09-.63M31,42.5v1.25m0,3.75V46.25m-1.08-.63-1.09.63m4.34-2.5-1.09.63" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke="url(#c)"/><circle cx="24" cy="45" r="1.25" fill="none" stroke-miterlimit="10" stroke="url(#d)"/><path d="M26.17,46.25l-1.09-.63m-2.16-1.24-1.09-.63M24,42.5v1.25m0,3.75V46.25m-1.08-.63-1.09.63m4.34-2.5-1.09.63" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke="url(#e)"/><circle cx="38" cy="45" r="1.25" fill="none" stroke-miterlimit="10" stroke="url(#f)"/><path d="M40.17,46.25l-1.09-.63m-2.16-1.24-1.09-.63M38,42.5v1.25m0,3.75V46.25m-1.08-.63-1.09.63m4.34-2.5-1.09.63" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke="url(#g)"/></svg>',
+  "showers": '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 64 64"><defs><linearGradient id="a" x1="16.5" y1="19.67" x2="21.5" y2="28.33" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fbbf24"/><stop offset="0.45" stop-color="#fbbf24"/><stop offset="1" stop-color="#f59e0b"/></linearGradient><linearGradient id="b" x1="22.56" y1="21.96" x2="39.2" y2="50.8" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f3f7fe"/><stop offset="0.45" stop-color="#f3f7fe"/><stop offset="1" stop-color="#deeafb"/></linearGradient><linearGradient id="c" x1="22.53" y1="42.95" x2="25.47" y2="48.05" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#4286ee"/><stop offset="0.45" stop-color="#4286ee"/><stop offset="1" stop-color="#0950bc"/></linearGradient><linearGradient id="d" x1="29.53" y1="42.95" x2="32.47" y2="48.05" xlink:href="#c"/><linearGradient id="e" x1="36.53" y1="42.95" x2="39.47" y2="48.05" xlink:href="#c"/></defs><circle cx="19" cy="24" r="5" stroke="#f8af18" stroke-miterlimit="10" stroke-width="0.5" fill="url(#a)"/><path d="M19,15.67V12.5m0,23V32.33m5.89-14.22,2.24-2.24M10.87,32.13l2.24-2.24m0-11.78-2.24-2.24M27.13,32.13l-2.24-2.24M7.5,24h3.17M30.5,24H27.33" fill="none" stroke="#fbbf24" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2"/><path d="M46.5,31.5l-.32,0a10.49,10.49,0,0,0-19.11-8,7,7,0,0,0-10.57,6,7.21,7.21,0,0,0,.1,1.14A7.5,7.5,0,0,0,18,45.5a4.19,4.19,0,0,0,.5,0v0h28a7,7,0,0,0,0-14Z" stroke="#e6effc" stroke-miterlimit="10" stroke-width="0.5" fill="url(#b)"/><line x1="24.39" y1="43.03" x2="23.61" y2="47.97" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" stroke="url(#c)"/><line x1="31.39" y1="43.03" x2="30.61" y2="47.97" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" stroke="url(#d)"/><line x1="38.39" y1="43.03" x2="37.61" y2="47.97" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" stroke="url(#e)"/></svg>',
+  "snow-showers": '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 64 64"><defs><linearGradient id="a" x1="16.5" y1="19.67" x2="21.5" y2="28.33" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fbbf24"/><stop offset="0.45" stop-color="#fbbf24"/><stop offset="1" stop-color="#f59e0b"/></linearGradient><linearGradient id="b" x1="22.56" y1="21.96" x2="39.2" y2="50.8" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f3f7fe"/><stop offset="0.45" stop-color="#f3f7fe"/><stop offset="1" stop-color="#deeafb"/></linearGradient><linearGradient id="c" x1="30.12" y1="43.48" x2="31.88" y2="46.52" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#86c3db"/><stop offset="0.45" stop-color="#86c3db"/><stop offset="1" stop-color="#5eafcf"/></linearGradient><linearGradient id="d" x1="29.67" y1="42.69" x2="32.33" y2="47.31" xlink:href="#c"/><linearGradient id="e" x1="23.12" y1="43.48" x2="24.88" y2="46.52" xlink:href="#c"/><linearGradient id="f" x1="22.67" y1="42.69" x2="25.33" y2="47.31" xlink:href="#c"/><linearGradient id="g" x1="37.12" y1="43.48" x2="38.88" y2="46.52" xlink:href="#c"/><linearGradient id="h" x1="36.67" y1="42.69" x2="39.33" y2="47.31" xlink:href="#c"/></defs><circle cx="19" cy="24" r="5" stroke="#f8af18" stroke-miterlimit="10" stroke-width="0.5" fill="url(#a)"/><path d="M19,15.67V12.5m0,23V32.33m5.89-14.22,2.24-2.24M10.87,32.13l2.24-2.24m0-11.78-2.24-2.24M27.13,32.13l-2.24-2.24M7.5,24h3.17M30.5,24H27.33" fill="none" stroke="#fbbf24" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2"/><path d="M46.5,31.5l-.32,0a10.49,10.49,0,0,0-19.11-8,7,7,0,0,0-10.57,6,7.21,7.21,0,0,0,.1,1.14A7.5,7.5,0,0,0,18,45.5a4.19,4.19,0,0,0,.5,0v0h28a7,7,0,0,0,0-14Z" stroke="#e6effc" stroke-miterlimit="10" stroke-width="0.5" fill="url(#b)"/><circle cx="31" cy="45" r="1.25" fill="none" stroke-miterlimit="10" stroke="url(#c)"/><path d="M33.17,46.25l-1.09-.63m-2.16-1.24-1.09-.63M31,42.5v1.25m0,3.75V46.25m-1.08-.63-1.09.63m4.34-2.5-1.09.63" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke="url(#d)"/><circle cx="24" cy="45" r="1.25" fill="none" stroke-miterlimit="10" stroke="url(#e)"/><path d="M26.17,46.25l-1.09-.63m-2.16-1.24-1.09-.63M24,42.5v1.25m0,3.75V46.25m-1.08-.63-1.09.63m4.34-2.5-1.09.63" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke="url(#f)"/><circle cx="38" cy="45" r="1.25" fill="none" stroke-miterlimit="10" stroke="url(#g)"/><path d="M40.17,46.25l-1.09-.63m-2.16-1.24-1.09-.63M38,42.5v1.25m0,3.75V46.25m-1.08-.63-1.09.63m4.34-2.5-1.09.63" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke="url(#h)"/></svg>',
+  "thunderstorm": '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 64 64"><defs><linearGradient id="a" x1="22.56" y1="21.96" x2="39.2" y2="50.8" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f3f7fe"/><stop offset="0.45" stop-color="#f3f7fe"/><stop offset="1" stop-color="#deeafb"/></linearGradient><linearGradient id="b" x1="22.53" y1="42.95" x2="25.47" y2="48.05" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#4286ee"/><stop offset="0.45" stop-color="#4286ee"/><stop offset="1" stop-color="#0950bc"/></linearGradient><linearGradient id="c" x1="29.53" y1="42.95" x2="32.47" y2="48.05" xlink:href="#b"/><linearGradient id="d" x1="36.53" y1="42.95" x2="39.47" y2="48.05" xlink:href="#b"/><linearGradient id="e" x1="26.74" y1="37.88" x2="35.76" y2="53.52" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f7b23b"/><stop offset="0.45" stop-color="#f7b23b"/><stop offset="1" stop-color="#f59e0b"/></linearGradient></defs><path d="M46.5,31.5l-.32,0a10.49,10.49,0,0,0-19.11-8,7,7,0,0,0-10.57,6,7.21,7.21,0,0,0,.1,1.14A7.5,7.5,0,0,0,18,45.5a4.19,4.19,0,0,0,.5,0v0h28a7,7,0,0,0,0-14Z" stroke="#e6effc" stroke-miterlimit="10" stroke-width="0.5" fill="url(#a)"/><line x1="24.39" y1="43.03" x2="23.61" y2="47.97" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" stroke="url(#b)"/><line x1="31.39" y1="43.03" x2="30.61" y2="47.97" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" stroke="url(#c)"/><line x1="38.39" y1="43.03" x2="37.61" y2="47.97" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" stroke="url(#d)"/><polygon points="30 36 26 48 30 48 28 58 38 44 32 44 36 36 30 36" stroke="#f6a823" stroke-miterlimit="10" stroke-width="0.5" fill="url(#e)"/></svg>'
+};
+var instance = 0;
+function meteoconSvg(name) {
+  var _a;
+  const prefix = `dj-mc${++instance}-`;
+  return ((_a = METEOCONS[name]) != null ? _a : METEOCONS.overcast).replace(/\bid="([^"]+)"/g, `id="${prefix}$1"`).replace(/url\(#([^)]+)\)/g, `url(#${prefix}$1)`).replace(/href="#([^"]+)"/g, `href="#${prefix}$1"`);
+}
+
 // src/dates.ts
 var import_obsidian = require("obsidian");
 function entryDate(settings, file) {
@@ -252,6 +379,8 @@ var DEFAULT_SETTINGS = {
   ],
   fillNewEntries: true,
   useAsDailyTemplate: true,
+  journalBase: true,
+  baseFolder: null,
   hideNoteChrome: true
 };
 
@@ -426,19 +555,19 @@ var PlaceModal = class extends import_obsidian4.Modal {
     showHome();
     input.addEventListener("input", () => {
       window.clearTimeout(this.timer);
-      const q = input.value.trim();
-      if (q.length < 2) {
+      const q2 = input.value.trim();
+      if (q2.length < 2) {
         showHome();
         return;
       }
       this.timer = window.setTimeout(async () => {
-        this.latest = q;
+        this.latest = q2;
         let places = [];
         try {
-          places = await searchPlaces(q);
+          places = await searchPlaces(q2);
         } catch (e) {
         }
-        if (this.latest === q)
+        if (this.latest === q2)
           show(places);
       }, 300);
     });
@@ -576,26 +705,6 @@ var ConfirmModal = class extends import_obsidian4.Modal {
 
 // src/render.ts
 var import_obsidian5 = require("obsidian");
-
-// src/meteocons.ts
-var METEOCONS = {
-  "clear": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="a" x1="26.75" y1="22.91" x2="37.25" y2="41.09" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fbbf24"/><stop offset="0.45" stop-color="#fbbf24"/><stop offset="1" stop-color="#f59e0b"/></linearGradient></defs><circle cx="32" cy="32" r="10.5" stroke="#f8af18" stroke-miterlimit="10" stroke-width="0.5" fill="url(#a)"/><path d="M32,15.71V9.5m0,45V48.29M43.52,20.48l4.39-4.39M16.09,47.91l4.39-4.39m0-23-4.39-4.39M47.91,47.91l-4.39-4.39M15.71,32H9.5m45,0H48.29" fill="none" stroke="#fbbf24" stroke-linecap="round" stroke-miterlimit="10" stroke-width="3"/></svg>',
-  "partly-cloudy": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="a" x1="16.5" y1="19.67" x2="21.5" y2="28.33" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fbbf24"/><stop offset="0.45" stop-color="#fbbf24"/><stop offset="1" stop-color="#f59e0b"/></linearGradient><linearGradient id="b" x1="22.56" y1="21.96" x2="39.2" y2="50.8" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f3f7fe"/><stop offset="0.45" stop-color="#f3f7fe"/><stop offset="1" stop-color="#deeafb"/></linearGradient></defs><circle cx="19" cy="24" r="5" stroke="#f8af18" stroke-miterlimit="10" stroke-width="0.5" fill="url(#a)"/><path d="M19,15.67V12.5m0,23V32.33m5.89-14.22,2.24-2.24M10.87,32.13l2.24-2.24m0-11.78-2.24-2.24M27.13,32.13l-2.24-2.24M7.5,24h3.17M30.5,24H27.33" fill="none" stroke="#fbbf24" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2"/><path d="M46.5,31.5l-.32,0a10.49,10.49,0,0,0-19.11-8,7,7,0,0,0-10.57,6,7.21,7.21,0,0,0,.1,1.14A7.5,7.5,0,0,0,18,45.5a4.19,4.19,0,0,0,.5,0v0h28a7,7,0,0,0,0-14Z" stroke="#e6effc" stroke-miterlimit="10" stroke-width="0.5" fill="url(#b)"/></svg>',
-  "overcast": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="a" x1="40.76" y1="23" x2="50.83" y2="40.46" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#9ca3af"/><stop offset="0.45" stop-color="#9ca3af"/><stop offset="1" stop-color="#6b7280"/></linearGradient><linearGradient id="b" x1="22.56" y1="21.96" x2="39.2" y2="50.8" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f3f7fe"/><stop offset="0.45" stop-color="#f3f7fe"/><stop offset="1" stop-color="#deeafb"/></linearGradient></defs><path d="M34.23,33.45a4.05,4.05,0,0,0,4.05,4H54.79a4.34,4.34,0,0,0,.81-8.61,3.52,3.52,0,0,0,.06-.66,4.06,4.06,0,0,0-6.13-3.48,6.08,6.08,0,0,0-11.25,3.19,6.34,6.34,0,0,0,.18,1.46h-.18A4.05,4.05,0,0,0,34.23,33.45Z" stroke="#848b98" stroke-miterlimit="10" stroke-width="0.5" fill="url(#a)"/><path d="M46.5,31.5l-.32,0a10.49,10.49,0,0,0-19.11-8,7,7,0,0,0-10.57,6,7.21,7.21,0,0,0,.1,1.14A7.5,7.5,0,0,0,18,45.5a4.19,4.19,0,0,0,.5,0v0h28a7,7,0,0,0,0-14Z" stroke="#e6effc" stroke-miterlimit="10" stroke-width="0.5" fill="url(#b)"/></svg>',
-  "fog": '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 64 64"><defs><linearGradient id="a" x1="22.56" y1="21.96" x2="39.2" y2="50.8" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f3f7fe"/><stop offset="0.45" stop-color="#f3f7fe"/><stop offset="1" stop-color="#deeafb"/></linearGradient><linearGradient id="b" x1="27.5" y1="50.21" x2="36.5" y2="65.79" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#d4d7dd"/><stop offset="0.45" stop-color="#d4d7dd"/><stop offset="1" stop-color="#bec1c6"/></linearGradient><linearGradient id="c" y1="44.21" y2="59.79" xlink:href="#b"/></defs><path d="M46.5,31.5l-.32,0a10.49,10.49,0,0,0-19.11-8,7,7,0,0,0-10.57,6,7.21,7.21,0,0,0,.1,1.14A7.5,7.5,0,0,0,18,45.5a4.19,4.19,0,0,0,.5,0v0h28a7,7,0,0,0,0-14Z" stroke="#e6effc" stroke-miterlimit="10" stroke-width="0.5" fill="url(#a)"/><line x1="17" y1="58" x2="47" y2="58" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke-width="3" stroke="url(#b)"/><line x1="17" y1="52" x2="47" y2="52" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke-width="3" stroke="url(#c)"/></svg>',
-  "drizzle": '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 64 64"><defs><linearGradient id="a" x1="22.56" y1="21.96" x2="39.2" y2="50.8" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f3f7fe"/><stop offset="0.45" stop-color="#f3f7fe"/><stop offset="1" stop-color="#deeafb"/></linearGradient><linearGradient id="b" x1="23.31" y1="44.3" x2="24.69" y2="46.7" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#4286ee"/><stop offset="0.45" stop-color="#4286ee"/><stop offset="1" stop-color="#0950bc"/></linearGradient><linearGradient id="c" x1="30.31" y1="44.3" x2="31.69" y2="46.7" xlink:href="#b"/><linearGradient id="d" x1="37.31" y1="44.3" x2="38.69" y2="46.7" xlink:href="#b"/></defs><path d="M46.5,31.5l-.32,0a10.49,10.49,0,0,0-19.11-8,7,7,0,0,0-10.57,6,7.21,7.21,0,0,0,.1,1.14A7.5,7.5,0,0,0,18,45.5a4.19,4.19,0,0,0,.5,0v0h28a7,7,0,0,0,0-14Z" stroke="#e6effc" stroke-miterlimit="10" stroke-width="0.5" fill="url(#a)"/><line x1="24.08" y1="45.01" x2="23.92" y2="45.99" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" stroke="url(#b)"/><line x1="31.08" y1="45.01" x2="30.92" y2="45.99" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" stroke="url(#c)"/><line x1="38.08" y1="45.01" x2="37.92" y2="45.99" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" stroke="url(#d)"/></svg>',
-  "rain": '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 64 64"><defs><linearGradient id="a" x1="22.56" y1="21.96" x2="39.2" y2="50.8" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f3f7fe"/><stop offset="0.45" stop-color="#f3f7fe"/><stop offset="1" stop-color="#deeafb"/></linearGradient><linearGradient id="b" x1="22.53" y1="42.95" x2="25.47" y2="48.05" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#4286ee"/><stop offset="0.45" stop-color="#4286ee"/><stop offset="1" stop-color="#0950bc"/></linearGradient><linearGradient id="c" x1="29.53" y1="42.95" x2="32.47" y2="48.05" xlink:href="#b"/><linearGradient id="d" x1="36.53" y1="42.95" x2="39.47" y2="48.05" xlink:href="#b"/></defs><path d="M46.5,31.5l-.32,0a10.49,10.49,0,0,0-19.11-8,7,7,0,0,0-10.57,6,7.21,7.21,0,0,0,.1,1.14A7.5,7.5,0,0,0,18,45.5a4.19,4.19,0,0,0,.5,0v0h28a7,7,0,0,0,0-14Z" stroke="#e6effc" stroke-miterlimit="10" stroke-width="0.5" fill="url(#a)"/><line x1="24.39" y1="43.03" x2="23.61" y2="47.97" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" stroke="url(#b)"/><line x1="31.39" y1="43.03" x2="30.61" y2="47.97" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" stroke="url(#c)"/><line x1="38.39" y1="43.03" x2="37.61" y2="47.97" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" stroke="url(#d)"/></svg>',
-  "snow": '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 64 64"><defs><linearGradient id="a" x1="22.56" y1="21.96" x2="39.2" y2="50.8" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f3f7fe"/><stop offset="0.45" stop-color="#f3f7fe"/><stop offset="1" stop-color="#deeafb"/></linearGradient><linearGradient id="b" x1="30.12" y1="43.48" x2="31.88" y2="46.52" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#86c3db"/><stop offset="0.45" stop-color="#86c3db"/><stop offset="1" stop-color="#5eafcf"/></linearGradient><linearGradient id="c" x1="29.67" y1="42.69" x2="32.33" y2="47.31" xlink:href="#b"/><linearGradient id="d" x1="23.12" y1="43.48" x2="24.88" y2="46.52" xlink:href="#b"/><linearGradient id="e" x1="22.67" y1="42.69" x2="25.33" y2="47.31" xlink:href="#b"/><linearGradient id="f" x1="37.12" y1="43.48" x2="38.88" y2="46.52" xlink:href="#b"/><linearGradient id="g" x1="36.67" y1="42.69" x2="39.33" y2="47.31" xlink:href="#b"/></defs><path d="M46.5,31.5l-.32,0a10.49,10.49,0,0,0-19.11-8,7,7,0,0,0-10.57,6,7.21,7.21,0,0,0,.1,1.14A7.5,7.5,0,0,0,18,45.5a4.19,4.19,0,0,0,.5,0v0h28a7,7,0,0,0,0-14Z" stroke="#e6effc" stroke-miterlimit="10" stroke-width="0.5" fill="url(#a)"/><circle cx="31" cy="45" r="1.25" fill="none" stroke-miterlimit="10" stroke="url(#b)"/><path d="M33.17,46.25l-1.09-.63m-2.16-1.24-1.09-.63M31,42.5v1.25m0,3.75V46.25m-1.08-.63-1.09.63m4.34-2.5-1.09.63" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke="url(#c)"/><circle cx="24" cy="45" r="1.25" fill="none" stroke-miterlimit="10" stroke="url(#d)"/><path d="M26.17,46.25l-1.09-.63m-2.16-1.24-1.09-.63M24,42.5v1.25m0,3.75V46.25m-1.08-.63-1.09.63m4.34-2.5-1.09.63" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke="url(#e)"/><circle cx="38" cy="45" r="1.25" fill="none" stroke-miterlimit="10" stroke="url(#f)"/><path d="M40.17,46.25l-1.09-.63m-2.16-1.24-1.09-.63M38,42.5v1.25m0,3.75V46.25m-1.08-.63-1.09.63m4.34-2.5-1.09.63" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke="url(#g)"/></svg>',
-  "showers": '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 64 64"><defs><linearGradient id="a" x1="16.5" y1="19.67" x2="21.5" y2="28.33" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fbbf24"/><stop offset="0.45" stop-color="#fbbf24"/><stop offset="1" stop-color="#f59e0b"/></linearGradient><linearGradient id="b" x1="22.56" y1="21.96" x2="39.2" y2="50.8" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f3f7fe"/><stop offset="0.45" stop-color="#f3f7fe"/><stop offset="1" stop-color="#deeafb"/></linearGradient><linearGradient id="c" x1="22.53" y1="42.95" x2="25.47" y2="48.05" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#4286ee"/><stop offset="0.45" stop-color="#4286ee"/><stop offset="1" stop-color="#0950bc"/></linearGradient><linearGradient id="d" x1="29.53" y1="42.95" x2="32.47" y2="48.05" xlink:href="#c"/><linearGradient id="e" x1="36.53" y1="42.95" x2="39.47" y2="48.05" xlink:href="#c"/></defs><circle cx="19" cy="24" r="5" stroke="#f8af18" stroke-miterlimit="10" stroke-width="0.5" fill="url(#a)"/><path d="M19,15.67V12.5m0,23V32.33m5.89-14.22,2.24-2.24M10.87,32.13l2.24-2.24m0-11.78-2.24-2.24M27.13,32.13l-2.24-2.24M7.5,24h3.17M30.5,24H27.33" fill="none" stroke="#fbbf24" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2"/><path d="M46.5,31.5l-.32,0a10.49,10.49,0,0,0-19.11-8,7,7,0,0,0-10.57,6,7.21,7.21,0,0,0,.1,1.14A7.5,7.5,0,0,0,18,45.5a4.19,4.19,0,0,0,.5,0v0h28a7,7,0,0,0,0-14Z" stroke="#e6effc" stroke-miterlimit="10" stroke-width="0.5" fill="url(#b)"/><line x1="24.39" y1="43.03" x2="23.61" y2="47.97" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" stroke="url(#c)"/><line x1="31.39" y1="43.03" x2="30.61" y2="47.97" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" stroke="url(#d)"/><line x1="38.39" y1="43.03" x2="37.61" y2="47.97" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" stroke="url(#e)"/></svg>',
-  "snow-showers": '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 64 64"><defs><linearGradient id="a" x1="16.5" y1="19.67" x2="21.5" y2="28.33" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fbbf24"/><stop offset="0.45" stop-color="#fbbf24"/><stop offset="1" stop-color="#f59e0b"/></linearGradient><linearGradient id="b" x1="22.56" y1="21.96" x2="39.2" y2="50.8" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f3f7fe"/><stop offset="0.45" stop-color="#f3f7fe"/><stop offset="1" stop-color="#deeafb"/></linearGradient><linearGradient id="c" x1="30.12" y1="43.48" x2="31.88" y2="46.52" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#86c3db"/><stop offset="0.45" stop-color="#86c3db"/><stop offset="1" stop-color="#5eafcf"/></linearGradient><linearGradient id="d" x1="29.67" y1="42.69" x2="32.33" y2="47.31" xlink:href="#c"/><linearGradient id="e" x1="23.12" y1="43.48" x2="24.88" y2="46.52" xlink:href="#c"/><linearGradient id="f" x1="22.67" y1="42.69" x2="25.33" y2="47.31" xlink:href="#c"/><linearGradient id="g" x1="37.12" y1="43.48" x2="38.88" y2="46.52" xlink:href="#c"/><linearGradient id="h" x1="36.67" y1="42.69" x2="39.33" y2="47.31" xlink:href="#c"/></defs><circle cx="19" cy="24" r="5" stroke="#f8af18" stroke-miterlimit="10" stroke-width="0.5" fill="url(#a)"/><path d="M19,15.67V12.5m0,23V32.33m5.89-14.22,2.24-2.24M10.87,32.13l2.24-2.24m0-11.78-2.24-2.24M27.13,32.13l-2.24-2.24M7.5,24h3.17M30.5,24H27.33" fill="none" stroke="#fbbf24" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2"/><path d="M46.5,31.5l-.32,0a10.49,10.49,0,0,0-19.11-8,7,7,0,0,0-10.57,6,7.21,7.21,0,0,0,.1,1.14A7.5,7.5,0,0,0,18,45.5a4.19,4.19,0,0,0,.5,0v0h28a7,7,0,0,0,0-14Z" stroke="#e6effc" stroke-miterlimit="10" stroke-width="0.5" fill="url(#b)"/><circle cx="31" cy="45" r="1.25" fill="none" stroke-miterlimit="10" stroke="url(#c)"/><path d="M33.17,46.25l-1.09-.63m-2.16-1.24-1.09-.63M31,42.5v1.25m0,3.75V46.25m-1.08-.63-1.09.63m4.34-2.5-1.09.63" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke="url(#d)"/><circle cx="24" cy="45" r="1.25" fill="none" stroke-miterlimit="10" stroke="url(#e)"/><path d="M26.17,46.25l-1.09-.63m-2.16-1.24-1.09-.63M24,42.5v1.25m0,3.75V46.25m-1.08-.63-1.09.63m4.34-2.5-1.09.63" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke="url(#f)"/><circle cx="38" cy="45" r="1.25" fill="none" stroke-miterlimit="10" stroke="url(#g)"/><path d="M40.17,46.25l-1.09-.63m-2.16-1.24-1.09-.63M38,42.5v1.25m0,3.75V46.25m-1.08-.63-1.09.63m4.34-2.5-1.09.63" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke="url(#h)"/></svg>',
-  "thunderstorm": '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 64 64"><defs><linearGradient id="a" x1="22.56" y1="21.96" x2="39.2" y2="50.8" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f3f7fe"/><stop offset="0.45" stop-color="#f3f7fe"/><stop offset="1" stop-color="#deeafb"/></linearGradient><linearGradient id="b" x1="22.53" y1="42.95" x2="25.47" y2="48.05" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#4286ee"/><stop offset="0.45" stop-color="#4286ee"/><stop offset="1" stop-color="#0950bc"/></linearGradient><linearGradient id="c" x1="29.53" y1="42.95" x2="32.47" y2="48.05" xlink:href="#b"/><linearGradient id="d" x1="36.53" y1="42.95" x2="39.47" y2="48.05" xlink:href="#b"/><linearGradient id="e" x1="26.74" y1="37.88" x2="35.76" y2="53.52" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f7b23b"/><stop offset="0.45" stop-color="#f7b23b"/><stop offset="1" stop-color="#f59e0b"/></linearGradient></defs><path d="M46.5,31.5l-.32,0a10.49,10.49,0,0,0-19.11-8,7,7,0,0,0-10.57,6,7.21,7.21,0,0,0,.1,1.14A7.5,7.5,0,0,0,18,45.5a4.19,4.19,0,0,0,.5,0v0h28a7,7,0,0,0,0-14Z" stroke="#e6effc" stroke-miterlimit="10" stroke-width="0.5" fill="url(#a)"/><line x1="24.39" y1="43.03" x2="23.61" y2="47.97" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" stroke="url(#b)"/><line x1="31.39" y1="43.03" x2="30.61" y2="47.97" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" stroke="url(#c)"/><line x1="38.39" y1="43.03" x2="37.61" y2="47.97" fill="none" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" stroke="url(#d)"/><polygon points="30 36 26 48 30 48 28 58 38 44 32 44 36 36 30 36" stroke="#f6a823" stroke-miterlimit="10" stroke-width="0.5" fill="url(#e)"/></svg>'
-};
-var instance = 0;
-function meteoconSvg(name) {
-  var _a;
-  const prefix = `dj-mc${++instance}-`;
-  return ((_a = METEOCONS[name]) != null ? _a : METEOCONS.overcast).replace(/\bid="([^"]+)"/g, `id="${prefix}$1"`).replace(/url\(#([^)]+)\)/g, `url(#${prefix}$1)`).replace(/href="#([^"]+)"/g, `href="#${prefix}$1"`);
-}
 
 // src/template.ts
 var SHOW_CHROME = "dj-show-chrome";
@@ -839,9 +948,9 @@ function drawReading(el, day, date) {
         line.createSpan({ text: `+${b.pages} pages` });
     }
   }
-  for (const q of day.quotes) {
-    const bq = c.createEl("blockquote", { cls: "dj-quote", text: q.text });
-    bq.createDiv({ cls: "dj-quote-source", text: "\u2014 " + q.book });
+  for (const q2 of day.quotes) {
+    const bq = c.createEl("blockquote", { cls: "dj-quote", text: q2.text });
+    bq.createDiv({ cls: "dj-quote-source", text: "\u2014 " + q2.book });
   }
 }
 function renderCheckIn(host, el, file, fm, fields) {
@@ -1039,6 +1148,10 @@ var JournalSettingTab = class extends import_obsidian6.PluginSettingTab {
       s.useAsDailyTemplate = v;
       await save();
     }));
+    new import_obsidian6.Setting(containerEl).setName("Journal base").setDesc(`Keeps a base of all entries (rating, sleep, weather, pages read and more, plus a By month view) at ${this.plugin.basePath()}, updated to match these settings. Turning it off moves the base and its weather icons to the trash.`).addToggle((t) => t.setValue(s.journalBase).onChange(async (v) => {
+      s.journalBase = v;
+      await save();
+    }));
     new import_obsidian6.Setting(containerEl).setName("Writing prompts").setDesc(s.prompts.map((p) => p.text).join(" \xB7 ") || "None").addButton((b) => b.setButtonText("Edit\u2026").onClick(() => {
       new PromptsModal(this.app, s.prompts, async (prompts) => {
         s.prompts = prompts;
@@ -1154,6 +1267,7 @@ var JournalBlock = class extends import_obsidian7.MarkdownRenderChild {
     this.timer = 0;
   }
   onload() {
+    this.plugin.blocks.add(this);
     this.render();
     this.registerEvent(this.plugin.app.metadataCache.on("changed", (changed) => {
       if (changed.path !== this.file.path)
@@ -1166,6 +1280,17 @@ var JournalBlock = class extends import_obsidian7.MarkdownRenderChild {
   }
   onunload() {
     window.clearTimeout(this.timer);
+    this.plugin.blocks.delete(this);
+  }
+  /** Redraw this block's Reading card from freshly fetched data, if it's a Reading card for that entry. */
+  showReading(file, date, day) {
+    const kind = this.section.split(/\s+/)[0];
+    if (this.file.path !== file.path || kind !== "reading" && kind !== "hardcover")
+      return;
+    window.clearTimeout(this.timer);
+    this.containerEl.empty();
+    this.containerEl.addClass("dj-block");
+    drawReading(this.containerEl, day, date);
   }
   render() {
     this.containerEl.empty();
@@ -1178,6 +1303,7 @@ var DailyJournal = class extends import_obsidian7.Plugin {
     super(...arguments);
     this.weatherTried = /* @__PURE__ */ new Set();
     this.readingTried = /* @__PURE__ */ new Set();
+    this.blocks = /* @__PURE__ */ new Set();
   }
   async onload() {
     await this.loadSettings();
@@ -1255,6 +1381,7 @@ var DailyJournal = class extends import_obsidian7.Plugin {
       this.refreshChrome();
       this.registerEvent(this.app.vault.on("create", (file) => this.fillIfEmpty(file)));
       void this.syncDailyTemplate();
+      void this.syncJournalBase();
     });
   }
   onunload() {
@@ -1291,6 +1418,7 @@ var DailyJournal = class extends import_obsidian7.Plugin {
   async saveSettings() {
     await this.saveData(this.settings);
     await this.syncDailyTemplate();
+    await this.syncJournalBase();
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   corePlugin(id) {
@@ -1334,6 +1462,55 @@ var DailyJournal = class extends import_obsidian7.Plugin {
       await setDailyTemplate("");
     }
   }
+  basePath() {
+    return (0, import_obsidian7.normalizePath)(`${this.settings.folder}/${BASE_NAME}`);
+  }
+  /**
+   * Keep the Journal base (and the weather icons it shows) in the journal folder while the setting
+   * is on, matching the current settings; move them to the trash when it's turned off or the
+   * journal folder moves. Only acts on an existing folder, so typing a folder name doesn't scatter
+   * bases across half-typed paths.
+   */
+  async syncJournalBase() {
+    const s = this.settings;
+    const folder = (0, import_obsidian7.normalizePath)(s.folder || "/");
+    const exists = folder === "/" || this.app.vault.getAbstractFileByPath(folder) instanceof import_obsidian7.TFolder;
+    const target = s.journalBase && exists ? folder : null;
+    if (s.baseFolder !== null && s.baseFolder !== target && (target !== null || !s.journalBase)) {
+      await this.removeJournalBase(s.baseFolder);
+      s.baseFolder = null;
+      await this.saveData(s);
+    }
+    if (target === null)
+      return;
+    const write = async (path, text) => {
+      const file = this.app.vault.getAbstractFileByPath(path);
+      if (file instanceof import_obsidian7.TFile) {
+        if (await this.app.vault.read(file) !== text)
+          await this.app.vault.modify(file, text);
+      } else {
+        await this.ensureFolder(path);
+        await this.app.vault.create(path, text);
+      }
+    };
+    const inFolder = (name) => (0, import_obsidian7.normalizePath)(folder === "/" ? name : `${folder}/${name}`);
+    await write(inFolder(BASE_NAME), journalBase(s));
+    if (s.showWeather)
+      for (const icon of SKY_ICONS)
+        await write(inFolder(`${ICONS_FOLDER}/${icon}.svg`), METEOCONS[icon]);
+    if (s.baseFolder !== target) {
+      s.baseFolder = target;
+      await this.saveData(s);
+    }
+  }
+  async removeJournalBase(folder) {
+    const inFolder = (name) => (0, import_obsidian7.normalizePath)(folder === "/" ? name : `${folder}/${name}`);
+    for (const path of [inFolder(BASE_NAME), inFolder(ICONS_FOLDER)]) {
+      const item = this.app.vault.getAbstractFileByPath(path);
+      if (item)
+        await this.app.fileManager.trashFile(item);
+    }
+  }
   journalEntries() {
     return this.app.vault.getMarkdownFiles().map((file) => ({ file, date: entryDate(this.settings, file) })).filter((e) => e.date !== null).sort((a, b) => a.date.valueOf() - b.date.valueOf());
   }
@@ -1344,6 +1521,8 @@ var DailyJournal = class extends import_obsidian7.Plugin {
     await this.app.fileManager.processFrontMatter(file, (f) => {
       Object.assign(f, props);
     });
+    for (const block2 of this.blocks)
+      block2.showReading(file, date, day);
   }
   withActiveEntry(checking, run) {
     const file = this.app.workspace.getActiveFile();

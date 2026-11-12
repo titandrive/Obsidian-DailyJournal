@@ -1,8 +1,10 @@
-import { MarkdownRenderChild, MarkdownView, Notice, normalizePath, Plugin, TAbstractFile, TFile, moment } from "obsidian";
+import { MarkdownRenderChild, MarkdownView, Notice, normalizePath, Plugin, TAbstractFile, TFile, TFolder, moment } from "obsidian";
+import { BASE_NAME, ICONS_FOLDER, journalBase, SKY_ICONS } from "./src/base";
+import { METEOCONS } from "./src/meteocons";
 import { entryDate, entryPath, Moment } from "./src/dates";
-import { hardcoverDay, readingProperties } from "./src/hardcover";
+import { HardcoverDay, hardcoverDay, readingProperties } from "./src/hardcover";
 import { MonthPicker, PlaceModal } from "./src/modals";
-import { JournalHost, renderSection } from "./src/render";
+import { drawReading, JournalHost, renderSection } from "./src/render";
 import { DEFAULT_SETTINGS, JournalSettings, Place, Prompt } from "./src/settings";
 import { JournalSettingTab } from "./src/settings-tab";
 import { applyLayout, blockShowsWeather, entryTemplate, parseBlock, SHOW_CHROME } from "./src/template";
@@ -17,6 +19,7 @@ class JournalBlock extends MarkdownRenderChild {
 	}
 
 	onload(): void {
+		this.plugin.blocks.add(this);
 		this.render();
 		this.registerEvent(this.plugin.app.metadataCache.on("changed", (changed) => {
 			if (changed.path !== this.file.path) return;
@@ -29,6 +32,17 @@ class JournalBlock extends MarkdownRenderChild {
 
 	onunload(): void {
 		window.clearTimeout(this.timer);
+		this.plugin.blocks.delete(this);
+	}
+
+	/** Redraw this block's Reading card from freshly fetched data, if it's a Reading card for that entry. */
+	showReading(file: TFile, date: Moment, day: HardcoverDay): void {
+		const kind = this.section.split(/\s+/)[0];
+		if (this.file.path !== file.path || (kind !== "reading" && kind !== "hardcover")) return;
+		window.clearTimeout(this.timer);
+		this.containerEl.empty();
+		this.containerEl.addClass("dj-block");
+		drawReading(this.containerEl, day, date);
 	}
 
 	private render(): void {
@@ -42,6 +56,7 @@ export default class DailyJournal extends Plugin implements JournalHost {
 	settings!: JournalSettings;
 	weatherTried = new Set<string>();
 	readingTried = new Set<string>();
+	blocks = new Set<JournalBlock>();
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
@@ -120,6 +135,7 @@ export default class DailyJournal extends Plugin implements JournalHost {
 			this.refreshChrome();
 			this.registerEvent(this.app.vault.on("create", (file) => this.fillIfEmpty(file)));
 			void this.syncDailyTemplate();
+			void this.syncJournalBase();
 		});
 	}
 
@@ -158,6 +174,7 @@ export default class DailyJournal extends Plugin implements JournalHost {
 	async saveSettings(): Promise<void> {
 		await this.saveData(this.settings);
 		await this.syncDailyTemplate();
+		await this.syncJournalBase();
 	}
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -201,6 +218,51 @@ export default class DailyJournal extends Plugin implements JournalHost {
 		}
 	}
 
+	basePath(): string {
+		return normalizePath(`${this.settings.folder}/${BASE_NAME}`);
+	}
+
+	/**
+	 * Keep the Journal base (and the weather icons it shows) in the journal folder while the setting
+	 * is on, matching the current settings; move them to the trash when it's turned off or the
+	 * journal folder moves. Only acts on an existing folder, so typing a folder name doesn't scatter
+	 * bases across half-typed paths.
+	 */
+	async syncJournalBase(): Promise<void> {
+		const s = this.settings;
+		const folder = normalizePath(s.folder || "/");
+		const exists = folder === "/" || this.app.vault.getAbstractFileByPath(folder) instanceof TFolder;
+		const target = s.journalBase && exists ? folder : null;
+		if (s.baseFolder !== null && s.baseFolder !== target && (target !== null || !s.journalBase)) {
+			await this.removeJournalBase(s.baseFolder);
+			s.baseFolder = null;
+			await this.saveData(s);
+		}
+		if (target === null) return;
+
+		const write = async (path: string, text: string) => {
+			const file = this.app.vault.getAbstractFileByPath(path);
+			if (file instanceof TFile) {
+				if ((await this.app.vault.read(file)) !== text) await this.app.vault.modify(file, text);
+			} else {
+				await this.ensureFolder(path);
+				await this.app.vault.create(path, text);
+			}
+		};
+		const inFolder = (name: string) => normalizePath(folder === "/" ? name : `${folder}/${name}`);
+		await write(inFolder(BASE_NAME), journalBase(s));
+		if (s.showWeather) for (const icon of SKY_ICONS) await write(inFolder(`${ICONS_FOLDER}/${icon}.svg`), METEOCONS[icon]);
+		if (s.baseFolder !== target) { s.baseFolder = target; await this.saveData(s); }
+	}
+
+	private async removeJournalBase(folder: string): Promise<void> {
+		const inFolder = (name: string) => normalizePath(folder === "/" ? name : `${folder}/${name}`);
+		for (const path of [inFolder(BASE_NAME), inFolder(ICONS_FOLDER)]) {
+			const item = this.app.vault.getAbstractFileByPath(path);
+			if (item) await this.app.fileManager.trashFile(item);
+		}
+	}
+
 	journalEntries(): Array<{ file: TFile; date: Moment }> {
 		return this.app.vault.getMarkdownFiles()
 			.map((file) => ({ file, date: entryDate(this.settings, file) }))
@@ -213,6 +275,8 @@ export default class DailyJournal extends Plugin implements JournalHost {
 		const day = await hardcoverDay(this.settings.hardcoverToken, date);
 		const props = readingProperties(day);
 		await this.app.fileManager.processFrontMatter(file, (f) => { Object.assign(f, props); });
+		// Redraw from the data in hand: Obsidian's property cache can lag right after a save.
+		for (const block of this.blocks) block.showReading(file, date, day);
 	}
 
 	private withActiveEntry(checking: boolean, run: (file: TFile, date: Moment) => void): boolean {

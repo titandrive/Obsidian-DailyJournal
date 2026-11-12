@@ -131,7 +131,7 @@ async function renderReading(host: JournalHost, el: HTMLElement, file: TFile, da
 	}
 }
 
-function drawReading(el: HTMLElement, day: HardcoverDay, date: Moment): void {
+export function drawReading(el: HTMLElement, day: HardcoverDay, date: Moment): void {
 	const c = card(el, "Reading");
 	if (!day.books.length && !day.quotes.length) {
 		const last = day.lastRead ? moment(day.lastRead.date, "YYYY-MM-DD") : null;

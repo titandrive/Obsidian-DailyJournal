@@ -22,9 +22,11 @@ Commands that act on an entry only appear while a journal entry is open.
 
 Daily Journal uses the same folder and date format as Daily notes (copied on first run, adjustable in settings). With **Use as Daily notes template** on (the default), it keeps the journal layout in a template file (`Daily Journal.md` in your Templates folder) and sets it as Daily notes' template, so Obsidian's own daily-note command uses it. Empty entries created any other way (calendars, dashboards) are filled with the layout too.
 
+With **Journal base** on (the default), it also keeps `Journal.base` in the journal folder: a table of every entry (location, weather, rating, sleep, work, exercise, food, book and pages read) and a By month view with averages and page totals. Its weather icons live in `Weather Icons/` beside it. The base follows your settings; turning it off moves both to the trash, and turning it back on recreates them.
+
 ## Settings
 
-- **Entries**: journal folder and date format, using the layout as Daily notes' template, filling new entries, and writing prompts (edited in a dialog: drag to reorder, indent to make sub-headings).
+- **Entries**: journal folder and date format, using the layout as Daily notes' template, the Journal base, filling new entries, and writing prompts (edited in a dialog: drag to reorder, indent to make sub-headings).
 - **Cards**: each card with its own settings: Weather (on/off, default location, °F/°C), Reading (Hardcover API token), Check-in (which fields to show), and On this day.
 - **Appearance**: hide the title and Properties box in entries.
 

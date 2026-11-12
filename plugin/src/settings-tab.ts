@@ -35,6 +35,10 @@ export class JournalSettingTab extends PluginSettingTab {
 			.setDesc(`Keeps the journal layout in ${this.plugin.templatePath()} and sets it as Daily notes' template, so Obsidian's own daily-note command uses it.`)
 			.addToggle((t) => t.setValue(s.useAsDailyTemplate).onChange(async (v) => { s.useAsDailyTemplate = v; await save(); }));
 		new Setting(containerEl)
+			.setName("Journal base")
+			.setDesc(`Keeps a base of all entries (rating, sleep, weather, pages read and more, plus a By month view) at ${this.plugin.basePath()}, updated to match these settings. Turning it off moves the base and its weather icons to the trash.`)
+			.addToggle((t) => t.setValue(s.journalBase).onChange(async (v) => { s.journalBase = v; await save(); }));
+		new Setting(containerEl)
 			.setName("Writing prompts")
 			.setDesc(s.prompts.map((p) => p.text).join(" · ") || "None")
 			.addButton((b) => b.setButtonText("Edit…").onClick(() => {

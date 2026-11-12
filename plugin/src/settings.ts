@@ -35,6 +35,9 @@ export interface JournalSettings {
 	prompts: Prompt[];
 	fillNewEntries: boolean;
 	useAsDailyTemplate: boolean;
+	journalBase: boolean;
+	/** Folder the plugin last wrote the Journal base to, so it can tidy up when the folder changes. */
+	baseFolder: string | null;
 	hideNoteChrome: boolean;
 }
 
@@ -55,5 +58,7 @@ export const DEFAULT_SETTINGS: JournalSettings = {
 	],
 	fillNewEntries: true,
 	useAsDailyTemplate: true,
+	journalBase: true,
+	baseFolder: null,
 	hideNoteChrome: true,
 };
