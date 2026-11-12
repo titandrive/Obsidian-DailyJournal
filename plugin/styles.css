@@ -29,6 +29,7 @@
 a.dj-chip { text-decoration: none; cursor: pointer; }
 a.dj-chip:hover { border-color: var(--interactive-accent); }
 .dj-icon { display: inline-flex; color: var(--interactive-accent); }
+.dj-icon svg { width: 1em; height: 1em; }
 
 /* Header */
 .dj-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 1em; flex-wrap: wrap; }

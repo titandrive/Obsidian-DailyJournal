@@ -86,17 +86,25 @@ function entryPlace(fm, home) {
   return home;
 }
 var CONDITIONS = [
-  [0, "\u2600", "Clear"],
-  [2, "\u{1F324}", "Partly cloudy"],
-  [3, "\u2601", "Overcast"],
-  [48, "\u{1F32B}", "Fog"],
-  [57, "\u{1F326}", "Drizzle"],
-  [67, "\u{1F327}", "Rain"],
-  [77, "\u{1F328}", "Snow"],
-  [82, "\u{1F327}", "Showers"],
-  [86, "\u{1F328}", "Snow showers"],
-  [Infinity, "\u26C8", "Thunderstorm"]
+  [0, "sun", "Clear"],
+  [2, "cloud-sun", "Partly cloudy"],
+  [3, "cloud", "Overcast"],
+  [48, "cloud-fog", "Fog"],
+  [57, "cloud-drizzle", "Drizzle"],
+  [67, "cloud-rain", "Rain"],
+  [77, "cloud-snow", "Snow"],
+  [82, "cloud-rain-wind", "Showers"],
+  [86, "cloud-snow", "Snow showers"],
+  [Infinity, "cloud-lightning", "Thunderstorm"]
 ];
+function weatherText(saved) {
+  return saved.replace(/^[^\p{L}\p{N}]+/u, "");
+}
+function weatherIcon(saved) {
+  const text = weatherText(saved);
+  const match = [...CONDITIONS].sort((a, b) => b[2].length - a[2].length).find(([, , label]) => text.startsWith(label));
+  return match ? match[1] : "cloud";
+}
 async function fetchWeather(place, date, units) {
   var _a;
   try {
@@ -106,8 +114,8 @@ async function fetchWeather(place, date, units) {
     });
     const w = res.json.daily;
     const code = w.weather_code[0];
-    const [, icon, label] = (_a = CONDITIONS.find(([max]) => code <= max)) != null ? _a : CONDITIONS[CONDITIONS.length - 1];
-    return `${icon} ${label} \xB7 H ${Math.round(w.temperature_2m_max[0])}\xB0 / L ${Math.round(w.temperature_2m_min[0])}\xB0`;
+    const [, , label] = (_a = CONDITIONS.find(([max]) => code <= max)) != null ? _a : CONDITIONS[CONDITIONS.length - 1];
+    return `${label} \xB7 H ${Math.round(w.temperature_2m_max[0])}\xB0 / L ${Math.round(w.temperature_2m_min[0])}\xB0`;
   } catch (e) {
     return null;
   }
@@ -572,7 +580,6 @@ async function renderSection(host, source, el, file) {
   }
 }
 async function renderHeader(host, el, file, date, fm, weatherOn) {
-  var _a;
   const { app, settings } = host;
   const c = card(el);
   const top = c.createDiv({ cls: "dj-header" });
@@ -589,10 +596,15 @@ async function renderHeader(host, el, file, date, fm, weatherOn) {
   if (next)
     link(app, nav, next.date.format("MMM D") + " \u203A", next.file, "dj-chip");
   const chips = c.createDiv({ cls: "dj-row" });
-  const weatherChip = chips.createSpan({ cls: "dj-chip", text: String((_a = fm.weather) != null ? _a : "") });
+  const weatherChip = chips.createSpan({ cls: "dj-chip" });
+  const weatherIconEl = weatherChip.createSpan({ cls: "dj-icon" });
+  const weatherLabel = weatherChip.createSpan();
   const showWeather = (weather) => {
-    weatherChip.setText(weather != null ? weather : "");
     weatherChip.toggle(!!weather);
+    if (!weather)
+      return;
+    (0, import_obsidian5.setIcon)(weatherIconEl, weatherIcon(weather));
+    weatherLabel.setText(weatherText(weather));
   };
   showWeather(weatherOn && fm.weather ? String(fm.weather) : null);
   const place = entryPlace(fm, settings.home);
@@ -600,9 +612,9 @@ async function renderHeader(host, el, file, date, fm, weatherOn) {
   placeChip.createSpan({ cls: "dj-icon" }).innerHTML = PIN_ICON;
   const placeName = placeChip.createSpan({ text: place.name });
   placeChip.onclick = (e) => {
-    var _a2;
+    var _a;
     e.preventDefault();
-    const current = entryPlace((_a2 = app.metadataCache.getFileCache(file)) == null ? void 0 : _a2.frontmatter, settings.home);
+    const current = entryPlace((_a = app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter, settings.home);
     new PlaceModal(app, current.name !== settings.home.name ? settings.home : null, async (chosen) => {
       placeName.setText((chosen != null ? chosen : settings.home).name);
       const weather = await host.setEntryPlace(file, chosen, weatherOn);

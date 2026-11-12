@@ -20,13 +20,27 @@ export function hasOwnPlace(fm: Record<string, unknown> | undefined): boolean {
 	return !!(fm && fm.location && fm.latitude != null && fm.longitude != null);
 }
 
+// Open-Meteo weather codes (up to the first number) → label and Lucide icon. Saved text is plain;
+// the header draws the icon from the label.
 const CONDITIONS: Array<[number, string, string]> = [
-	[0, "☀", "Clear"], [2, "🌤", "Partly cloudy"], [3, "☁", "Overcast"], [48, "🌫", "Fog"],
-	[57, "🌦", "Drizzle"], [67, "🌧", "Rain"], [77, "🌨", "Snow"], [82, "🌧", "Showers"],
-	[86, "🌨", "Snow showers"], [Infinity, "⛈", "Thunderstorm"],
+	[0, "sun", "Clear"], [2, "cloud-sun", "Partly cloudy"], [3, "cloud", "Overcast"], [48, "cloud-fog", "Fog"],
+	[57, "cloud-drizzle", "Drizzle"], [67, "cloud-rain", "Rain"], [77, "cloud-snow", "Snow"], [82, "cloud-rain-wind", "Showers"],
+	[86, "cloud-snow", "Snow showers"], [Infinity, "cloud-lightning", "Thunderstorm"],
 ];
 
-/** One line of weather for a day at a place, e.g. "🌤 Partly cloudy · H 84° / L 60°". Null on failure. */
+/** Saved weather without any leading emoji (entries saved before weather was plain text had one). */
+export function weatherText(saved: string): string {
+	return saved.replace(/^[^\p{L}\p{N}]+/u, "");
+}
+
+/** Lucide icon for a saved weather line, from its condition label. */
+export function weatherIcon(saved: string): string {
+	const text = weatherText(saved);
+	const match = [...CONDITIONS].sort((a, b) => b[2].length - a[2].length).find(([, , label]) => text.startsWith(label));
+	return match ? match[1] : "cloud";
+}
+
+/** One line of weather for a day at a place, e.g. "Partly cloudy · H 84° / L 60°". Null on failure. */
 export async function fetchWeather(place: Place, date: Moment, units: "f" | "c"): Promise<string | null> {
 	try {
 		const day = date.format("YYYY-MM-DD");
@@ -38,8 +52,8 @@ export async function fetchWeather(place: Place, date: Moment, units: "f" | "c")
 		});
 		const w = res.json.daily;
 		const code: number = w.weather_code[0];
-		const [, icon, label] = CONDITIONS.find(([max]) => code <= max) ?? CONDITIONS[CONDITIONS.length - 1];
-		return `${icon} ${label} · H ${Math.round(w.temperature_2m_max[0])}° / L ${Math.round(w.temperature_2m_min[0])}°`;
+		const [, , label] = CONDITIONS.find(([max]) => code <= max) ?? CONDITIONS[CONDITIONS.length - 1];
+		return `${label} · H ${Math.round(w.temperature_2m_max[0])}° / L ${Math.round(w.temperature_2m_min[0])}°`;
 	} catch {
 		return null; // offline, or the date is outside the forecast/history range
 	}
