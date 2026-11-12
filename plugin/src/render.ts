@@ -54,18 +54,19 @@ export async function renderSection(host: JournalHost, source: string, el: HTMLE
 async function renderHeader(host: JournalHost, el: HTMLElement, file: TFile, date: Moment, fm: Frontmatter, weatherOn: boolean): Promise<void> {
 	const { app, settings } = host;
 	const c = card(el);
-	const top = c.createDiv({ cls: "dj-header" });
-	const title = top.createDiv();
-	title.createDiv({ cls: "dj-label", text: date.format("dddd") });
-	const big = title.createDiv({ cls: "dj-date", text: date.format("MMMM D") });
-	big.createSpan({ cls: "dj-year", text: "  " + date.format("YYYY") });
-
-	const nav = top.createDiv({ cls: "dj-row" });
 	const entries = host.journalEntries();
 	const prev = [...entries].reverse().find((d) => d.date.isBefore(date, "day"));
 	const next = entries.find((d) => d.date.isAfter(date, "day"));
-	if (prev) link(app, nav, "‹ " + prev.date.format("MMM D"), prev.file, "dj-chip");
-	if (next) link(app, nav, next.date.format("MMM D") + " ›", next.file, "dj-chip");
+
+	// Top row: previous entry far left, weekday centered, next entry far right.
+	const bar = c.createDiv({ cls: "dj-topnav" });
+	const left = bar.createDiv();
+	bar.createDiv({ cls: "dj-label", text: date.format("dddd") });
+	const right = bar.createDiv();
+	if (prev) link(app, left, "‹ " + prev.date.format("MMM D"), prev.file, "dj-navlink");
+	if (next) link(app, right, next.date.format("MMM D") + " ›", next.file, "dj-navlink");
+	const big = c.createDiv({ cls: "dj-date", text: date.format("MMMM D") });
+	big.createSpan({ cls: "dj-year", text: "  " + date.format("YYYY") });
 
 	const chips = c.createDiv({ cls: "dj-row" });
 	const weatherChip = chips.createSpan({ cls: "dj-chip" });

@@ -602,19 +602,19 @@ async function renderSection(host, source, el, file) {
 async function renderHeader(host, el, file, date, fm, weatherOn) {
   const { app, settings } = host;
   const c = card(el);
-  const top = c.createDiv({ cls: "dj-header" });
-  const title = top.createDiv();
-  title.createDiv({ cls: "dj-label", text: date.format("dddd") });
-  const big = title.createDiv({ cls: "dj-date", text: date.format("MMMM D") });
-  big.createSpan({ cls: "dj-year", text: "  " + date.format("YYYY") });
-  const nav = top.createDiv({ cls: "dj-row" });
   const entries = host.journalEntries();
   const prev = [...entries].reverse().find((d) => d.date.isBefore(date, "day"));
   const next = entries.find((d) => d.date.isAfter(date, "day"));
+  const bar = c.createDiv({ cls: "dj-topnav" });
+  const left = bar.createDiv();
+  bar.createDiv({ cls: "dj-label", text: date.format("dddd") });
+  const right = bar.createDiv();
   if (prev)
-    link(app, nav, "\u2039 " + prev.date.format("MMM D"), prev.file, "dj-chip");
+    link(app, left, "\u2039 " + prev.date.format("MMM D"), prev.file, "dj-navlink");
   if (next)
-    link(app, nav, next.date.format("MMM D") + " \u203A", next.file, "dj-chip");
+    link(app, right, next.date.format("MMM D") + " \u203A", next.file, "dj-navlink");
+  const big = c.createDiv({ cls: "dj-date", text: date.format("MMMM D") });
+  big.createSpan({ cls: "dj-year", text: "  " + date.format("YYYY") });
   const chips = c.createDiv({ cls: "dj-row" });
   const weatherChip = chips.createSpan({ cls: "dj-chip" });
   const weatherIconEl = weatherChip.createSpan({ cls: "dj-weather-icon" });
