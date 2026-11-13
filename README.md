@@ -33,9 +33,35 @@ With **Journal base** on (the default), it also keeps `Journal.base` in the jour
 
 Each entry keeps the layout it was created with (its cards, weather on/off, check-in fields, location, and whether its title and Properties show), so changing settings only affects new entries. **Apply to existing entries** updates older ones to the current settings without touching your writing.
 
+## Getting a Hardcover API token
+
+The Reading card reads your reading journal from [Hardcover](https://hardcover.app), so it needs your Hardcover API token. It's free and takes a minute.
+
+1. Sign in at [hardcover.app](https://hardcover.app).
+2. Open [Settings → Hardcover API](https://hardcover.app/account/api) (account menu → **Settings** → **Hardcover API**).
+3. Copy the token shown there. It may start with `Bearer`; paste it with or without that.
+4. In Obsidian, open **Settings → Daily Journal → Reading**, paste it into **Hardcover API token** and click **Test**. It should say "Connected to Hardcover as" your username.
+
+The token can read your Hardcover account, so keep it private. It's stored in this plugin's settings in your vault and only sent to Hardcover. Hardcover tokens expire after a while; if the Reading card says the token was rejected, get a new one from the same page.
+
+## Getting a YouTube API key
+
+The Song of the day card works without a key: paste a YouTube or YouTube Music link. A free YouTube Data API key adds a search bar, so you can find songs by title, artist or both. It takes about five minutes and needs only a Google account (no credit card).
+
+1. Open [Google Cloud Console](https://console.cloud.google.com/) and sign in.
+2. Create a project: click the project picker at the top, then **New Project**, give it a name (for example "Daily Journal") and click **Create**. Make sure the new project is selected.
+3. Turn on the YouTube API: open [YouTube Data API v3](https://console.cloud.google.com/apis/library/youtube.googleapis.com) (or **APIs & Services → Library** and search for it) and click **Enable**.
+4. Create the key: go to **APIs & Services → Credentials**, click **Create credentials → API key**, and copy the key (it starts with `AIza`).
+5. Recommended: restrict it. On the key's page, under **API restrictions**, choose **Restrict key**, tick **YouTube Data API v3** and click **Save**. If the key ever leaked, it would then only work for YouTube searches.
+6. In Obsidian, open **Settings → Daily Journal → Song of the day**, paste the key into **YouTube API key** and click **Test**. A new key can take a few minutes to start working.
+
+The free allowance is 10,000 units a day and a search costs 100, so about 100 searches a day. The card only searches after you pause typing, so picking a song uses a few. The key is stored in this plugin's settings in your vault, not sent anywhere except YouTube.
+
 ## Data
 
 Weather icons are [Meteocons](https://github.com/basmilius/weather-icons) by Bas Milius (MIT License).
+
+Songs come from YouTube: pasted links are looked up with YouTube's oEmbed service (no key needed), search uses the YouTube Data API with your key, and songs play through the embed page Obsidian uses for its own YouTube embeds.
 
 Weather comes from [Open-Meteo](https://open-meteo.com) (no account needed). Location search uses Open-Meteo's geocoding API. Each entry stores its weather once, so past entries don't change.
 
