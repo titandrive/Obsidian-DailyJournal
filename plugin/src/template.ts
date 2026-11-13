@@ -60,7 +60,11 @@ export function entryTemplate(settings: JournalSettings): string {
 	];
 	for (const section of ["header", "reading", "song", "checkin"] as Section[]) {
 		const line = lines[section];
-		if (line) parts.push(block(line));
+		if (!line) continue;
+		// Reading and Song share one row, side by side, when both are on.
+		if (section === "reading" && lines.song) { parts.push(block(ROW_LINE)); continue; }
+		if (section === "song" && lines.reading) continue;
+		parts.push(block(line));
 	}
 	for (const prompt of settings.prompts) {
 		parts.push(`${"#".repeat(2 + prompt.level)} ${prompt.text}`, "", "");
@@ -70,6 +74,10 @@ export function entryTemplate(settings: JournalSettings): string {
 }
 
 const BLOCK = (section: Section) => new RegExp("```journal\\n" + section + "(?:[ \\t][^\\n]*)?\\n```\\n?");
+
+/** Reading and Song side by side in one block (see renderSection's "row"). */
+const ROW_LINE = "row reading song";
+const ROW = /```journal\nrow(?:[ \t]([^\n]*))?\n```\n?/;
 
 /**
  * An existing entry rewritten to the current card settings: cards added or removed, weather and
@@ -87,6 +95,9 @@ export function applyLayout(text: string, settings: JournalSettings): string {
 		out = BLOCK("reading").test(out) ? out.replace(new RegExp(HARDCOVER.source + "\\n?"), "") : out.replace(HARDCOVER, block("reading"));
 	}
 
+	// A side-by-side row counts as its cards for now; it's rebuilt below when both are on.
+	out = out.replace(ROW, (_m, opts: string | undefined) => (opts ?? "").trim().split(/\s+/).filter(Boolean).map((o) => block(o)).join("\n"));
+
 	// Cards between the header and the writing, in order: reading, song, then check-in.
 	const order: Section[] = ["header", "reading", "song", "checkin"];
 	for (const section of ["reading", "song", "checkin"] as Section[]) {
@@ -100,6 +111,11 @@ export function applyLayout(text: string, settings: JournalSettings): string {
 		} else {
 			out = out.replace(new RegExp(BLOCK(section).source + "\\n?"), "");
 		}
+	}
+
+	// Both on: Reading and Song share one row.
+	if (lines.reading && lines.song && BLOCK("reading").test(out) && BLOCK("song").test(out)) {
+		out = out.replace(BLOCK("reading"), block(ROW_LINE)).replace(new RegExp(BLOCK("song").source + "\\n?"), "");
 	}
 
 	if (lines.onthisday && !BLOCK("onthisday").test(out)) out = out.replace(/\n*$/, "\n\n" + block(lines.onthisday));

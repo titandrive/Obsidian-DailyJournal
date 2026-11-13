@@ -906,8 +906,15 @@ function entryTemplate(settings) {
   ];
   for (const section of ["header", "reading", "song", "checkin"]) {
     const line = lines[section];
-    if (line)
-      parts.push(block(line));
+    if (!line)
+      continue;
+    if (section === "reading" && lines.song) {
+      parts.push(block(ROW_LINE));
+      continue;
+    }
+    if (section === "song" && lines.reading)
+      continue;
+    parts.push(block(line));
   }
   for (const prompt of settings.prompts) {
     parts.push(`${"#".repeat(2 + prompt.level)} ${prompt.text}`, "", "");
@@ -917,6 +924,8 @@ function entryTemplate(settings) {
   return parts.join("\n");
 }
 var BLOCK = (section) => new RegExp("```journal\\n" + section + "(?:[ \\t][^\\n]*)?\\n```\\n?");
+var ROW_LINE = "row reading song";
+var ROW = /```journal\nrow(?:[ \t]([^\n]*))?\n```\n?/;
 function applyLayout(text, settings) {
   var _a;
   if (!BLOCK("header").test(text))
@@ -927,6 +936,7 @@ function applyLayout(text, settings) {
   if (HARDCOVER.test(out)) {
     out = BLOCK("reading").test(out) ? out.replace(new RegExp(HARDCOVER.source + "\\n?"), "") : out.replace(HARDCOVER, block("reading"));
   }
+  out = out.replace(ROW, (_m, opts) => (opts != null ? opts : "").trim().split(/\s+/).filter(Boolean).map((o) => block(o)).join("\n"));
   const order = ["header", "reading", "song", "checkin"];
   for (const section of ["reading", "song", "checkin"]) {
     const line = lines[section];
@@ -938,6 +948,9 @@ function applyLayout(text, settings) {
     } else {
       out = out.replace(new RegExp(BLOCK(section).source + "\\n?"), "");
     }
+  }
+  if (lines.reading && lines.song && BLOCK("reading").test(out) && BLOCK("song").test(out)) {
+    out = out.replace(BLOCK("reading"), block(ROW_LINE)).replace(new RegExp(BLOCK("song").source + "\\n?"), "");
   }
   if (lines.onthisday && !BLOCK("onthisday").test(out))
     out = out.replace(/\n*$/, "\n\n" + block(lines.onthisday));
