@@ -1062,7 +1062,7 @@ async function renderReading(host, el, file, date, fm) {
   const day = savedReading(fm);
   if (day)
     return drawReading(el, day, date);
-  const muted = (text) => card(el, "Reading").createDiv({ cls: "dj-muted", text });
+  const muted = (text) => card(el, "Currently reading").createDiv({ cls: "dj-muted", text });
   if (!host.settings.hardcoverToken)
     return void muted("Add your Hardcover API token in Daily Journal's settings to show what you read.");
   if (date.isAfter((0, import_obsidian6.moment)(), "day"))
@@ -1079,7 +1079,7 @@ async function renderReading(host, el, file, date, fm) {
 }
 function drawReading(el, day, date) {
   var _a;
-  const c = card(el, "Reading");
+  const c = card(el, "Currently reading");
   if (!day.books.length && !day.quotes.length) {
     const last = day.lastRead ? (0, import_obsidian6.moment)(day.lastRead.date, "YYYY-MM-DD") : null;
     const gap = last ? date.clone().startOf("day").diff(last, "days") : 0;
@@ -1304,7 +1304,7 @@ function savedSong(fm) {
 }
 function renderSong(host, el, file, fm) {
   const { app, settings } = host;
-  const body = card(el, "Song of the day").createDiv();
+  const body = card(el, "Earworm of the day").createDiv();
   const save = (song2) => app.fileManager.processFrontMatter(file, (f) => {
     for (const k of SONG_KEYS)
       delete f[k];

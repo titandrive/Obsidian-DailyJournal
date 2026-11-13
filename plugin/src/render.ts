@@ -127,7 +127,7 @@ async function renderReading(host: JournalHost, el: HTMLElement, file: TFile, da
 	// Not fetched yet: ask Hardcover once and save it in the entry (the card redraws from that).
 	// After this, only "Refresh reading" asks again. Tried once per entry per session, so a
 	// failed lookup can't turn into a retry loop.
-	const muted = (text: string) => card(el, "Reading").createDiv({ cls: "dj-muted", text });
+	const muted = (text: string) => card(el, "Currently reading").createDiv({ cls: "dj-muted", text });
 	if (!host.settings.hardcoverToken) return void muted("Add your Hardcover API token in Daily Journal's settings to show what you read.");
 	if (date.isAfter(moment(), "day")) return;
 	if (host.readingTried.has(file.path)) return void muted("Couldn't load from Hardcover. Run \"Refresh reading\" to try again.");
@@ -141,7 +141,7 @@ async function renderReading(host: JournalHost, el: HTMLElement, file: TFile, da
 }
 
 export function drawReading(el: HTMLElement, day: HardcoverDay, date: Moment): void {
-	const c = card(el, "Reading");
+	const c = card(el, "Currently reading");
 	if (!day.books.length && !day.quotes.length) {
 		const last = day.lastRead ? moment(day.lastRead.date, "YYYY-MM-DD") : null;
 		const gap = last ? date.clone().startOf("day").diff(last, "days") : 0;
@@ -347,7 +347,7 @@ function savedSong(fm: Frontmatter): Song | null {
 
 function renderSong(host: JournalHost, el: HTMLElement, file: TFile, fm: Frontmatter): void {
 	const { app, settings } = host;
-	const body = card(el, "Song of the day").createDiv();
+	const body = card(el, "Earworm of the day").createDiv();
 	const save = (song: Song | null) => app.fileManager.processFrontMatter(file, (f) => {
 		for (const k of SONG_KEYS) delete f[k];
 		if (song) Object.assign(f, songProperties(song));
