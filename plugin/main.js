@@ -360,7 +360,7 @@ async function hardcoverDay(token, date) {
 }
 
 // src/modals.ts
-var import_obsidian4 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 
 // src/settings.ts
 var MAX_PROMPT_LEVEL = 3;
@@ -455,15 +455,104 @@ async function searchPlaces(query2) {
 }
 var PIN_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.97 9.304A8 8 0 0 0 2 10c0 4.69 4.887 9.562 7.022 11.468"/><path d="M21.378 16.626a1 1 0 0 0-3.004-3.004l-4.01 4.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/><circle cx="10" cy="10" r="3"/></svg>';
 
+// src/music.ts
+var import_obsidian4 = require("obsidian");
+function videoIdFromUrl(text) {
+  const t = text.trim();
+  if (!/^(https?:\/\/)?([\w-]+\.)?(youtube\.com|youtu\.be|youtube-nocookie\.com)\//i.test(t))
+    return null;
+  const m = t.match(/(?:[?&]v=|youtu\.be\/|\/(?:embed|shorts|live|v)\/)([\w-]{11})/);
+  return m ? m[1] : null;
+}
+var youtubeMusicUrl = (id) => `https://music.youtube.com/watch?v=${id}`;
+var thumbnailUrl = (id) => `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
+function playerUrl(id) {
+  const params = `autoplay=1&rel=0`;
+  if (location.protocol !== "https:" && /obsidian/i.test(navigator.userAgent)) {
+    return `https://releases.obsidian.md/youtube?v=${encodeURIComponent(id)}&${params}`;
+  }
+  return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?${params}`;
+}
+function songFrom(id, rawTitle, channel, cover) {
+  let title = decodeEntities(rawTitle).trim();
+  let artist = decodeEntities(channel).replace(/\s+-\s+Topic$/i, "").replace(/VEVO$/i, "").trim();
+  const dash = title.match(/^(.+?)\s+[-–—]\s+(.+)$/);
+  if (dash && !/\s-\s+Topic$/i.test(channel)) {
+    artist = dash[1].trim();
+    title = dash[2].trim();
+  }
+  title = title.replace(/\s*[([](official|lyric|lyrics|audio|video|music video|visualizer|hd|4k|remaster|remastered)[^)\]]*[)\]]/gi, "").replace(/\s*\|.*$/, "").replace(/(\s+(hq|hd|4k))?(\s*[+&]\s*|\s+with\s+)?\s*\blyrics?\s*$/i, "").replace(/\s+(hq|hd|4k)\s*$/i, "").replace(/\s+/g, " ").trim();
+  return { id, title: title || rawTitle, artist, cover: cover != null ? cover : thumbnailUrl(id) };
+}
+function decodeEntities(s) {
+  return s.replace(/&(#\d+|#x[\da-f]+|amp|quot|apos|lt|gt|#39);/gi, (m, e) => {
+    const named = { amp: "&", quot: '"', apos: "'", lt: "<", gt: ">", "#39": "'" };
+    if (named[e.toLowerCase()])
+      return named[e.toLowerCase()];
+    const code = e.startsWith("#x") ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+    return Number.isFinite(code) ? String.fromCodePoint(code) : m;
+  });
+}
+async function songFromLink(text) {
+  var _a, _b;
+  const id = videoIdFromUrl(text);
+  if (!id)
+    throw new Error("That isn't a YouTube or YouTube Music link.");
+  const res = await (0, import_obsidian4.requestUrl)({
+    url: `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(`https://www.youtube.com/watch?v=${id}`)}`,
+    throw: false
+  });
+  if (res.status === 400 || res.status === 401 || res.status === 404)
+    throw new Error("YouTube couldn't find that video (it may be private or removed).");
+  if (res.status >= 400)
+    throw new Error(`YouTube error (${res.status}).`);
+  return songFrom(id, String((_a = res.json.title) != null ? _a : ""), String((_b = res.json.author_name) != null ? _b : ""), thumbnailUrl(id));
+}
+async function searchSongs(apiKey, term, limit = 8) {
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
+  const q2 = term.trim();
+  if (!q2)
+    return [];
+  const res = await (0, import_obsidian4.requestUrl)({
+    url: `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&maxResults=${limit}&q=${encodeURIComponent(q2)}&key=${encodeURIComponent(apiKey.trim())}`,
+    throw: false
+  });
+  if (res.status === 400 || res.status === 403) {
+    const reason = (_h = (_g = (_d = (_c = (_b = (_a = res.json) == null ? void 0 : _a.error) == null ? void 0 : _b.errors) == null ? void 0 : _c[0]) == null ? void 0 : _d.reason) != null ? _g : (_f = (_e = res.json) == null ? void 0 : _e.error) == null ? void 0 : _f.status) != null ? _h : "";
+    if (/quota/i.test(reason))
+      throw new Error("Today's YouTube search allowance is used up. Paste a link instead, or try tomorrow.");
+    throw new Error("YouTube rejected the API key. Check it in Daily Journal's settings.");
+  }
+  if (res.status >= 400)
+    throw new Error(`YouTube search failed (${res.status}).`);
+  return ((_j = (_i = res.json) == null ? void 0 : _i.items) != null ? _j : []).filter((it) => {
+    var _a2;
+    return (_a2 = it.id) == null ? void 0 : _a2.videoId;
+  }).map((it) => {
+    var _a2, _b2, _c2, _d2;
+    return songFrom(
+      it.id.videoId,
+      String((_b2 = (_a2 = it.snippet) == null ? void 0 : _a2.title) != null ? _b2 : ""),
+      String((_d2 = (_c2 = it.snippet) == null ? void 0 : _c2.channelTitle) != null ? _d2 : ""),
+      null
+      // always the band-free thumbnail (see thumbnailUrl)
+    );
+  });
+}
+function songProperties(song) {
+  return { song: song.title, artist: song.artist, song_cover: song.cover, song_id: song.id, song_url: youtubeMusicUrl(song.id) };
+}
+var SONG_KEYS = ["song", "artist", "song_cover", "song_id", "song_url", "song_album", "song_apple"];
+
 // src/modals.ts
-var MonthPicker = class extends import_obsidian4.Modal {
+var MonthPicker = class extends import_obsidian5.Modal {
   constructor(app, current, isTaken, onPick, options = {}) {
     super(app);
     this.current = current;
     this.isTaken = isTaken;
     this.onPick = onPick;
     this.options = options;
-    this.month = (current != null ? current : (0, import_obsidian4.moment)()).clone().startOf("month");
+    this.month = (current != null ? current : (0, import_obsidian5.moment)()).clone().startOf("month");
   }
   onOpen() {
     var _a;
@@ -485,11 +574,11 @@ var MonthPicker = class extends import_obsidian4.Modal {
       this.render();
     };
     const grid = contentEl.createDiv({ cls: "dj-picker-grid" });
-    for (const d of import_obsidian4.moment.weekdaysMin())
+    for (const d of import_obsidian5.moment.weekdaysMin())
       grid.createDiv({ cls: "dj-picker-dow", text: d });
     for (let i = 0; i < this.month.day(); i++)
       grid.createDiv();
-    const today = (0, import_obsidian4.moment)();
+    const today = (0, import_obsidian5.moment)();
     for (const day = this.month.clone(); day.isSame(this.month, "month"); day.add(1, "day")) {
       const date = day.clone();
       const btn = grid.createEl("button", { cls: "dj-picker-day", text: String(date.date()) });
@@ -518,7 +607,7 @@ var MonthPicker = class extends import_obsidian4.Modal {
     this.contentEl.empty();
   }
 };
-var PlaceModal = class extends import_obsidian4.Modal {
+var PlaceModal = class extends import_obsidian5.Modal {
   constructor(app, home, onChoose, title = "Change location") {
     super(app);
     this.home = home;
@@ -582,7 +671,7 @@ var PlaceModal = class extends import_obsidian4.Modal {
     this.contentEl.empty();
   }
 };
-var PromptsModal = class extends import_obsidian4.Modal {
+var PromptsModal = class extends import_obsidian5.Modal {
   constructor(app, prompts, onSave) {
     super(app);
     this.onSave = onSave;
@@ -594,7 +683,7 @@ var PromptsModal = class extends import_obsidian4.Modal {
     this.contentEl.createDiv({ cls: "dj-prompts-hint", text: "Drag to reorder. Indent to make a prompt a sub-heading of the one above." });
     this.list = this.contentEl.createDiv({ cls: "dj-prompts" });
     const add = this.contentEl.createEl("button", { cls: "dj-prompt-add" });
-    (0, import_obsidian4.setIcon)(add.createSpan(), "plus");
+    (0, import_obsidian5.setIcon)(add.createSpan(), "plus");
     add.createSpan({ text: "Add prompt" });
     add.onclick = () => {
       var _a, _b, _c;
@@ -617,7 +706,7 @@ var PromptsModal = class extends import_obsidian4.Modal {
       const row = this.list.createDiv({ cls: "dj-prompt-row" });
       row.style.setProperty("--dj-level", String(item.level));
       const handle = row.createDiv({ cls: "dj-prompt-handle", attr: { "aria-label": "Drag to reorder" } });
-      (0, import_obsidian4.setIcon)(handle, "grip-vertical");
+      (0, import_obsidian5.setIcon)(handle, "grip-vertical");
       handle.addEventListener("pointerdown", (e) => this.startDrag(e, row, item));
       row.createSpan({ cls: "dj-prompt-level", text: "#".repeat(2 + item.level) });
       const input = row.createEl("input", { type: "text", attr: { placeholder: "Prompt" } });
@@ -627,7 +716,7 @@ var PromptsModal = class extends import_obsidian4.Modal {
       });
       const button = (icon, label, disabled, run) => {
         const b = row.createEl("button", { cls: "dj-prompt-btn", attr: { "aria-label": label } });
-        (0, import_obsidian4.setIcon)(b, icon);
+        (0, import_obsidian5.setIcon)(b, icon);
         b.disabled = disabled;
         b.onclick = run;
       };
@@ -683,7 +772,7 @@ var PromptsModal = class extends import_obsidian4.Modal {
     this.contentEl.empty();
   }
 };
-var ConfirmModal = class extends import_obsidian4.Modal {
+var ConfirmModal = class extends import_obsidian5.Modal {
   constructor(app, heading, message, confirmText, onConfirm) {
     super(app);
     this.heading = heading;
@@ -706,98 +795,67 @@ var ConfirmModal = class extends import_obsidian4.Modal {
     this.contentEl.empty();
   }
 };
+var SongPickerModal = class extends import_obsidian5.SuggestModal {
+  constructor(app, apiKey, onPick) {
+    super(app);
+    this.apiKey = apiKey;
+    this.onPick = onPick;
+    this.latest = 0;
+    this.shown = [];
+    this.setPlaceholder(apiKey ? "Search for a song or artist, or paste a YouTube link" : "Paste a YouTube or YouTube Music link");
+    this.emptyStateText = apiKey ? "Type a song or artist." : "Paste a link. Add a YouTube API key in Daily Journal's settings to search instead.";
+    this.limit = 10;
+    this.modalEl.addClass("dj-song-modal");
+    this.setInstructions([{ command: "\u2191\u2193", purpose: "to navigate" }, { command: "\u21B5", purpose: "to pick" }, { command: "esc", purpose: "to cancel" }]);
+  }
+  async getSuggestions(query2) {
+    const term = query2.trim(), mine = ++this.latest;
+    const isLink = !!videoIdFromUrl(term);
+    if (!term || !isLink && (!this.apiKey || term.length < 2)) {
+      this.emptyStateText = !term || this.apiKey ? "Type a song or artist." : "That isn't a YouTube link. Add a YouTube API key in settings to search by name.";
+      return this.shown = [];
+    }
+    if (!isLink) {
+      await new Promise((r) => window.setTimeout(r, 450));
+      if (mine !== this.latest)
+        return this.shown;
+    }
+    try {
+      const songs = isLink ? [await songFromLink(term)] : await searchSongs(this.apiKey, term, this.limit);
+      if (mine !== this.latest)
+        return this.shown;
+      this.emptyStateText = "No songs found.";
+      return this.shown = songs;
+    } catch (e) {
+      this.emptyStateText = e instanceof Error ? e.message : String(e);
+      return this.shown = [];
+    }
+  }
+  renderSuggestion(song, el) {
+    el.addClass("dj-song-suggestion");
+    const fallback = () => {
+      img == null ? void 0 : img.remove();
+      const d = createDiv({ cls: "dj-song-thumb dj-cover-fallback" });
+      (0, import_obsidian5.setIcon)(d, "music");
+      el.prepend(d);
+    };
+    const img = song.cover ? el.createEl("img", { cls: "dj-song-thumb", attr: { src: song.cover, alt: "" } }) : null;
+    if (img)
+      img.onerror = fallback;
+    else
+      fallback();
+    const text = el.createDiv({ cls: "dj-song-result-text" });
+    text.createDiv({ cls: "dj-song-result-title", text: song.title });
+    if (song.artist)
+      text.createDiv({ cls: "dj-song-result-meta", text: song.artist });
+  }
+  onChooseSuggestion(song) {
+    this.onPick(song);
+  }
+};
 
 // src/render.ts
 var import_obsidian6 = require("obsidian");
-
-// src/music.ts
-var import_obsidian5 = require("obsidian");
-function videoIdFromUrl(text) {
-  const t = text.trim();
-  if (!/^(https?:\/\/)?([\w-]+\.)?(youtube\.com|youtu\.be|youtube-nocookie\.com)\//i.test(t))
-    return null;
-  const m = t.match(/(?:[?&]v=|youtu\.be\/|\/(?:embed|shorts|live|v)\/)([\w-]{11})/);
-  return m ? m[1] : null;
-}
-var youtubeMusicUrl = (id) => `https://music.youtube.com/watch?v=${id}`;
-var thumbnailUrl = (id) => `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
-function playerUrl(id) {
-  const params = `autoplay=1&rel=0`;
-  if (location.protocol !== "https:" && /obsidian/i.test(navigator.userAgent)) {
-    return `https://releases.obsidian.md/youtube?v=${encodeURIComponent(id)}&${params}`;
-  }
-  return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?${params}`;
-}
-function songFrom(id, rawTitle, channel, cover) {
-  let title = decodeEntities(rawTitle).trim();
-  let artist = decodeEntities(channel).replace(/\s+-\s+Topic$/i, "").replace(/VEVO$/i, "").trim();
-  const dash = title.match(/^(.+?)\s+[-–—]\s+(.+)$/);
-  if (dash && !/\s-\s+Topic$/i.test(channel)) {
-    artist = dash[1].trim();
-    title = dash[2].trim();
-  }
-  title = title.replace(/\s*[([](official|lyric|lyrics|audio|video|music video|visualizer|hd|4k|remaster|remastered)[^)\]]*[)\]]/gi, "").replace(/\s*\|.*$/, "").replace(/(\s+(hq|hd|4k))?(\s*[+&]\s*|\s+with\s+)?\s*\blyrics?\s*$/i, "").replace(/\s+(hq|hd|4k)\s*$/i, "").replace(/\s+/g, " ").trim();
-  return { id, title: title || rawTitle, artist, cover: cover != null ? cover : thumbnailUrl(id) };
-}
-function decodeEntities(s) {
-  return s.replace(/&(#\d+|#x[\da-f]+|amp|quot|apos|lt|gt|#39);/gi, (m, e) => {
-    const named = { amp: "&", quot: '"', apos: "'", lt: "<", gt: ">", "#39": "'" };
-    if (named[e.toLowerCase()])
-      return named[e.toLowerCase()];
-    const code = e.startsWith("#x") ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
-    return Number.isFinite(code) ? String.fromCodePoint(code) : m;
-  });
-}
-async function songFromLink(text) {
-  var _a, _b;
-  const id = videoIdFromUrl(text);
-  if (!id)
-    throw new Error("That isn't a YouTube or YouTube Music link.");
-  const res = await (0, import_obsidian5.requestUrl)({
-    url: `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(`https://www.youtube.com/watch?v=${id}`)}`,
-    throw: false
-  });
-  if (res.status === 400 || res.status === 401 || res.status === 404)
-    throw new Error("YouTube couldn't find that video (it may be private or removed).");
-  if (res.status >= 400)
-    throw new Error(`YouTube error (${res.status}).`);
-  return songFrom(id, String((_a = res.json.title) != null ? _a : ""), String((_b = res.json.author_name) != null ? _b : ""), thumbnailUrl(id));
-}
-async function searchSongs(apiKey, term, limit = 8) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
-  const q2 = term.trim();
-  if (!q2)
-    return [];
-  const res = await (0, import_obsidian5.requestUrl)({
-    url: `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&maxResults=${limit}&q=${encodeURIComponent(q2)}&key=${encodeURIComponent(apiKey.trim())}`,
-    throw: false
-  });
-  if (res.status === 400 || res.status === 403) {
-    const reason = (_h = (_g = (_d = (_c = (_b = (_a = res.json) == null ? void 0 : _a.error) == null ? void 0 : _b.errors) == null ? void 0 : _c[0]) == null ? void 0 : _d.reason) != null ? _g : (_f = (_e = res.json) == null ? void 0 : _e.error) == null ? void 0 : _f.status) != null ? _h : "";
-    if (/quota/i.test(reason))
-      throw new Error("Today's YouTube search allowance is used up. Paste a link instead, or try tomorrow.");
-    throw new Error("YouTube rejected the API key. Check it in Daily Journal's settings.");
-  }
-  if (res.status >= 400)
-    throw new Error(`YouTube search failed (${res.status}).`);
-  return ((_j = (_i = res.json) == null ? void 0 : _i.items) != null ? _j : []).filter((it) => {
-    var _a2;
-    return (_a2 = it.id) == null ? void 0 : _a2.videoId;
-  }).map((it) => {
-    var _a2, _b2, _c2, _d2;
-    return songFrom(
-      it.id.videoId,
-      String((_b2 = (_a2 = it.snippet) == null ? void 0 : _a2.title) != null ? _b2 : ""),
-      String((_d2 = (_c2 = it.snippet) == null ? void 0 : _c2.channelTitle) != null ? _d2 : ""),
-      null
-      // always the band-free thumbnail (see thumbnailUrl)
-    );
-  });
-}
-function songProperties(song) {
-  return { song: song.title, artist: song.artist, song_cover: song.cover, song_id: song.id, song_url: youtubeMusicUrl(song.id) };
-}
-var SONG_KEYS = ["song", "artist", "song_cover", "song_id", "song_url", "song_album", "song_apple"];
 
 // src/template.ts
 var SHOW_CHROME = "dj-show-chrome";
@@ -1269,10 +1327,17 @@ function renderSong(host, el, file, fm) {
     };
     if (song2.artist)
       info.createDiv({ cls: "dj-book-author", text: song2.artist });
-    const change = info.createEl("a", { cls: "dj-song-change", text: "Change", href: "#" });
+    const actions = info.createDiv({ cls: "dj-song-actions" });
+    const change = actions.createEl("a", { cls: "dj-song-change", text: "Change", href: "#" });
     change.onclick = (e) => {
       e.preventDefault();
-      showPicker(song2);
+      pick();
+    };
+    const remove = actions.createEl("a", { cls: "dj-song-change", text: "Remove", href: "#" });
+    remove.onclick = (e) => {
+      e.preventDefault();
+      void save(null);
+      showEmpty();
     };
     let player = null;
     play.onclick = () => {
@@ -1297,102 +1362,22 @@ function renderSong(host, el, file, fm) {
       play.setAttr("aria-label", "Stop");
     };
   };
-  const showPicker = (current) => {
+  const pick = () => new SongPickerModal(app, settings.youtubeApiKey, (song2) => {
+    showSong(song2);
+    void save(song2);
+  }).open();
+  const showEmpty = () => {
     body.empty();
-    const canSearch = () => !!settings.youtubeApiKey;
-    const bar = body.createDiv({ cls: "dj-song-bar" });
-    const input = bar.createEl("input", { cls: "dj-song-search", attr: { type: "search", spellcheck: "false" } });
-    const hint = () => {
-      input.placeholder = canSearch() ? "Search for a song or artist, or paste a YouTube link" : "Paste a YouTube or YouTube Music link";
-      if (!input.value.trim()) {
-        results.empty();
-        if (!canSearch())
-          results.createDiv({ cls: "dj-muted", text: "Add a YouTube API key in Daily Journal's settings to search instead." });
-      }
-    };
-    if (current) {
-      const cancel = bar.createEl("a", { cls: "dj-song-change", text: "Cancel", href: "#" });
-      cancel.onclick = (e) => {
-        e.preventDefault();
-        showSong(current);
-      };
-      const remove = bar.createEl("a", { cls: "dj-song-change", text: "Remove", href: "#" });
-      remove.onclick = (e) => {
-        e.preventDefault();
-        void save(null);
-        showPicker(null);
-      };
-    }
-    const results = body.createDiv({ cls: "dj-song-results" });
-    hint();
-    input.addEventListener("focus", hint);
-    const choose = (song2) => {
-      showSong(song2);
-      void save(song2);
-    };
-    const list = (songs) => {
-      results.empty();
-      if (!songs.length) {
-        results.createDiv({ cls: "dj-muted", text: "No songs found." });
-        return;
-      }
-      for (const song2 of songs) {
-        const item = results.createEl("button", { cls: "dj-song-result" });
-        art(item, song2, "dj-song-thumb");
-        const text = item.createDiv({ cls: "dj-song-result-text" });
-        text.createDiv({ cls: "dj-song-result-title", text: song2.title });
-        text.createDiv({ cls: "dj-song-result-meta", text: song2.artist });
-        item.onclick = () => choose(song2);
-      }
-    };
-    let timer = 0, latest = 0;
-    const run = async () => {
-      const term = input.value.trim(), mine = ++latest;
-      const isLink = !!videoIdFromUrl(term);
-      if (!isLink && (!canSearch() || term.length < 2)) {
-        results.empty();
-        if (term && !canSearch())
-          results.createDiv({ cls: "dj-muted", text: "Paste a YouTube or YouTube Music link, or add a YouTube API key in settings to search." });
-        return;
-      }
-      try {
-        const songs = isLink ? [await songFromLink(term)] : await searchSongs(settings.youtubeApiKey, term);
-        if (mine !== latest)
-          return;
-        if (isLink)
-          choose(songs[0]);
-        else
-          list(songs);
-      } catch (e) {
-        if (mine === latest) {
-          results.empty();
-          results.createDiv({ cls: "dj-muted", text: e instanceof Error ? e.message : String(e) });
-        }
-      }
-    };
-    input.addEventListener("input", () => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(run, videoIdFromUrl(input.value) ? 0 : 500);
-    });
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        window.clearTimeout(timer);
-        void run();
-      }
-      if (e.key === "Escape" && current) {
-        e.preventDefault();
-        showSong(current);
-      }
-    });
-    if (current)
-      input.focus();
+    const add = body.createEl("button", { cls: "dj-song-add" });
+    (0, import_obsidian6.setIcon)(add.createSpan({ cls: "dj-song-add-icon" }), "music");
+    add.createSpan({ text: "Add a song" });
+    add.onclick = pick;
   };
   const song = savedSong(fm);
   if (song)
     showSong(song);
   else
-    showPicker(null);
+    showEmpty();
 }
 function renderOnThisDay(host, el, date) {
   const monthAgo = date.clone().subtract(1, "month");

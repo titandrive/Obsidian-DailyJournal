@@ -1,10 +1,10 @@
 import { App, moment, setIcon, TFile } from "obsidian";
 import { entryDate, Moment } from "./dates";
-import { PlaceModal } from "./modals";
+import { PlaceModal, SongPickerModal } from "./modals";
 import { CheckInFields, JournalSettings, Place } from "./settings";
 import { HardcoverDay, savedReading } from "./hardcover";
 import { meteoconSvg } from "./meteocons";
-import { playerUrl, searchSongs, Song, SONG_KEYS, songFromLink, songProperties, thumbnailUrl, videoIdFromUrl, youtubeMusicUrl } from "./music";
+import { playerUrl, Song, SONG_KEYS, songProperties, thumbnailUrl, youtubeMusicUrl } from "./music";
 import { blockFields, blockShowsWeather, parseBlock } from "./template";
 import { entryPlace, fetchWeather, PIN_ICON, weatherIcon, weatherText } from "./weather";
 
@@ -371,8 +371,11 @@ function renderSong(host: JournalHost, el: HTMLElement, file: TFile, fm: Frontma
 		const title = info.createEl("a", { cls: "dj-book-title", text: song.title, href: youtubeMusicUrl(song.id), attr: { "aria-label": "Open in YouTube Music" } });
 		title.onclick = (e) => { e.preventDefault(); window.open(youtubeMusicUrl(song.id), "_blank"); };
 		if (song.artist) info.createDiv({ cls: "dj-book-author", text: song.artist });
-		const change = info.createEl("a", { cls: "dj-song-change", text: "Change", href: "#" });
-		change.onclick = (e) => { e.preventDefault(); showPicker(song); };
+		const actions = info.createDiv({ cls: "dj-song-actions" });
+		const change = actions.createEl("a", { cls: "dj-song-change", text: "Change", href: "#" });
+		change.onclick = (e) => { e.preventDefault(); pick(); };
+		const remove = actions.createEl("a", { cls: "dj-song-change", text: "Remove", href: "#" });
+		remove.onclick = (e) => { e.preventDefault(); void save(null); showEmpty(); };
 
 		let player: HTMLElement | null = null;
 		play.onclick = () => {
@@ -389,74 +392,18 @@ function renderSong(host: JournalHost, el: HTMLElement, file: TFile, fm: Frontma
 		};
 	};
 
-	// Paste a link (always works), or search when an API key is set. Newest input wins.
-	const showPicker = (current: Song | null) => {
+	// Picking happens in a search dialog (roomy even when the card is half a row wide).
+	const pick = () => new SongPickerModal(app, settings.youtubeApiKey, (song) => { showSong(song); void save(song); }).open();
+	const showEmpty = () => {
 		body.empty();
-		// Read the key live, so adding one in settings unlocks search in cards that are already open.
-		const canSearch = () => !!settings.youtubeApiKey;
-		const bar = body.createDiv({ cls: "dj-song-bar" });
-		const input = bar.createEl("input", { cls: "dj-song-search", attr: { type: "search", spellcheck: "false" } });
-		const hint = () => {
-			input.placeholder = canSearch() ? "Search for a song or artist, or paste a YouTube link" : "Paste a YouTube or YouTube Music link";
-			if (!input.value.trim()) {
-				results.empty();
-				if (!canSearch()) results.createDiv({ cls: "dj-muted", text: "Add a YouTube API key in Daily Journal's settings to search instead." });
-			}
-		};
-		if (current) {
-			const cancel = bar.createEl("a", { cls: "dj-song-change", text: "Cancel", href: "#" });
-			cancel.onclick = (e) => { e.preventDefault(); showSong(current); };
-			const remove = bar.createEl("a", { cls: "dj-song-change", text: "Remove", href: "#" });
-			remove.onclick = (e) => { e.preventDefault(); void save(null); showPicker(null); };
-		}
-		const results = body.createDiv({ cls: "dj-song-results" });
-		hint();
-		input.addEventListener("focus", hint);
-		const choose = (song: Song) => { showSong(song); void save(song); };
-		const list = (songs: Song[]) => {
-			results.empty();
-			if (!songs.length) { results.createDiv({ cls: "dj-muted", text: "No songs found." }); return; }
-			for (const song of songs) {
-				const item = results.createEl("button", { cls: "dj-song-result" });
-				art(item, song, "dj-song-thumb");
-				const text = item.createDiv({ cls: "dj-song-result-text" });
-				text.createDiv({ cls: "dj-song-result-title", text: song.title });
-				text.createDiv({ cls: "dj-song-result-meta", text: song.artist });
-				item.onclick = () => choose(song);
-			}
-		};
-		let timer = 0, latest = 0;
-		const run = async () => {
-			const term = input.value.trim(), mine = ++latest;
-			const isLink = !!videoIdFromUrl(term);
-			if (!isLink && (!canSearch() || term.length < 2)) {
-				results.empty();
-				if (term && !canSearch()) results.createDiv({ cls: "dj-muted", text: "Paste a YouTube or YouTube Music link, or add a YouTube API key in settings to search." });
-				return;
-			}
-			try {
-				const songs = isLink ? [await songFromLink(term)] : await searchSongs(settings.youtubeApiKey, term);
-				if (mine !== latest) return;
-				// A pasted link is unambiguous: pick it straight away.
-				if (isLink) choose(songs[0]); else list(songs);
-			} catch (e) {
-				if (mine === latest) { results.empty(); results.createDiv({ cls: "dj-muted", text: e instanceof Error ? e.message : String(e) }); }
-			}
-		};
-		// Searches wait for a pause in typing (each costs API allowance); links resolve right away.
-		input.addEventListener("input", () => {
-			window.clearTimeout(timer);
-			timer = window.setTimeout(run, videoIdFromUrl(input.value) ? 0 : 500);
-		});
-		input.addEventListener("keydown", (e) => {
-			if (e.key === "Enter") { e.preventDefault(); window.clearTimeout(timer); void run(); }
-			if (e.key === "Escape" && current) { e.preventDefault(); showSong(current); }
-		});
-		if (current) input.focus(); // only when you asked to change it, so opening an entry never grabs the cursor
+		const add = body.createEl("button", { cls: "dj-song-add" });
+		setIcon(add.createSpan({ cls: "dj-song-add-icon" }), "music");
+		add.createSpan({ text: "Add a song" });
+		add.onclick = pick;
 	};
 
 	const song = savedSong(fm);
-	if (song) showSong(song); else showPicker(null);
+	if (song) showSong(song); else showEmpty();
 }
 
 function renderOnThisDay(host: JournalHost, el: HTMLElement, date: Moment): void {

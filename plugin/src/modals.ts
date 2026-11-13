@@ -1,7 +1,8 @@
-import { App, Modal, moment, setIcon } from "obsidian";
+import { App, Modal, moment, setIcon, SuggestModal } from "obsidian";
 import { Moment } from "./dates";
 import { MAX_PROMPT_LEVEL, Place, Prompt } from "./settings";
 import { PlaceResult, searchPlaces } from "./weather";
+import { searchSongs, Song, songFromLink, videoIdFromUrl } from "./music";
 
 /** Month calendar for choosing a date. Days that already have an entry are marked (and can't be picked unless allowTaken). */
 export class MonthPicker extends Modal {
@@ -236,5 +237,60 @@ export class ConfirmModal extends Modal {
 
 	onClose(): void {
 		this.contentEl.empty();
+	}
+}
+
+/**
+ * Search dialog for the song of the day, like Obsidian's quick switcher. Paste a YouTube or YouTube
+ * Music link, or (with an API key) type a song or artist. Searches wait for a pause in typing, since
+ * each one uses part of the key's daily allowance; links resolve right away.
+ */
+export class SongPickerModal extends SuggestModal<Song> {
+	private latest = 0;
+	private shown: Song[] = [];
+
+	constructor(app: App, private apiKey: string, private onPick: (song: Song) => void) {
+		super(app);
+		this.setPlaceholder(apiKey ? "Search for a song or artist, or paste a YouTube link" : "Paste a YouTube or YouTube Music link");
+		this.emptyStateText = apiKey ? "Type a song or artist." : "Paste a link. Add a YouTube API key in Daily Journal's settings to search instead.";
+		this.limit = 10;
+		this.modalEl.addClass("dj-song-modal");
+		this.setInstructions([{ command: "↑↓", purpose: "to navigate" }, { command: "↵", purpose: "to pick" }, { command: "esc", purpose: "to cancel" }]);
+	}
+
+	async getSuggestions(query: string): Promise<Song[]> {
+		const term = query.trim(), mine = ++this.latest;
+		const isLink = !!videoIdFromUrl(term);
+		if (!term || (!isLink && (!this.apiKey || term.length < 2))) {
+			this.emptyStateText = !term || this.apiKey ? "Type a song or artist." : "That isn't a YouTube link. Add a YouTube API key in settings to search by name.";
+			return (this.shown = []);
+		}
+		if (!isLink) {
+			await new Promise((r) => window.setTimeout(r, 450));
+			if (mine !== this.latest) return this.shown; // a newer keystroke took over
+		}
+		try {
+			const songs = isLink ? [await songFromLink(term)] : await searchSongs(this.apiKey, term, this.limit);
+			if (mine !== this.latest) return this.shown;
+			this.emptyStateText = "No songs found.";
+			return (this.shown = songs);
+		} catch (e) {
+			this.emptyStateText = e instanceof Error ? e.message : String(e);
+			return (this.shown = []);
+		}
+	}
+
+	renderSuggestion(song: Song, el: HTMLElement): void {
+		el.addClass("dj-song-suggestion");
+		const fallback = () => { img?.remove(); const d = createDiv({ cls: "dj-song-thumb dj-cover-fallback" }); setIcon(d, "music"); el.prepend(d); };
+		const img = song.cover ? el.createEl("img", { cls: "dj-song-thumb", attr: { src: song.cover, alt: "" } }) : null;
+		if (img) img.onerror = fallback; else fallback();
+		const text = el.createDiv({ cls: "dj-song-result-text" });
+		text.createDiv({ cls: "dj-song-result-title", text: song.title });
+		if (song.artist) text.createDiv({ cls: "dj-song-result-meta", text: song.artist });
+	}
+
+	onChooseSuggestion(song: Song): void {
+		this.onPick(song);
 	}
 }

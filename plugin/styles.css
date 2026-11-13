@@ -153,17 +153,20 @@ a.dj-book-title:hover { color: var(--text-accent); }
 .dj-song-player iframe { width: 100%; height: 100%; border: 0; display: block; }
 .dj-song-change { font-size: .85em; color: var(--text-muted); text-decoration: none; align-self: flex-start; }
 .dj-song-change:hover { color: var(--text-accent); }
-.dj-song-bar { display: flex; align-items: center; gap: .8em; }
-.dj-card input.dj-song-search { flex: 1; min-width: 0; }
-.dj-song-results { display: flex; flex-direction: column; gap: 2px; margin-top: .5em; }
-/* Obsidian centers button content; results are full-width rows aligned left. */
-.dj-card button.dj-song-result {
-	display: flex !important; align-items: center; justify-content: flex-start !important; gap: .7em;
-	width: 100% !important; align-self: stretch; height: auto; padding: .35em .45em;
-	background: transparent; box-shadow: none; border-radius: 8px; text-align: start; cursor: pointer;
+.dj-song-actions { display: flex; gap: 1em; }
+/* Empty state: one big target that opens the search dialog. */
+.dj-card button.dj-song-add {
+	display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .45em;
+	width: 100%; height: auto; min-height: 7.5em; padding: 1em; cursor: pointer;
+	background: transparent; box-shadow: none; color: var(--text-muted); font-size: .95em;
+	border: 1.5px dashed var(--background-modifier-border); border-radius: 12px;
 }
-.dj-song-result-text { flex: 1; align-items: flex-start; text-align: start; }
-.dj-card button.dj-song-result:hover { background: var(--background-modifier-hover); }
+.dj-card button.dj-song-add:hover { color: var(--text-accent); border-color: var(--interactive-accent); background: var(--background-modifier-hover); }
+.dj-song-add-icon svg { width: 26px; height: 26px; }
+.dj-row-cell .dj-card > div:has(> .dj-song-add) { flex: 1; display: flex; }
+/* Search dialog rows. */
+.dj-song-modal .suggestion-item.dj-song-suggestion { display: flex; align-items: center; gap: .75em; }
+.dj-song-modal .suggestion-item.is-selected .dj-song-result-meta { color: var(--text-on-accent); opacity: .85; }
 .dj-song-thumb { width: 38px; height: 38px; border-radius: 5px; object-fit: cover; flex-shrink: 0; }
 .dj-song-thumb.dj-cover-fallback, .dj-song-cover.dj-cover-fallback { display: flex; align-items: center; justify-content: center; color: var(--text-faint); background: var(--background-modifier-border); }
 .dj-song-result-text { min-width: 0; display: flex; flex-direction: column; }
