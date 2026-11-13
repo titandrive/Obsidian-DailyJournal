@@ -3,6 +3,7 @@ import type DailyJournal from "../main";
 import { ConfirmModal, PlaceModal, PromptsModal } from "./modals";
 import { hardcoverUser } from "./hardcover";
 import { CheckInFields } from "./settings";
+import { searchSongs } from "./music";
 
 export class JournalSettingTab extends PluginSettingTab {
 	constructor(app: App, private plugin: DailyJournal) {
@@ -95,6 +96,31 @@ export class JournalSettingTab extends PluginSettingTab {
 					new Notice(`Connected to Hardcover as ${user.username}.`);
 				} catch (e) {
 					new Notice(`Hardcover: ${e instanceof Error ? e.message : String(e)}`);
+				}
+			}));
+
+		new Setting(card())
+			.setName("Song of the day")
+			.setDesc("Pick a song for the day from YouTube: paste a YouTube or YouTube Music link, or search with an API key. It plays in full in the card, and its title opens it in YouTube Music. Saved as properties (song, artist).")
+			.addToggle((t) => t.setValue(s.showSong).onChange(async (v) => { s.showSong = v; await save(); this.display(); }));
+		const keyDesc = createFragment((f) => {
+			f.appendText("Optional. Lets you search for songs instead of pasting links. Free: in ");
+			f.createEl("a", { text: "Google Cloud Console", href: "https://console.cloud.google.com/" });
+			f.appendText(", create a project, enable \"YouTube Data API v3\", then Credentials → Create credentials → API key.");
+		});
+		sub(new Setting(group).setName("YouTube API key").setDesc(keyDesc), s.showSong)
+			.addText((t) => {
+				t.inputEl.type = "password";
+				t.setPlaceholder("Paste your key").setValue(s.youtubeApiKey)
+					.onChange(async (v) => { s.youtubeApiKey = v.trim(); await save(); });
+			})
+			.addButton((b) => b.setButtonText("Test").onClick(async () => {
+				if (!s.youtubeApiKey) { new Notice("Paste your YouTube API key first."); return; }
+				try {
+					const found = await searchSongs(s.youtubeApiKey, "hey jude", 1);
+					new Notice(found.length ? "YouTube search works." : "The key works, but the test search found nothing.");
+				} catch (e) {
+					new Notice(`YouTube: ${e instanceof Error ? e.message : String(e)}`);
 				}
 			}));
 

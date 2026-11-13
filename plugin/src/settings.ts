@@ -30,6 +30,9 @@ export interface JournalSettings {
 	units: "f" | "c";
 	showReading: boolean;
 	hardcoverToken: string;
+	showSong: boolean;
+	/** YouTube Data API key: optional, unlocks searching for songs. */
+	youtubeApiKey: string;
 	showOnThisDay: boolean;
 	fields: CheckInFields;
 	prompts: Prompt[];
@@ -49,6 +52,8 @@ export const DEFAULT_SETTINGS: JournalSettings = {
 	units: "f",
 	showReading: true,
 	hardcoverToken: "",
+	showSong: true,
+	youtubeApiKey: "",
 	showOnThisDay: true,
 	fields: { rating: true, sleep: true, work: true, exercise: true, food: true, tags: true },
 	prompts: [

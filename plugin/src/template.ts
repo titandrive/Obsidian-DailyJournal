@@ -13,7 +13,7 @@ import { CheckInFields, JournalSettings } from "./settings";
 export const SHOW_CHROME = "dj-show-chrome";
 
 export const FIELD_KEYS: Array<keyof CheckInFields> = ["rating", "sleep", "work", "exercise", "food", "tags"];
-type Section = "header" | "reading" | "checkin" | "onthisday";
+type Section = "header" | "reading" | "song" | "checkin" | "onthisday";
 
 const block = (line: string) => "```journal\n" + line + "\n```\n";
 
@@ -40,6 +40,7 @@ function layoutLines(settings: JournalSettings): Record<Section, string | null> 
 	return {
 		header: settings.showWeather ? "header weather" : "header no-weather",
 		reading: settings.showReading ? "reading" : null,
+		song: settings.showSong ? "song" : null,
 		checkin: fields.length ? "checkin " + fields.join(" ") : null,
 		onthisday: settings.showOnThisDay ? "onthisday" : null,
 	};
@@ -57,7 +58,7 @@ export function entryTemplate(settings: JournalSettings): string {
 		`location: ${JSON.stringify(home.name)}`, `latitude: ${home.lat}`, `longitude: ${home.lon}`, `timezone: ${JSON.stringify(home.tz)}`,
 		"---", "",
 	];
-	for (const section of ["header", "reading", "checkin"] as Section[]) {
+	for (const section of ["header", "reading", "song", "checkin"] as Section[]) {
 		const line = lines[section];
 		if (line) parts.push(block(line));
 	}
@@ -86,9 +87,9 @@ export function applyLayout(text: string, settings: JournalSettings): string {
 		out = BLOCK("reading").test(out) ? out.replace(new RegExp(HARDCOVER.source + "\\n?"), "") : out.replace(HARDCOVER, block("reading"));
 	}
 
-	// Cards between the header and the writing, in order: reading, then check-in.
-	const order: Section[] = ["header", "reading", "checkin"];
-	for (const section of ["reading", "checkin"] as Section[]) {
+	// Cards between the header and the writing, in order: reading, song, then check-in.
+	const order: Section[] = ["header", "reading", "song", "checkin"];
+	for (const section of ["reading", "song", "checkin"] as Section[]) {
 		const line = lines[section];
 		if (line && BLOCK(section).test(out)) {
 			out = out.replace(BLOCK(section), block(line));

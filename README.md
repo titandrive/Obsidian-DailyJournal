@@ -4,6 +4,7 @@ A daily journal for Obsidian. Each entry gets a set of cards above your writing:
 
 - **Header**: the date, links to your previous and next entries, that day's weather, and the entry's location (defaults to your default location; change it per entry while traveling).
 - **Reading**: what you read that day, from your [Hardcover](https://hardcover.app) reading journal: each book's cover, progress and pages read, books started or finished (with your rating), and quotes you saved. On days with no reading it shows when you last read. Works for past entries too. Needs a Hardcover API token. Each entry asks Hardcover once and saves the result in its properties (`reading`, plus `books` and `pages_read` for Bases); after that it only updates when you run **Refresh reading**.
+- **Song of the day**: a song for the day from YouTube. Paste a YouTube or YouTube Music link (works out of the box), or add a free YouTube Data API key in settings to search by song, artist or both. The card shows the art, title and artist; the play button plays the whole song in the card, and the title opens it in YouTube Music. Saved as properties (`song`, `artist`, plus the video id, link and art), so the Journal base lists your songs.
 - **Check-in**: day rating (1–10), sleep, whether you worked, exercise, food (breakfast, lunch, dinner) and tags, saved as note properties so you can chart or query them with Bases.
 - **On this day**: links to entries from the same date in earlier months and years.
 
@@ -27,7 +28,7 @@ With **Journal base** on (the default), it also keeps `Journal.base` in the jour
 ## Settings
 
 - **Entries**: journal folder and date format, using the layout as Daily notes' template, the Journal base, filling new entries, and writing prompts (edited in a dialog: drag to reorder, indent to make sub-headings).
-- **Cards**: each card with its own settings: Weather (on/off, default location, °F/°C), Reading (Hardcover API token), Check-in (which fields to show), and On this day.
+- **Cards**: each card with its own settings: Weather (on/off, default location, °F/°C), Reading (Hardcover API token), Song of the day (optional YouTube API key for search), Check-in (which fields to show), and On this day.
 - **Appearance**: hide the title and Properties box in entries.
 
 Each entry keeps the layout it was created with (its cards, weather on/off, check-in fields, location, and whether its title and Properties show), so changing settings only affects new entries. **Apply to existing entries** updates older ones to the current settings without touching your writing.

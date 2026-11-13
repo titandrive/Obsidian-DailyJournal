@@ -1,9 +1,10 @@
-import { App, moment, TFile } from "obsidian";
+import { App, moment, setIcon, TFile } from "obsidian";
 import { entryDate, Moment } from "./dates";
 import { PlaceModal } from "./modals";
 import { CheckInFields, JournalSettings, Place } from "./settings";
 import { HardcoverDay, savedReading } from "./hardcover";
 import { meteoconSvg } from "./meteocons";
+import { playerUrl, searchSongs, Song, SONG_KEYS, songFromLink, songProperties, thumbnailUrl, videoIdFromUrl, youtubeMusicUrl } from "./music";
 import { blockFields, blockShowsWeather, parseBlock } from "./template";
 import { entryPlace, fetchWeather, PIN_ICON, weatherIcon, weatherText } from "./weather";
 
@@ -52,6 +53,7 @@ export async function renderSection(host: JournalHost, source: string, el: HTMLE
 		case "hardcover": // the block's name before it replaced the book-notes card
 			return renderReading(host, el, file, date, fm);
 		case "checkin": return renderCheckIn(host, el, file, fm, blockFields(options));
+		case "song": return renderSong(host, el, file, fm);
 		case "onthisday": return renderOnThisDay(host, el, date);
 	}
 }
@@ -316,6 +318,127 @@ function renderCheckIn(host: JournalHost, el: HTMLElement, file: TFile, fm: Fron
 		input.addEventListener("change", add);
 		paint();
 	}
+}
+
+/** The song saved in an entry, or null (older Apple-based picks have no YouTube id and are ignored). */
+function savedSong(fm: Frontmatter): Song | null {
+	const id = typeof fm.song_id === "string" && /^[\w-]{11}$/.test(fm.song_id) ? fm.song_id : null;
+	if (!fm.song || !id) return null;
+	return { id, title: String(fm.song), artist: fm.artist ? String(fm.artist) : "", cover: fm.song_cover ? String(fm.song_cover) : thumbnailUrl(id) };
+}
+
+function renderSong(host: JournalHost, el: HTMLElement, file: TFile, fm: Frontmatter): void {
+	const { app, settings } = host;
+	const body = card(el, "Song of the day").createDiv();
+	const save = (song: Song | null) => app.fileManager.processFrontMatter(file, (f) => {
+		for (const k of SONG_KEYS) delete f[k];
+		if (song) Object.assign(f, songProperties(song));
+	});
+	const art = (parent: HTMLElement, song: Song, cls: string) => {
+		const fallback = () => { img?.remove(); const d = createDiv({ cls: `${cls} dj-cover-fallback` }); setIcon(d, "music"); parent.prepend(d); };
+		const img = song.cover ? parent.createEl("img", { cls, attr: { src: song.cover, alt: "" } }) : null;
+		if (img) img.onerror = fallback; else fallback();
+		return img;
+	};
+
+	const showSong = (song: Song) => {
+		body.empty();
+		const row = body.createDiv({ cls: "dj-book dj-song" });
+		// Album art with a play button over it. The player is only created when you press play.
+		const cover = row.createDiv({ cls: "dj-song-art" });
+		art(cover, song, "dj-cover dj-song-cover");
+		const play = cover.createEl("button", { cls: "dj-song-play", attr: { "aria-label": "Play" } });
+		setIcon(play, "play");
+		const info = row.createDiv({ cls: "dj-book-info" });
+		const title = info.createEl("a", { cls: "dj-book-title", text: song.title, href: youtubeMusicUrl(song.id), attr: { "aria-label": "Open in YouTube Music" } });
+		title.onclick = (e) => { e.preventDefault(); window.open(youtubeMusicUrl(song.id), "_blank"); };
+		if (song.artist) info.createDiv({ cls: "dj-book-author", text: song.artist });
+		const change = info.createEl("a", { cls: "dj-song-change", text: "Change", href: "#" });
+		change.onclick = (e) => { e.preventDefault(); showPicker(song); };
+
+		let player: HTMLElement | null = null;
+		play.onclick = () => {
+			if (player) { player.remove(); player = null; setIcon(play, "play"); play.setAttr("aria-label", "Play"); return; }
+			player = body.createDiv({ cls: "dj-song-player" });
+			// Same frame settings as Obsidian's own YouTube embeds.
+			player.createEl("iframe", { cls: "external-embed", attr: {
+				src: playerUrl(song.id), title: song.title, frameborder: "0", allowfullscreen: "",
+				allow: "autoplay; fullscreen; encrypted-media; picture-in-picture",
+				sandbox: "allow-forms allow-presentation allow-same-origin allow-popups-to-escape-sandbox allow-scripts allow-modals allow-popups",
+				referrerpolicy: "strict-origin-when-cross-origin",
+			} });
+			setIcon(play, "square"); play.setAttr("aria-label", "Stop");
+		};
+	};
+
+	// Paste a link (always works), or search when an API key is set. Newest input wins.
+	const showPicker = (current: Song | null) => {
+		body.empty();
+		// Read the key live, so adding one in settings unlocks search in cards that are already open.
+		const canSearch = () => !!settings.youtubeApiKey;
+		const bar = body.createDiv({ cls: "dj-song-bar" });
+		const input = bar.createEl("input", { cls: "dj-song-search", attr: { type: "search", spellcheck: "false" } });
+		const hint = () => {
+			input.placeholder = canSearch() ? "Search for a song or artist, or paste a YouTube link" : "Paste a YouTube or YouTube Music link";
+			if (!input.value.trim()) {
+				results.empty();
+				if (!canSearch()) results.createDiv({ cls: "dj-muted", text: "Add a YouTube API key in Daily Journal's settings to search instead." });
+			}
+		};
+		if (current) {
+			const cancel = bar.createEl("a", { cls: "dj-song-change", text: "Cancel", href: "#" });
+			cancel.onclick = (e) => { e.preventDefault(); showSong(current); };
+			const remove = bar.createEl("a", { cls: "dj-song-change", text: "Remove", href: "#" });
+			remove.onclick = (e) => { e.preventDefault(); void save(null); showPicker(null); };
+		}
+		const results = body.createDiv({ cls: "dj-song-results" });
+		hint();
+		input.addEventListener("focus", hint);
+		const choose = (song: Song) => { showSong(song); void save(song); };
+		const list = (songs: Song[]) => {
+			results.empty();
+			if (!songs.length) { results.createDiv({ cls: "dj-muted", text: "No songs found." }); return; }
+			for (const song of songs) {
+				const item = results.createEl("button", { cls: "dj-song-result" });
+				art(item, song, "dj-song-thumb");
+				const text = item.createDiv({ cls: "dj-song-result-text" });
+				text.createDiv({ cls: "dj-song-result-title", text: song.title });
+				text.createDiv({ cls: "dj-song-result-meta", text: song.artist });
+				item.onclick = () => choose(song);
+			}
+		};
+		let timer = 0, latest = 0;
+		const run = async () => {
+			const term = input.value.trim(), mine = ++latest;
+			const isLink = !!videoIdFromUrl(term);
+			if (!isLink && (!canSearch() || term.length < 2)) {
+				results.empty();
+				if (term && !canSearch()) results.createDiv({ cls: "dj-muted", text: "Paste a YouTube or YouTube Music link, or add a YouTube API key in settings to search." });
+				return;
+			}
+			try {
+				const songs = isLink ? [await songFromLink(term)] : await searchSongs(settings.youtubeApiKey, term);
+				if (mine !== latest) return;
+				// A pasted link is unambiguous: pick it straight away.
+				if (isLink) choose(songs[0]); else list(songs);
+			} catch (e) {
+				if (mine === latest) { results.empty(); results.createDiv({ cls: "dj-muted", text: e instanceof Error ? e.message : String(e) }); }
+			}
+		};
+		// Searches wait for a pause in typing (each costs API allowance); links resolve right away.
+		input.addEventListener("input", () => {
+			window.clearTimeout(timer);
+			timer = window.setTimeout(run, videoIdFromUrl(input.value) ? 0 : 500);
+		});
+		input.addEventListener("keydown", (e) => {
+			if (e.key === "Enter") { e.preventDefault(); window.clearTimeout(timer); void run(); }
+			if (e.key === "Escape" && current) { e.preventDefault(); showSong(current); }
+		});
+		if (current) input.focus(); // only when you asked to change it, so opening an entry never grabs the cursor
+	};
+
+	const song = savedSong(fm);
+	if (song) showSong(song); else showPicker(null);
 }
 
 function renderOnThisDay(host: JournalHost, el: HTMLElement, date: Moment): void {
