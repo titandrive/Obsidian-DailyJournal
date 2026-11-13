@@ -57,9 +57,6 @@ export default class DailyJournal extends Plugin implements JournalHost {
 	weatherTried = new Set<string>();
 	readingTried = new Set<string>();
 	blocks = new Set<JournalBlock>();
-	/** Entries created this session that haven't been opened yet, to start the cursor at the first prompt. */
-	private newEntries = new Set<string>();
-	private userMovedCursor = false;
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
@@ -136,13 +133,7 @@ export default class DailyJournal extends Plugin implements JournalHost {
 		// Fill new, empty entries (e.g. from Obsidian's Daily notes or the Hearth "Today" card) with the template.
 		this.app.workspace.onLayoutReady(() => {
 			this.refreshChrome();
-			this.registerEvent(this.app.vault.on("create", (file) => {
-				if (file instanceof TFile && entryDate(this.settings, file)) this.newEntries.add(file.path);
-				this.fillIfEmpty(file);
-			}));
-			this.registerEvent(this.app.workspace.on("file-open", (file) => {
-				if (file && this.newEntries.delete(file.path)) void this.cursorToFirstPrompt(file);
-			}));
+			this.registerEvent(this.app.vault.on("create", (file) => this.fillIfEmpty(file)));
 			void this.syncDailyTemplate();
 			void this.syncJournalBase();
 		});
@@ -358,62 +349,8 @@ export default class DailyJournal extends Plugin implements JournalHost {
 		if (!(file instanceof TFile)) {
 			await this.ensureFolder(path);
 			file = await this.app.vault.create(path, entryTemplate(this.settings));
-			this.newEntries.add(path);
 		}
 		await this.app.workspace.getLeaf(false).openFile(file as TFile);
-	}
-
-	/**
-	 * Put the cursor on the line under the first writing prompt of a newly created entry, so you can
-	 * start typing. Waits briefly for the layout to arrive when the entry is filled after it opens, and
-	 * puts the cursor back for a few seconds while the cards save weather and reading into the entry
-	 * (those rewrites shift the text under a cursor that stays at the same position), unless you've
-	 * moved it yourself by then.
-	 */
-	private async cursorToFirstPrompt(file: TFile): Promise<void> {
-		const prompt = this.settings.prompts[0]?.text.trim();
-		if (!prompt) return;
-		const heading = new RegExp(`^#{1,6}\\s+${prompt.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`);
-		const editorFor = () => {
-			const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-			return view && view.file?.path === file.path && view.getMode() === "source" ? view.editor : null;
-		};
-		let placed = false;
-		const place = (): boolean => {
-			const editor = editorFor();
-			if (!editor) return false;
-			for (let line = 0; line < editor.lineCount(); line++) {
-				if (!heading.test(editor.getLine(line))) continue;
-				if (line + 1 >= editor.lineCount()) editor.replaceRange("\n", { line, ch: editor.getLine(line).length });
-				editor.setCursor({ line: line + 1, ch: 0 });
-				editor.scrollIntoView({ from: { line, ch: 0 }, to: { line: line + 1, ch: 0 } }, true);
-				editor.focus();
-				placed = true;
-				return true;
-			}
-			return false;
-		};
-		for (let tries = 0; tries < 20 && !place(); tries++) {
-			if (!editorFor()) return; // moved on to another note
-			await new Promise((r) => window.setTimeout(r, 150));
-		}
-		if (!placed) return;
-
-		// Keep it there while the first saves land.
-		const ref = this.app.metadataCache.on("changed", (changed) => {
-			if (changed.path !== file.path) return;
-			// Put it back unless you've typed or clicked since.
-			window.setTimeout(() => { if (!this.userMovedCursor) place(); }, 50);
-		});
-		this.userMovedCursor = false;
-		const moved = () => { this.userMovedCursor = true; };
-		window.addEventListener("keydown", moved, { once: true });
-		window.addEventListener("mousedown", moved, { once: true });
-		window.setTimeout(() => {
-			this.app.metadataCache.offref(ref);
-			window.removeEventListener("keydown", moved);
-			window.removeEventListener("mousedown", moved);
-		}, 6000);
 	}
 
 	private async ensureFolder(path: string): Promise<void> {
