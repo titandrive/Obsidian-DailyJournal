@@ -382,7 +382,12 @@ function renderSong(host: JournalHost, el: HTMLElement, file: TFile, fm: Frontma
 		return img;
 	};
 
+	// In a side-by-side row the card is too narrow for a video: the player opens full-width under the row.
+	const playerHost = () => (el.closest(".dj-row-wrap") as HTMLElement | null) ?? body;
+	const closePlayer = () => playerHost().querySelectorAll(":scope > .dj-song-player").forEach((p) => p.remove());
+
 	const showSong = (song: Song) => {
+		closePlayer();
 		body.empty();
 		const row = body.createDiv({ cls: "dj-book dj-song" });
 		// Album art with a play button over it. The player is only created when you press play.
@@ -403,7 +408,8 @@ function renderSong(host: JournalHost, el: HTMLElement, file: TFile, fm: Frontma
 		let player: HTMLElement | null = null;
 		play.onclick = () => {
 			if (player) { player.remove(); player = null; setIcon(play, "play"); play.setAttr("aria-label", "Play"); return; }
-			player = body.createDiv({ cls: "dj-song-player" });
+			closePlayer();
+			player = playerHost().createDiv({ cls: "dj-song-player" });
 			// Same frame settings as Obsidian's own YouTube embeds.
 			player.createEl("iframe", { cls: "external-embed", attr: {
 				src: playerUrl(song.id), title: song.title, frameborder: "0", allowfullscreen: "",
@@ -418,6 +424,7 @@ function renderSong(host: JournalHost, el: HTMLElement, file: TFile, fm: Frontma
 	// Picking happens in a search dialog (roomy even when the card is half a row wide).
 	const pick = () => new SongPickerModal(app, settings.youtubeApiKey, (song) => { showSong(song); void save(song); }).open();
 	const showEmpty = () => {
+		closePlayer();
 		body.empty();
 		const add = body.createEl("button", { cls: "dj-song-add" });
 		setIcon(add.createSpan({ cls: "dj-song-add-icon" }), "music");

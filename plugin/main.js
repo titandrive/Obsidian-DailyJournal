@@ -1343,7 +1343,13 @@ function renderSong(host, el, file, fm) {
       fallback();
     return img;
   };
+  const playerHost = () => {
+    var _a;
+    return (_a = el.closest(".dj-row-wrap")) != null ? _a : body;
+  };
+  const closePlayer = () => playerHost().querySelectorAll(":scope > .dj-song-player").forEach((p) => p.remove());
   const showSong = (song2) => {
+    closePlayer();
     body.empty();
     const row = body.createDiv({ cls: "dj-book dj-song" });
     const cover = row.createDiv({ cls: "dj-song-art" });
@@ -1379,7 +1385,8 @@ function renderSong(host, el, file, fm) {
         play.setAttr("aria-label", "Play");
         return;
       }
-      player = body.createDiv({ cls: "dj-song-player" });
+      closePlayer();
+      player = playerHost().createDiv({ cls: "dj-song-player" });
       player.createEl("iframe", { cls: "external-embed", attr: {
         src: playerUrl(song2.id),
         title: song2.title,
@@ -1398,6 +1405,7 @@ function renderSong(host, el, file, fm) {
     void save(song2);
   }).open();
   const showEmpty = () => {
+    closePlayer();
     body.empty();
     const add = body.createEl("button", { cls: "dj-song-add" });
     (0, import_obsidian6.setIcon)(add.createSpan({ cls: "dj-song-add-icon" }), "music");
