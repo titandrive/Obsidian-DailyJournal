@@ -7,6 +7,7 @@ import { meteoconSvg } from "./meteocons";
 import { playerUrl, Song, SONG_KEYS, songProperties, thumbnailUrl, youtubeMusicUrl } from "./music";
 import { blockFields, blockShowsWeather, parseBlock } from "./template";
 import { entryPlace, fetchWeather, PIN_ICON, weatherIcon, weatherText } from "./weather";
+import { RETRY_AFTER_MS } from "./net";
 
 /** What the cards need from the plugin. */
 export interface JournalHost {
@@ -17,6 +18,11 @@ export interface JournalHost {
 	/** Fetch the entry's reading from Hardcover and save it in the entry. */
 	refreshReading(file: TFile, date: Moment): Promise<void>;
 	readingTried: Set<string>;
+	/** Entries whose failed first lookup has its one automatic retry scheduled ("pending") or used ("done"). */
+	readingRetries: Map<string, "pending" | "done">;
+	weatherRetried: Set<string>;
+	/** Plugin.registerInterval: the timer is cleared if the plugin unloads (works for timeouts too). */
+	registerInterval(id: number): number;
 	journalEntries(): Array<{ file: TFile; date: Moment }>;
 }
 
@@ -112,10 +118,20 @@ async function renderHeader(host: JournalHost, el: HTMLElement, file: TFile, dat
 	// Tried once per entry per session, so a failed lookup can't turn into a retry loop.
 	if (weatherOn && !fm.weather && !host.weatherTried.has(file.path) && !date.isAfter(moment(), "day")) {
 		host.weatherTried.add(file.path);
+		const save = async (weather: string) => {
+			if (weatherChip.isConnected) showWeather(weather);
+			await app.fileManager.processFrontMatter(file, (f) => { if (!f.weather) f.weather = weather; });
+		};
 		const weather = await fetchWeather(place, date, settings.units);
-		if (weather) {
-			showWeather(weather);
-			await app.fileManager.processFrontMatter(file, (f) => { f.weather = weather; });
+		if (weather) await save(weather);
+		else if (!host.weatherRetried.has(file.path)) {
+			// Weather service down or slow: try once more a minute later (it fills in on a later start otherwise).
+			host.weatherRetried.add(file.path);
+			host.registerInterval(window.setTimeout(async () => {
+				if (app.metadataCache.getFileCache(file)?.frontmatter?.weather) return;
+				const retry = await fetchWeather(place, date, settings.units);
+				if (retry) await save(retry);
+			}, RETRY_AFTER_MS));
 		}
 	}
 }
@@ -124,19 +140,39 @@ async function renderReading(host: JournalHost, el: HTMLElement, file: TFile, da
 	const day = savedReading(fm);
 	if (day) return drawReading(el, day, date);
 
-	// Not fetched yet: ask Hardcover once and save it in the entry (the card redraws from that).
-	// After this, only "Refresh reading" asks again. Tried once per entry per session, so a
-	// failed lookup can't turn into a retry loop.
+	// Not fetched yet: ask Hardcover and save it in the entry (the card redraws from that). A failed
+	// first lookup is retried once, a minute later; after that only "Refresh reading" asks again, so
+	// a failing lookup can't turn into a retry loop.
 	const muted = (text: string) => card(el, "Currently reading").createDiv({ cls: "dj-muted", text });
 	if (!host.settings.hardcoverToken) return void muted("Add your Hardcover API token in Daily Journal's settings to show what you read.");
 	if (date.isAfter(moment(), "day")) return;
-	if (host.readingTried.has(file.path)) return void muted("Couldn't load from Hardcover. Run \"Refresh reading\" to try again.");
-	host.readingTried.add(file.path);
+	const path = file.path;
+	const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+	if (host.readingTried.has(path)) {
+		return void muted(host.readingRetries.get(path) === "pending"
+			? "Couldn't load from Hardcover. Trying again in a minute…"
+			: "Couldn't load from Hardcover. Run \"Refresh reading\" to try again.");
+	}
+	host.readingTried.add(path);
 	const loading = muted("Loading from Hardcover…");
 	try {
 		await host.refreshReading(file, date);
 	} catch (e) {
-		loading.setText(`Couldn't load from Hardcover: ${e instanceof Error ? e.message : String(e)} Run "Refresh reading" to try again.`);
+		if (host.readingRetries.has(path)) {
+			loading.setText(`Couldn't load from Hardcover: ${message(e)} Run "Refresh reading" to try again.`);
+			return;
+		}
+		host.readingRetries.set(path, "pending");
+		loading.setText(`Couldn't load from Hardcover: ${message(e)} Trying again in a minute.`);
+		host.registerInterval(window.setTimeout(async () => {
+			host.readingRetries.set(path, "done");
+			if (savedReading(host.app.metadataCache.getFileCache(file)?.frontmatter ?? {})) return; // refreshed meanwhile
+			try {
+				await host.refreshReading(file, date); // redraws the card on success
+			} catch (e2) {
+				if (loading.isConnected) loading.setText(`Still couldn't load from Hardcover: ${message(e2)} Run "Refresh reading" to try again.`);
+			}
+		}, RETRY_AFTER_MS));
 	}
 }
 

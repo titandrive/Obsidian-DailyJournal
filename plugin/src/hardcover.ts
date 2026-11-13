@@ -1,4 +1,4 @@
-import { requestUrl } from "obsidian";
+import { requestWithin } from "./net";
 import { Moment } from "./dates";
 
 const API = "https://api.hardcover.app/v1/graphql";
@@ -59,7 +59,7 @@ export function savedReading(fm: Record<string, unknown>): HardcoverDay | null {
 
 async function query<T>(token: string, gql: string, variables: Record<string, unknown> = {}): Promise<T> {
 	const auth = /^bearer\s/i.test(token.trim()) ? token.trim() : `Bearer ${token.trim()}`;
-	const res = await requestUrl({
+	const res = await requestWithin("Hardcover", {
 		url: API,
 		method: "POST",
 		contentType: "application/json",

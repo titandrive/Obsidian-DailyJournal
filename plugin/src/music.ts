@@ -1,4 +1,4 @@
-import { requestUrl } from "obsidian";
+import { requestWithin } from "./net";
 
 /*
  * Song of the day, from YouTube.
@@ -72,7 +72,7 @@ function decodeEntities(s: string): string {
 export async function songFromLink(text: string): Promise<Song> {
 	const id = videoIdFromUrl(text);
 	if (!id) throw new Error("That isn't a YouTube or YouTube Music link.");
-	const res = await requestUrl({
+	const res = await requestWithin("YouTube", {
 		url: `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(`https://www.youtube.com/watch?v=${id}`)}`,
 		throw: false,
 	});
@@ -85,7 +85,7 @@ export async function songFromLink(text: string): Promise<Song> {
 export async function searchSongs(apiKey: string, term: string, limit = 8): Promise<Song[]> {
 	const q = term.trim();
 	if (!q) return [];
-	const res = await requestUrl({
+	const res = await requestWithin("YouTube", {
 		url: "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10" +
 			`&maxResults=${limit}&q=${encodeURIComponent(q)}&key=${encodeURIComponent(apiKey.trim())}`,
 		throw: false,

@@ -56,6 +56,8 @@ export default class DailyJournal extends Plugin implements JournalHost {
 	settings!: JournalSettings;
 	weatherTried = new Set<string>();
 	readingTried = new Set<string>();
+	readingRetries = new Map<string, "pending" | "done">();
+	weatherRetried = new Set<string>();
 	blocks = new Set<JournalBlock>();
 
 	async onload(): Promise<void> {

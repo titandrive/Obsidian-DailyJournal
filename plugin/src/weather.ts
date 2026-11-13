@@ -1,4 +1,4 @@
-import { requestUrl } from "obsidian";
+import { requestWithin } from "./net";
 import { Moment } from "./dates";
 import { Place } from "./settings";
 
@@ -44,7 +44,7 @@ export function weatherIcon(saved: string): string {
 export async function fetchWeather(place: Place, date: Moment, units: "f" | "c"): Promise<string | null> {
 	try {
 		const day = date.format("YYYY-MM-DD");
-		const res = await requestUrl({
+		const res = await requestWithin("The weather service", {
 			url: `https://api.open-meteo.com/v1/forecast?latitude=${place.lat}&longitude=${place.lon}` +
 				"&daily=weather_code,temperature_2m_max,temperature_2m_min" +
 				`&temperature_unit=${units === "f" ? "fahrenheit" : "celsius"}` +
@@ -64,7 +64,7 @@ export interface PlaceResult extends Place {
 }
 
 export async function searchPlaces(query: string): Promise<PlaceResult[]> {
-	const res = await requestUrl({
+	const res = await requestWithin("The weather service", {
 		url: `https://geocoding-api.open-meteo.com/v1/search?count=6&language=en&name=${encodeURIComponent(query)}`,
 	});
 	const results: Array<Record<string, unknown>> = res.json.results ?? [];
