@@ -1077,6 +1077,23 @@ async function renderReading(host, el, file, date, fm) {
     loading.setText(`Couldn't load from Hardcover: ${e instanceof Error ? e.message : String(e)} Run "Refresh reading" to try again.`);
   }
 }
+function lineCount(el) {
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  return new Set(Array.from(range.getClientRects()).filter((r) => r.width > 0).map((r) => Math.round(r.top))).size;
+}
+function shrinkToTwoLines(el, sizes = ["0.92em", "0.82em"], tries = 0) {
+  if (!el.isConnected || !el.offsetWidth) {
+    if (tries < 30)
+      window.requestAnimationFrame(() => shrinkToTwoLines(el, sizes, tries + 1));
+    return;
+  }
+  for (const size of sizes) {
+    if (lineCount(el) <= 2)
+      return;
+    el.style.fontSize = size;
+  }
+}
 function drawReading(el, day, date) {
   var _a;
   const c = card(el, "Currently reading");
@@ -1120,6 +1137,7 @@ function drawReading(el, day, date) {
       title.addEventListener("click", openBook);
     else
       title.removeAttribute("href");
+    shrinkToTwoLines(title);
     if (b.author)
       info.createDiv({ cls: "dj-book-author", text: b.author });
     const badges = info.createDiv({ cls: "dj-row" });

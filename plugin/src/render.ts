@@ -140,6 +140,28 @@ async function renderReading(host: JournalHost, el: HTMLElement, file: TFile, da
 	}
 }
 
+/** Lines a text element currently wraps to (one rect per line box). */
+function lineCount(el: HTMLElement): number {
+	const range = document.createRange();
+	range.selectNodeContents(el);
+	return new Set(Array.from(range.getClientRects()).filter((r) => r.width > 0).map((r) => Math.round(r.top))).size;
+}
+
+/**
+ * Long titles step down in size until they fit on two lines (at most two steps). Measured once,
+ * when the card is on screen: no observers, so a resize can never start a redraw loop.
+ */
+function shrinkToTwoLines(el: HTMLElement, sizes = ["0.92em", "0.82em"], tries = 0): void {
+	if (!el.isConnected || !el.offsetWidth) {
+		if (tries < 30) window.requestAnimationFrame(() => shrinkToTwoLines(el, sizes, tries + 1));
+		return;
+	}
+	for (const size of sizes) {
+		if (lineCount(el) <= 2) return;
+		el.style.fontSize = size;
+	}
+}
+
 export function drawReading(el: HTMLElement, day: HardcoverDay, date: Moment): void {
 	const c = card(el, "Currently reading");
 	if (!day.books.length && !day.quotes.length) {
@@ -175,6 +197,7 @@ export function drawReading(el: HTMLElement, day: HardcoverDay, date: Moment): v
 		const info = row.createDiv({ cls: "dj-book-info" });
 		const title = info.createEl("a", { cls: "dj-book-title", text: b.title, href: b.url ?? "#" });
 		if (b.url) title.addEventListener("click", openBook); else title.removeAttribute("href");
+		shrinkToTwoLines(title);
 		if (b.author) info.createDiv({ cls: "dj-book-author", text: b.author });
 		const badges = info.createDiv({ cls: "dj-row" });
 		if (b.started) badges.createSpan({ cls: "dj-badge", text: "Started" });

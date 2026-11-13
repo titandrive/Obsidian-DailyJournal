@@ -181,13 +181,13 @@ a.dj-book-title:hover { color: var(--text-accent); }
 .dj-row-cell > .dj-card { flex: 1; margin: 0; padding: 1.05em 1.15em; gap: .8em; }
 /* Compact covers and text inside a row. */
 .dj-row-cell .dj-book { gap: .85em; }
-.dj-row-cell .dj-cover { width: 54px; }
+.dj-row-cell .dj-cover { width: 66px; }
 /* The song has room to spare beside a book: big art, filling the card's height. */
 .dj-row-cell .dj-card > div:has(> .dj-song) { flex: 1; display: flex; align-items: center; }
 .dj-row-cell .dj-song { gap: 1.1em; width: 100%; }
-.dj-row-cell .dj-song .dj-song-cover { width: 120px; height: 120px; border-radius: 12px; }
-.dj-row-cell .dj-card button.dj-song-play { width: 48px; height: 48px; }
-.dj-row-cell .dj-card button.dj-song-play svg { width: 21px; height: 21px; }
+.dj-row-cell .dj-song .dj-song-cover { width: 99px; height: 99px; border-radius: 10px; } /* same height as the book cover beside it (66px wide, 2:3) */
+.dj-row-cell .dj-card button.dj-song-play { width: 42px; height: 42px; }
+.dj-row-cell .dj-card button.dj-song-play svg { width: 18px; height: 18px; }
 .dj-row-cell .dj-song a.dj-book-title { font-size: 1.2em; }
 .dj-row-cell .dj-song .dj-book-author { font-size: .95em; }
 .dj-row-cell a.dj-book-title { font-size: .98em; }
