@@ -55,6 +55,13 @@ export async function renderSection(host: JournalHost, source: string, el: HTMLE
 		case "checkin": return renderCheckIn(host, el, file, fm, blockFields(options));
 		case "song": return renderSong(host, el, file, fm);
 		case "onthisday": return renderOnThisDay(host, el, date);
+		case "row": {
+			// Several cards side by side in one block, e.g. "row reading song": compact versions of each,
+			// stacked again when the note is too narrow (see .dj-row-cards).
+			const grid = el.createDiv({ cls: "dj-row-wrap" }).createDiv({ cls: "dj-row-cards" });
+			await Promise.all(options.filter((o) => o !== "row" && o !== "header").map((o) => renderSection(host, o, grid.createDiv({ cls: "dj-row-cell" }), file)));
+			return;
+		}
 	}
 }
 
@@ -324,7 +331,8 @@ function renderCheckIn(host: JournalHost, el: HTMLElement, file: TFile, fm: Fron
 function savedSong(fm: Frontmatter): Song | null {
 	const id = typeof fm.song_id === "string" && /^[\w-]{11}$/.test(fm.song_id) ? fm.song_id : null;
 	if (!fm.song || !id) return null;
-	return { id, title: String(fm.song), artist: fm.artist ? String(fm.artist) : "", cover: fm.song_cover ? String(fm.song_cover) : thumbnailUrl(id) };
+	// Always show the band-free thumbnail, also for songs saved with an older one.
+	return { id, title: String(fm.song), artist: fm.artist ? String(fm.artist) : "", cover: thumbnailUrl(id) };
 }
 
 function renderSong(host: JournalHost, el: HTMLElement, file: TFile, fm: Frontmatter): void {

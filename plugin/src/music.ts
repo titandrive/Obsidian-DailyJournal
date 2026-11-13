@@ -25,7 +25,8 @@ export function videoIdFromUrl(text: string): string | null {
 }
 
 export const youtubeMusicUrl = (id: string) => `https://music.youtube.com/watch?v=${id}`;
-export const thumbnailUrl = (id: string) => `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+/** The widescreen thumbnail: unlike hqdefault (4:3), it has no letterbox bands, so a square crop is clean. */
+export const thumbnailUrl = (id: string) => `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
 
 /**
  * Embedded player URL that starts playing right away. YouTube refuses to play inside Obsidian's
@@ -99,7 +100,7 @@ export async function searchSongs(apiKey: string, term: string, limit = 8): Prom
 		.filter((it: Record<string, any>) => it.id?.videoId)
 		.map((it: Record<string, any>) => songFrom(
 			it.id.videoId, String(it.snippet?.title ?? ""), String(it.snippet?.channelTitle ?? ""),
-			it.snippet?.thumbnails?.high?.url ?? it.snippet?.thumbnails?.medium?.url ?? null,
+			null, // always the band-free thumbnail (see thumbnailUrl)
 		));
 }
 

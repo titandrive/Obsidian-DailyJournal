@@ -720,7 +720,7 @@ function videoIdFromUrl(text) {
   return m ? m[1] : null;
 }
 var youtubeMusicUrl = (id) => `https://music.youtube.com/watch?v=${id}`;
-var thumbnailUrl = (id) => `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+var thumbnailUrl = (id) => `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
 function playerUrl(id) {
   const params = `autoplay=1&rel=0`;
   if (location.protocol !== "https:" && /obsidian/i.test(navigator.userAgent)) {
@@ -784,12 +784,13 @@ async function searchSongs(apiKey, term, limit = 8) {
     var _a2;
     return (_a2 = it.id) == null ? void 0 : _a2.videoId;
   }).map((it) => {
-    var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2, _j2, _k, _l;
+    var _a2, _b2, _c2, _d2;
     return songFrom(
       it.id.videoId,
       String((_b2 = (_a2 = it.snippet) == null ? void 0 : _a2.title) != null ? _b2 : ""),
       String((_d2 = (_c2 = it.snippet) == null ? void 0 : _c2.channelTitle) != null ? _d2 : ""),
-      (_l = (_k = (_g2 = (_f2 = (_e2 = it.snippet) == null ? void 0 : _e2.thumbnails) == null ? void 0 : _f2.high) == null ? void 0 : _g2.url) != null ? _k : (_j2 = (_i2 = (_h2 = it.snippet) == null ? void 0 : _h2.thumbnails) == null ? void 0 : _i2.medium) == null ? void 0 : _j2.url) != null ? _l : null
+      null
+      // always the band-free thumbnail (see thumbnailUrl)
     );
   });
 }
@@ -926,6 +927,11 @@ async function renderSection(host, source, el, file) {
       return renderSong(host, el, file, fm);
     case "onthisday":
       return renderOnThisDay(host, el, date);
+    case "row": {
+      const grid = el.createDiv({ cls: "dj-row-wrap" }).createDiv({ cls: "dj-row-cards" });
+      await Promise.all(options.filter((o) => o !== "row" && o !== "header").map((o) => renderSection(host, o, grid.createDiv({ cls: "dj-row-cell" }), file)));
+      return;
+    }
   }
 }
 async function renderHeader(host, el, file, date, fm, weatherOn) {
@@ -1208,7 +1214,7 @@ function savedSong(fm) {
   const id = typeof fm.song_id === "string" && /^[\w-]{11}$/.test(fm.song_id) ? fm.song_id : null;
   if (!fm.song || !id)
     return null;
-  return { id, title: String(fm.song), artist: fm.artist ? String(fm.artist) : "", cover: fm.song_cover ? String(fm.song_cover) : thumbnailUrl(id) };
+  return { id, title: String(fm.song), artist: fm.artist ? String(fm.artist) : "", cover: thumbnailUrl(id) };
 }
 function renderSong(host, el, file, fm) {
   const { app, settings } = host;
