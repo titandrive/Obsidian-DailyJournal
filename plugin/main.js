@@ -1021,18 +1021,33 @@ function drawReading(el, day, date) {
   for (const b of day.books) {
     const row = c.createDiv({ cls: "dj-book" });
     const initials = b.title.split(/[\s:]+/).filter((w) => /^[A-Za-z0-9]/.test(w)).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
+    const openBook = (e) => {
+      e.preventDefault();
+      if (b.url)
+        window.open(b.url, "_blank");
+    };
+    const linkable = (node) => {
+      if (!b.url)
+        return node;
+      node.addClass("dj-clickable");
+      node.setAttr("aria-label", "Open on Hardcover");
+      node.addEventListener("click", openBook);
+      return node;
+    };
     const fallback = () => {
       img == null ? void 0 : img.remove();
-      row.prepend(createDiv({ cls: "dj-cover dj-cover-fallback", text: initials }));
+      row.prepend(linkable(createDiv({ cls: "dj-cover dj-cover-fallback", text: initials })));
     };
-    const img = b.cover ? row.createEl("img", { cls: "dj-cover", attr: { src: b.cover, alt: b.title } }) : null;
+    const img = b.cover ? linkable(row.createEl("img", { cls: "dj-cover", attr: { src: b.cover, alt: b.title } })) : null;
     if (img)
       img.onerror = fallback;
     else
       fallback();
     const info = row.createDiv({ cls: "dj-book-info" });
     const title = info.createEl("a", { cls: "dj-book-title", text: b.title, href: (_a = b.url) != null ? _a : "#" });
-    if (!b.url)
+    if (b.url)
+      title.addEventListener("click", openBook);
+    else
       title.removeAttribute("href");
     if (b.author)
       info.createDiv({ cls: "dj-book-author", text: b.author });

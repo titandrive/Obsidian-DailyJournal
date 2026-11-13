@@ -55,6 +55,9 @@ a.dj-navlink:hover { color: var(--interactive-accent); }
 }
 .dj-book-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .3em; }
 a.dj-book-title { font-weight: 650; font-size: 1.05em; color: var(--text-normal); text-decoration: none; }
+a.dj-book-title:hover { color: var(--text-accent); }
+.dj-clickable { cursor: pointer; }
+.dj-cover.dj-clickable:hover { filter: brightness(1.08); }
 .dj-book-author { color: var(--text-muted); font-size: .9em; }
 .dj-bar { height: 6px; border-radius: 3px; background: var(--background-modifier-border); overflow: hidden; }
 .dj-bar > div { height: 100%; background: var(--interactive-accent); border-radius: 3px; }

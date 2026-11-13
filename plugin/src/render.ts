@@ -158,13 +158,23 @@ export function drawReading(el: HTMLElement, day: HardcoverDay, date: Moment): v
 	for (const b of day.books) {
 		const row = c.createDiv({ cls: "dj-book" });
 		const initials = b.title.split(/[\s:]+/).filter((w) => /^[A-Za-z0-9]/.test(w)).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
-		const fallback = () => { img?.remove(); row.prepend(createDiv({ cls: "dj-cover dj-cover-fallback", text: initials })); };
-		const img = b.cover ? row.createEl("img", { cls: "dj-cover", attr: { src: b.cover, alt: b.title } }) : null;
+		// The cover and title open the book on Hardcover. Opened explicitly: inside the editor, a plain
+		// link's click doesn't reach Obsidian's link handling.
+		const openBook = (e: MouseEvent) => { e.preventDefault(); if (b.url) window.open(b.url, "_blank"); };
+		const linkable = (node: HTMLElement) => {
+			if (!b.url) return node;
+			node.addClass("dj-clickable");
+			node.setAttr("aria-label", "Open on Hardcover");
+			node.addEventListener("click", openBook);
+			return node;
+		};
+		const fallback = () => { img?.remove(); row.prepend(linkable(createDiv({ cls: "dj-cover dj-cover-fallback", text: initials }))); };
+		const img = b.cover ? linkable(row.createEl("img", { cls: "dj-cover", attr: { src: b.cover, alt: b.title } })) as HTMLImageElement : null;
 		if (img) img.onerror = fallback; else fallback();
 
 		const info = row.createDiv({ cls: "dj-book-info" });
 		const title = info.createEl("a", { cls: "dj-book-title", text: b.title, href: b.url ?? "#" });
-		if (!b.url) title.removeAttribute("href");
+		if (b.url) title.addEventListener("click", openBook); else title.removeAttribute("href");
 		if (b.author) info.createDiv({ cls: "dj-book-author", text: b.author });
 		const badges = info.createDiv({ cls: "dj-row" });
 		if (b.started) badges.createSpan({ cls: "dj-badge", text: "Started" });
