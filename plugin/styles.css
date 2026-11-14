@@ -192,6 +192,25 @@ a.dj-book-title:hover { color: var(--text-accent); }
 .dj-song-modal .prompt-results:not(:has(.suggestion-item, .suggestion-empty:not(:empty))) { display: none; }
 .dj-song-modal:not(:has(.suggestion-item)) .prompt-instructions { display: none; }
 .dj-song-modal .suggestion-empty:empty { display: none; }
+/* Matching shows at the top of podcast results. */
+.dj-song-modal .suggestion-item.dj-show-row .dj-song-result-text { flex: 1; }
+.dj-show-row-arrow { display: flex; color: var(--text-faint); }
+.dj-show-row-arrow svg { width: 16px; height: 16px; }
+/* "Show more results" row at the end of podcast results. */
+.dj-song-modal .suggestion-item.dj-song-more { display: flex; align-items: center; justify-content: center; gap: .4em; color: var(--text-muted); font-size: .9em; }
+.dj-song-modal .suggestion-item.dj-song-more svg { width: 15px; height: 15px; }
+/* Browsing one podcast: "← Show name" above the search box goes back to your search. */
+.dj-show-bar { padding: .5em 1em 0; }
+.dj-song-modal button.dj-show-back {
+	display: inline-flex; align-items: center; gap: .4em; height: auto; padding: .2em .4em; border: none; background: none; box-shadow: none;
+	color: var(--text-normal); font-weight: 600; cursor: pointer;
+}
+.dj-song-modal button.dj-show-back:hover { color: var(--text-accent); }
+.dj-song-modal button.dj-show-back svg { width: 15px; height: 15px; }
+/* Podcast show names in results open that show's latest episodes. */
+.dj-show-link { cursor: pointer; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 2px; }
+.dj-show-link:hover { text-decoration-color: currentColor; color: var(--text-normal); }
+.dj-song-modal .suggestion-item.is-selected .dj-show-link:hover { color: var(--text-on-accent); }
 .dj-song-modal .suggestion-empty { background: none; border: none; box-shadow: none; color: var(--text-faint); padding: 1em 1.2em; font-size: .9em; }
 .dj-song-modal .suggestion-item.is-selected .dj-song-result-meta { color: var(--text-on-accent); opacity: .85; }
 .dj-song-thumb { width: 38px; height: 38px; border-radius: 5px; object-fit: cover; flex-shrink: 0; }

@@ -2,7 +2,7 @@ import { App, Modal, moment, setIcon, SuggestModal } from "obsidian";
 import { Moment } from "./dates";
 import { MAX_PROMPT_LEVEL, Place, Prompt } from "./settings";
 import { PlaceResult, searchPlaces } from "./weather";
-import { searchEpisodes, searchSongs, Song, SongKind, songFromLink, videoIdFromUrl } from "./music";
+import { searchEpisodes, searchShows, searchSongs, showEpisodes, Song, SongKind, songFromLink, videoIdFromUrl } from "./music";
 
 /** Month calendar for choosing a date. Days that already have an entry are marked (and can't be picked unless allowTaken). */
 export class MonthPicker extends Modal {
@@ -252,10 +252,16 @@ export class SongPickerModal extends SuggestModal<Song> {
 	private shown: Song[] = [];
 
 	private modeButtons = new Map<SongKind, HTMLButtonElement>();
+	/** Browsing one podcast (after clicking its name): its latest episodes, with your search kept to go back to. */
+	private show: { id: number; name: string; query: string } | null = null;
+	/** How many podcast results to fetch: grows with "Show more results", resets on a new search. */
+	private pageSize = 10;
+	private pageKey = "";
+	private showBar!: HTMLElement;
 
 	constructor(app: App, private apiKey: string, private onPick: (song: Song) => void) {
 		super(app);
-		this.limit = 10;
+		this.limit = 250; // how many rows the dialog may show; the searches decide how many to fetch
 		this.modalEl.addClass("dj-song-modal");
 		this.setInstructions([{ command: "↑↓", purpose: "to navigate" }, { command: "↵", purpose: "to pick" }, { command: "tab", purpose: "music / podcasts" }, { command: "esc", purpose: "to cancel" }]);
 
@@ -264,10 +270,16 @@ export class SongPickerModal extends SuggestModal<Song> {
 		const modes = createDiv({ cls: "dj-song-modes" });
 		for (const [kind, label, icon] of [["music", "Music", "music"], ["podcast", "Podcasts", "mic"]] as Array<[SongKind, string, string]>) {
 			const b = modes.createEl("button", { cls: "dj-song-mode", text: label, attr: { "aria-label": `${label} (Tab switches)`, "data-icon": icon } });
-			b.onclick = () => { this.setKind(kind); this.inputEl.focus(); };
+			b.onclick = () => { if (this.show) { this.show = null; this.showBar.hide(); } this.setKind(kind); this.inputEl.focus(); };
 			this.modeButtons.set(kind, b);
 		}
 		this.modalEl.prepend(modes);
+		this.showBar = createDiv({ cls: "dj-show-bar" });
+		this.showBar.hide();
+		modes.after(this.showBar);
+		this.inputEl.addEventListener("keydown", (e) => {
+			if (e.key === "Escape" && this.show) { e.preventDefault(); e.stopPropagation(); this.leaveShow(); }
+		}, true);
 		this.inputEl.addEventListener("keydown", (e) => {
 			if (e.key === "Tab" && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) { e.preventDefault(); this.switchKind(); }
 		});
@@ -280,7 +292,34 @@ export class SongPickerModal extends SuggestModal<Song> {
 		window.setTimeout(() => this.inputEl.focus(), 0);
 	}
 
+	/** Show one podcast's latest episodes, newest first; the search box then filters within it. */
+	private openShow(id: number, name: string): void {
+		this.show = { id, name, query: this.show?.query ?? this.inputEl.value };
+		this.showBar.empty();
+		const back = this.showBar.createEl("button", { cls: "dj-show-back", attr: { "aria-label": "Back to your search" } });
+		setIcon(back.createSpan(), "arrow-left");
+		back.createSpan({ text: name });
+		back.onclick = () => this.leaveShow();
+		this.showBar.show();
+		this.setPlaceholder(`Filter ${name} episodes`);
+		this.inputEl.value = "";
+		this.inputEl.focus();
+		this.inputEl.dispatchEvent(new Event("input"));
+	}
+
+	private leaveShow(): void {
+		if (!this.show) return;
+		const query = this.show.query;
+		this.show = null;
+		this.showBar.hide();
+		this.setKind(SongPickerModal.kind);
+		this.inputEl.value = query;
+		this.inputEl.focus();
+		this.inputEl.dispatchEvent(new Event("input"));
+	}
+
 	private switchKind(): void {
+		if (this.show) { this.show = null; this.showBar.hide(); }
 		this.setKind(SongPickerModal.kind === "music" ? "podcast" : "music");
 	}
 
@@ -296,6 +335,21 @@ export class SongPickerModal extends SuggestModal<Song> {
 
 	async getSuggestions(query: string): Promise<Song[]> {
 		const term = query.trim(), mine = ++this.latest;
+		const step = this.show ? 20 : 10;
+		const key = `${SongPickerModal.kind}|${this.show?.id ?? ""}|${term}`;
+		if (key !== this.pageKey) { this.pageKey = key; this.pageSize = step; }
+		if (this.show) {
+			// Inside a show: its latest episodes, filtered by what's typed.
+			try {
+				const eps = await showEpisodes(this.show.id, term, this.pageSize);
+				if (mine !== this.latest) return this.shown;
+				this.emptyStateText = "No episodes match.";
+				return (this.shown = this.withMore(eps));
+			} catch (e) {
+				this.emptyStateText = e instanceof Error ? e.message : String(e);
+				return (this.shown = []);
+			}
+		}
 		const isLink = !!videoIdFromUrl(term);
 		const canSearch = SongPickerModal.kind === "podcast" || !!this.apiKey;
 		if (!term || (!isLink && (!canSearch || term.length < 2))) {
@@ -310,8 +364,8 @@ export class SongPickerModal extends SuggestModal<Song> {
 		try {
 			const kind = SongPickerModal.kind;
 			const songs = isLink ? [await songFromLink(term, kind)]
-				: kind === "podcast" ? await searchEpisodes(term, this.limit)
-				: await searchSongs(this.apiKey, term, this.limit, kind);
+				: kind === "podcast" ? await this.podcastResults(term)
+				: await searchSongs(this.apiKey, term, 10, kind);
 			if (mine !== this.latest) return this.shown;
 			this.emptyStateText = kind === "podcast" ? "No episodes found." : "No songs found.";
 			return (this.shown = songs);
@@ -321,7 +375,48 @@ export class SongPickerModal extends SuggestModal<Song> {
 		}
 	}
 
+	/** Matching shows first (pick one to see its latest episodes), then matching episodes. */
+	private async podcastResults(term: string): Promise<Song[]> {
+		const [shows, episodes] = await Promise.all([searchShows(term).catch(() => []), searchEpisodes(term, this.pageSize)]);
+		const showRows: Song[] = shows.map((sh) => ({ id: `__show__${sh.id}`, title: sh.name, artist: "", cover: sh.cover, kind: "podcast", showId: sh.id }));
+		return [...showRows, ...this.withMore(episodes)];
+	}
+
+	/** Adds a "Show more results" row when the list is full (there may be more). */
+	private withMore(songs: Song[]): Song[] {
+		return songs.length >= this.pageSize && this.pageSize < 200 ? [...songs, SongPickerModal.MORE] : songs;
+	}
+
+	private static readonly MORE: Song = { id: "__more__", title: "Show more results", artist: "", cover: null, kind: "podcast" };
+
+	selectSuggestion(value: Song, evt: MouseEvent | KeyboardEvent): void {
+		if (value.id.startsWith("__show__") && value.showId) { this.openShow(value.showId, value.title); return; }
+		if (value !== SongPickerModal.MORE) { super.selectSuggestion(value, evt); return; }
+		// Keep the dialog open and fetch the next page.
+		this.pageSize = Math.min(200, this.pageSize + (this.show ? 20 : 10));
+		const key = this.pageKey, size = this.pageSize;
+		this.inputEl.dispatchEvent(new Event("input"));
+		this.pageKey = key; this.pageSize = size; // the re-run must not reset the page
+	}
+
 	renderSuggestion(song: Song, el: HTMLElement): void {
+		if (song.id.startsWith("__show__")) {
+			// A matching show: picking it lists its latest episodes.
+			el.addClass("dj-song-suggestion", "dj-show-row");
+			const img = song.cover ? el.createEl("img", { cls: "dj-song-thumb", attr: { src: song.cover, alt: "" } }) : null;
+			if (!img) setIcon(el.createDiv({ cls: "dj-song-thumb dj-cover-fallback" }), "mic");
+			const text = el.createDiv({ cls: "dj-song-result-text" });
+			text.createDiv({ cls: "dj-song-result-title", text: song.title });
+			text.createDiv({ cls: "dj-song-result-meta", text: "Podcast · latest episodes" });
+			setIcon(el.createSpan({ cls: "dj-show-row-arrow" }), "chevron-right");
+			return;
+		}
+		if (song === SongPickerModal.MORE) {
+			el.addClass("dj-song-more");
+			setIcon(el.createSpan(), "chevrons-down");
+			el.createSpan({ text: "Show more results" });
+			return;
+		}
 		el.addClass("dj-song-suggestion");
 		const fallback = () => { img?.remove(); const d = createDiv({ cls: "dj-song-thumb dj-cover-fallback" }); setIcon(d, "music"); el.prepend(d); };
 		const img = song.cover ? el.createEl("img", { cls: "dj-song-thumb", attr: { src: song.cover, alt: "" } }) : null;
@@ -329,8 +424,19 @@ export class SongPickerModal extends SuggestModal<Song> {
 		const text = el.createDiv({ cls: "dj-song-result-text" });
 		text.createDiv({ cls: "dj-song-result-title", text: song.title });
 		const date = song.date ? moment(song.date, "YYYY-MM-DD").format("MMM D, YYYY") : null;
-		const meta = [song.artist, date].filter(Boolean).join(" · ");
-		if (meta) text.createDiv({ cls: "dj-song-result-meta", text: meta });
+		const meta = text.createDiv({ cls: "dj-song-result-meta" });
+		if (song.audio && song.artist && !this.show) {
+			// A podcast's show name opens that show's latest episodes.
+			const show = meta.createSpan({ cls: song.showId ? "dj-show-link" : "", text: song.artist, attr: song.showId ? { "aria-label": `Latest episodes of ${song.artist}` } : {} });
+			const browse = (e: MouseEvent) => {
+				if (!song.showId) return;
+				e.preventDefault(); e.stopPropagation();
+				if (e.type === "click") this.openShow(song.showId, song.artist);
+			};
+			show.addEventListener("mousedown", browse);
+			show.addEventListener("click", browse);
+		} else if (song.artist) meta.appendText(song.artist);
+		if (date) meta.appendText((song.artist ? " · " : "") + date);
 	}
 
 	onChooseSuggestion(song: Song): void {

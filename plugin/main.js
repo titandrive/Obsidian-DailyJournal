@@ -552,32 +552,58 @@ async function searchSongs(apiKey, term, limit = 8, kind = "music") {
     );
   });
 }
-async function searchEpisodes(term, limit = 10) {
+var words = (t) => t.toLowerCase().normalize("NFKD").replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(Boolean);
+function episodeFrom(r) {
+  var _a, _b, _c, _d, _e;
+  return {
+    id: String((_a = r.trackId) != null ? _a : ""),
+    title: decodeEntities(String(r.trackName)).trim(),
+    artist: decodeEntities(String((_b = r.collectionName) != null ? _b : "")).trim(),
+    cover: (_e = (_d = (_c = r.artworkUrl600) != null ? _c : r.artworkUrl160) != null ? _d : r.artworkUrl100) != null ? _e : null,
+    kind: "podcast",
+    showId: Number(r.collectionId) || null,
+    audio: String(r.episodeUrl),
+    page: null,
+    feedUrl: r.feedUrl ? String(r.feedUrl) : null,
+    guid: r.episodeGuid ? String(r.episodeGuid) : null,
+    date: r.releaseDate ? String(r.releaseDate).slice(0, 10) : null
+  };
+}
+var newestFirst = (a, b) => {
   var _a, _b;
+  return ((_a = b.date) != null ? _a : "").localeCompare((_b = a.date) != null ? _b : "");
+};
+async function directory(url) {
+  var _a, _b;
+  const res = await requestWithin("The podcast directory", { url, throw: false });
+  if (res.status >= 400)
+    throw new Error(`Podcast search failed (${res.status}).`);
+  return (_b = (_a = res.json) == null ? void 0 : _a.results) != null ? _b : [];
+}
+async function searchEpisodes(term, limit = 10) {
   const q2 = term.trim();
   if (!q2)
     return [];
-  const res = await requestWithin("The podcast directory", {
-    url: `https://itunes.apple.com/search?media=podcast&entity=podcastEpisode&limit=${limit}&term=${encodeURIComponent(q2)}`,
-    throw: false
-  });
-  if (res.status >= 400)
-    throw new Error(`Podcast search failed (${res.status}).`);
-  return ((_b = (_a = res.json) == null ? void 0 : _a.results) != null ? _b : []).filter((r) => r.episodeUrl && r.trackName).map((r) => {
-    var _a2, _b2, _c, _d, _e;
-    return {
-      id: String((_a2 = r.trackId) != null ? _a2 : ""),
-      title: decodeEntities(String(r.trackName)).trim(),
-      artist: decodeEntities(String((_b2 = r.collectionName) != null ? _b2 : "")).trim(),
-      cover: (_e = (_d = (_c = r.artworkUrl600) != null ? _c : r.artworkUrl160) != null ? _d : r.artworkUrl100) != null ? _e : null,
-      kind: "podcast",
-      audio: String(r.episodeUrl),
-      page: null,
-      feedUrl: r.feedUrl ? String(r.feedUrl) : null,
-      guid: r.episodeGuid ? String(r.episodeGuid) : null,
-      date: r.releaseDate ? String(r.releaseDate).slice(0, 10) : null
-    };
-  });
+  return (await directory(`https://itunes.apple.com/search?media=podcast&entity=podcastEpisode&limit=${limit}&term=${encodeURIComponent(q2)}`)).filter((r) => r.episodeUrl && r.trackName).map(episodeFrom);
+}
+async function searchShows(term, limit = 2) {
+  const typed = words(term);
+  if (!typed.length)
+    return [];
+  return (await directory(`https://itunes.apple.com/search?media=podcast&entity=podcast&limit=8&term=${encodeURIComponent(term.trim())}`)).map((r) => {
+    var _a, _b, _c;
+    return { id: Number(r.collectionId), name: decodeEntities(String((_a = r.collectionName) != null ? _a : "")).trim(), cover: (_c = (_b = r.artworkUrl600) != null ? _b : r.artworkUrl100) != null ? _c : null };
+  }).filter((sh) => {
+    const name = words(sh.name);
+    return sh.id && name.length && (typed.every((w) => name.includes(w)) || name.every((w) => typed.includes(w)));
+  }).slice(0, limit);
+}
+async function showEpisodes(showId, filter = "", limit = 50) {
+  const want = words(filter);
+  return (await directory(`https://itunes.apple.com/lookup?id=${showId}&media=podcast&entity=podcastEpisode&limit=200`)).filter((r) => r.wrapperType === "podcastEpisode" && r.episodeUrl && r.trackName).map(episodeFrom).filter((e) => {
+    const t = words(e.title);
+    return want.every((w) => t.some((x) => x.startsWith(w)));
+  }).sort(newestFirst).slice(0, limit);
 }
 async function episodePage(song) {
   var _a, _b, _c, _d;
@@ -875,7 +901,12 @@ var _SongPickerModal = class _SongPickerModal extends import_obsidian3.SuggestMo
     this.latest = 0;
     this.shown = [];
     this.modeButtons = /* @__PURE__ */ new Map();
-    this.limit = 10;
+    /** Browsing one podcast (after clicking its name): its latest episodes, with your search kept to go back to. */
+    this.show = null;
+    /** How many podcast results to fetch: grows with "Show more results", resets on a new search. */
+    this.pageSize = 10;
+    this.pageKey = "";
+    this.limit = 250;
     this.modalEl.addClass("dj-song-modal");
     this.setInstructions([{ command: "\u2191\u2193", purpose: "to navigate" }, { command: "\u21B5", purpose: "to pick" }, { command: "tab", purpose: "music / podcasts" }, { command: "esc", purpose: "to cancel" }]);
     (_a = this.inputEl.parentElement) == null ? void 0 : _a.addClass("dj-song-search-row");
@@ -883,12 +914,26 @@ var _SongPickerModal = class _SongPickerModal extends import_obsidian3.SuggestMo
     for (const [kind, label, icon] of [["music", "Music", "music"], ["podcast", "Podcasts", "mic"]]) {
       const b = modes.createEl("button", { cls: "dj-song-mode", text: label, attr: { "aria-label": `${label} (Tab switches)`, "data-icon": icon } });
       b.onclick = () => {
+        if (this.show) {
+          this.show = null;
+          this.showBar.hide();
+        }
         this.setKind(kind);
         this.inputEl.focus();
       };
       this.modeButtons.set(kind, b);
     }
     this.modalEl.prepend(modes);
+    this.showBar = createDiv({ cls: "dj-show-bar" });
+    this.showBar.hide();
+    modes.after(this.showBar);
+    this.inputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && this.show) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.leaveShow();
+      }
+    }, true);
     this.inputEl.addEventListener("keydown", (e) => {
       if (e.key === "Tab" && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
         e.preventDefault();
@@ -901,7 +946,37 @@ var _SongPickerModal = class _SongPickerModal extends import_obsidian3.SuggestMo
     super.onOpen();
     window.setTimeout(() => this.inputEl.focus(), 0);
   }
+  /** Show one podcast's latest episodes, newest first; the search box then filters within it. */
+  openShow(id, name) {
+    var _a, _b;
+    this.show = { id, name, query: (_b = (_a = this.show) == null ? void 0 : _a.query) != null ? _b : this.inputEl.value };
+    this.showBar.empty();
+    const back = this.showBar.createEl("button", { cls: "dj-show-back", attr: { "aria-label": "Back to your search" } });
+    (0, import_obsidian3.setIcon)(back.createSpan(), "arrow-left");
+    back.createSpan({ text: name });
+    back.onclick = () => this.leaveShow();
+    this.showBar.show();
+    this.setPlaceholder(`Filter ${name} episodes`);
+    this.inputEl.value = "";
+    this.inputEl.focus();
+    this.inputEl.dispatchEvent(new Event("input"));
+  }
+  leaveShow() {
+    if (!this.show)
+      return;
+    const query2 = this.show.query;
+    this.show = null;
+    this.showBar.hide();
+    this.setKind(_SongPickerModal.kind);
+    this.inputEl.value = query2;
+    this.inputEl.focus();
+    this.inputEl.dispatchEvent(new Event("input"));
+  }
   switchKind() {
+    if (this.show) {
+      this.show = null;
+      this.showBar.hide();
+    }
     this.setKind(_SongPickerModal.kind === "music" ? "podcast" : "music");
   }
   setKind(kind) {
@@ -914,7 +989,26 @@ var _SongPickerModal = class _SongPickerModal extends import_obsidian3.SuggestMo
     this.inputEl.dispatchEvent(new Event("input"));
   }
   async getSuggestions(query2) {
+    var _a, _b;
     const term = query2.trim(), mine = ++this.latest;
+    const step = this.show ? 20 : 10;
+    const key = `${_SongPickerModal.kind}|${(_b = (_a = this.show) == null ? void 0 : _a.id) != null ? _b : ""}|${term}`;
+    if (key !== this.pageKey) {
+      this.pageKey = key;
+      this.pageSize = step;
+    }
+    if (this.show) {
+      try {
+        const eps = await showEpisodes(this.show.id, term, this.pageSize);
+        if (mine !== this.latest)
+          return this.shown;
+        this.emptyStateText = "No episodes match.";
+        return this.shown = this.withMore(eps);
+      } catch (e) {
+        this.emptyStateText = e instanceof Error ? e.message : String(e);
+        return this.shown = [];
+      }
+    }
     const isLink = !!videoIdFromUrl(term);
     const canSearch = _SongPickerModal.kind === "podcast" || !!this.apiKey;
     if (!term || !isLink && (!canSearch || term.length < 2)) {
@@ -928,7 +1022,7 @@ var _SongPickerModal = class _SongPickerModal extends import_obsidian3.SuggestMo
     }
     try {
       const kind = _SongPickerModal.kind;
-      const songs = isLink ? [await songFromLink(term, kind)] : kind === "podcast" ? await searchEpisodes(term, this.limit) : await searchSongs(this.apiKey, term, this.limit, kind);
+      const songs = isLink ? [await songFromLink(term, kind)] : kind === "podcast" ? await this.podcastResults(term) : await searchSongs(this.apiKey, term, 10, kind);
       if (mine !== this.latest)
         return this.shown;
       this.emptyStateText = kind === "podcast" ? "No episodes found." : "No songs found.";
@@ -938,7 +1032,49 @@ var _SongPickerModal = class _SongPickerModal extends import_obsidian3.SuggestMo
       return this.shown = [];
     }
   }
+  /** Matching shows first (pick one to see its latest episodes), then matching episodes. */
+  async podcastResults(term) {
+    const [shows, episodes] = await Promise.all([searchShows(term).catch(() => []), searchEpisodes(term, this.pageSize)]);
+    const showRows = shows.map((sh) => ({ id: `__show__${sh.id}`, title: sh.name, artist: "", cover: sh.cover, kind: "podcast", showId: sh.id }));
+    return [...showRows, ...this.withMore(episodes)];
+  }
+  /** Adds a "Show more results" row when the list is full (there may be more). */
+  withMore(songs) {
+    return songs.length >= this.pageSize && this.pageSize < 200 ? [...songs, _SongPickerModal.MORE] : songs;
+  }
+  selectSuggestion(value, evt) {
+    if (value.id.startsWith("__show__") && value.showId) {
+      this.openShow(value.showId, value.title);
+      return;
+    }
+    if (value !== _SongPickerModal.MORE) {
+      super.selectSuggestion(value, evt);
+      return;
+    }
+    this.pageSize = Math.min(200, this.pageSize + (this.show ? 20 : 10));
+    const key = this.pageKey, size = this.pageSize;
+    this.inputEl.dispatchEvent(new Event("input"));
+    this.pageKey = key;
+    this.pageSize = size;
+  }
   renderSuggestion(song, el) {
+    if (song.id.startsWith("__show__")) {
+      el.addClass("dj-song-suggestion", "dj-show-row");
+      const img2 = song.cover ? el.createEl("img", { cls: "dj-song-thumb", attr: { src: song.cover, alt: "" } }) : null;
+      if (!img2)
+        (0, import_obsidian3.setIcon)(el.createDiv({ cls: "dj-song-thumb dj-cover-fallback" }), "mic");
+      const text2 = el.createDiv({ cls: "dj-song-result-text" });
+      text2.createDiv({ cls: "dj-song-result-title", text: song.title });
+      text2.createDiv({ cls: "dj-song-result-meta", text: "Podcast \xB7 latest episodes" });
+      (0, import_obsidian3.setIcon)(el.createSpan({ cls: "dj-show-row-arrow" }), "chevron-right");
+      return;
+    }
+    if (song === _SongPickerModal.MORE) {
+      el.addClass("dj-song-more");
+      (0, import_obsidian3.setIcon)(el.createSpan(), "chevrons-down");
+      el.createSpan({ text: "Show more results" });
+      return;
+    }
     el.addClass("dj-song-suggestion");
     const fallback = () => {
       img == null ? void 0 : img.remove();
@@ -954,9 +1090,23 @@ var _SongPickerModal = class _SongPickerModal extends import_obsidian3.SuggestMo
     const text = el.createDiv({ cls: "dj-song-result-text" });
     text.createDiv({ cls: "dj-song-result-title", text: song.title });
     const date = song.date ? (0, import_obsidian3.moment)(song.date, "YYYY-MM-DD").format("MMM D, YYYY") : null;
-    const meta = [song.artist, date].filter(Boolean).join(" \xB7 ");
-    if (meta)
-      text.createDiv({ cls: "dj-song-result-meta", text: meta });
+    const meta = text.createDiv({ cls: "dj-song-result-meta" });
+    if (song.audio && song.artist && !this.show) {
+      const show = meta.createSpan({ cls: song.showId ? "dj-show-link" : "", text: song.artist, attr: song.showId ? { "aria-label": `Latest episodes of ${song.artist}` } : {} });
+      const browse = (e) => {
+        if (!song.showId)
+          return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.type === "click")
+          this.openShow(song.showId, song.artist);
+      };
+      show.addEventListener("mousedown", browse);
+      show.addEventListener("click", browse);
+    } else if (song.artist)
+      meta.appendText(song.artist);
+    if (date)
+      meta.appendText((song.artist ? " \xB7 " : "") + date);
   }
   onChooseSuggestion(song) {
     this.onPick(song);
@@ -964,6 +1114,7 @@ var _SongPickerModal = class _SongPickerModal extends import_obsidian3.SuggestMo
 };
 /** Music or Podcasts: remembered for the next time the dialog opens (this session). */
 _SongPickerModal.kind = "music";
+_SongPickerModal.MORE = { id: "__more__", title: "Show more results", artist: "", cover: null, kind: "podcast" };
 var SongPickerModal = _SongPickerModal;
 
 // src/render.ts

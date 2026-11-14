@@ -25,6 +25,8 @@ export interface Song {
 	/** Directory podcasts: the episode's audio file, and its web page (when known). YouTube items have neither. */
 	audio?: string | null;
 	page?: string | null;
+	/** Directory podcasts: the show's id in the directory, for listing its latest episodes. */
+	showId?: number | null;
 	/** Directory podcasts: what's needed to find the episode's page in its feed when picked. */
 	feedUrl?: string | null;
 	guid?: string | null;
@@ -127,29 +129,63 @@ export async function searchSongs(apiKey: string, term: string, limit = 8, kind:
 		));
 }
 
-/** Podcast episodes matching a show, an episode title or both, newest-relevant first (no key needed). */
+const words = (t: string) => t.toLowerCase().normalize("NFKD").replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(Boolean);
+
+function episodeFrom(r: Record<string, any>): Song {
+	return {
+		id: String(r.trackId ?? ""),
+		title: decodeEntities(String(r.trackName)).trim(),
+		artist: decodeEntities(String(r.collectionName ?? "")).trim(),
+		cover: r.artworkUrl600 ?? r.artworkUrl160 ?? r.artworkUrl100 ?? null,
+		kind: "podcast",
+		showId: Number(r.collectionId) || null,
+		audio: String(r.episodeUrl),
+		page: null,
+		feedUrl: r.feedUrl ? String(r.feedUrl) : null,
+		guid: r.episodeGuid ? String(r.episodeGuid) : null,
+		date: r.releaseDate ? String(r.releaseDate).slice(0, 10) : null,
+	};
+}
+
+const newestFirst = (a: Song, b: Song) => (b.date ?? "").localeCompare(a.date ?? "");
+
+async function directory(url: string): Promise<Record<string, any>[]> {
+	const res = await requestWithin("The podcast directory", { url, throw: false });
+	if (res.status >= 400) throw new Error(`Podcast search failed (${res.status}).`);
+	return res.json?.results ?? [];
+}
+
+/** Podcast episodes matching what you typed, in the directory's own (relevance) order (no key needed). */
 export async function searchEpisodes(term: string, limit = 10): Promise<Song[]> {
 	const q = term.trim();
 	if (!q) return [];
-	const res = await requestWithin("The podcast directory", {
-		url: `https://itunes.apple.com/search?media=podcast&entity=podcastEpisode&limit=${limit}&term=${encodeURIComponent(q)}`,
-		throw: false,
-	});
-	if (res.status >= 400) throw new Error(`Podcast search failed (${res.status}).`);
-	return (res.json?.results ?? [])
-		.filter((r: Record<string, any>) => r.episodeUrl && r.trackName)
-		.map((r: Record<string, any>): Song => ({
-			id: String(r.trackId ?? ""),
-			title: decodeEntities(String(r.trackName)).trim(),
-			artist: decodeEntities(String(r.collectionName ?? "")).trim(),
-			cover: r.artworkUrl600 ?? r.artworkUrl160 ?? r.artworkUrl100 ?? null,
-			kind: "podcast",
-			audio: String(r.episodeUrl),
-			page: null,
-			feedUrl: r.feedUrl ? String(r.feedUrl) : null,
-			guid: r.episodeGuid ? String(r.episodeGuid) : null,
-			date: r.releaseDate ? String(r.releaseDate).slice(0, 10) : null,
-		}));
+	return (await directory(`https://itunes.apple.com/search?media=podcast&entity=podcastEpisode&limit=${limit}&term=${encodeURIComponent(q)}`))
+		.filter((r) => r.episodeUrl && r.trackName)
+		.map(episodeFrom);
+}
+
+/** Podcasts (shows) whose name matches what you typed: every typed word appears in the name, or vice versa. */
+export async function searchShows(term: string, limit = 2): Promise<Array<{ id: number; name: string; cover: string | null }>> {
+	const typed = words(term);
+	if (!typed.length) return [];
+	return (await directory(`https://itunes.apple.com/search?media=podcast&entity=podcast&limit=8&term=${encodeURIComponent(term.trim())}`))
+		.map((r) => ({ id: Number(r.collectionId), name: decodeEntities(String(r.collectionName ?? "")).trim(), cover: r.artworkUrl600 ?? r.artworkUrl100 ?? null }))
+		.filter((sh) => {
+			const name = words(sh.name);
+			return sh.id && name.length && (typed.every((w) => name.includes(w)) || name.every((w) => typed.includes(w)));
+		})
+		.slice(0, limit);
+}
+
+/** A show's latest episodes, newest first (up to 200), optionally only titles containing `filter`'s words. */
+export async function showEpisodes(showId: number, filter = "", limit = 50): Promise<Song[]> {
+	const want = words(filter);
+	return (await directory(`https://itunes.apple.com/lookup?id=${showId}&media=podcast&entity=podcastEpisode&limit=200`))
+		.filter((r) => r.wrapperType === "podcastEpisode" && r.episodeUrl && r.trackName)
+		.map(episodeFrom)
+		.filter((e) => { const t = words(e.title); return want.every((w) => t.some((x) => x.startsWith(w))); })
+		.sort(newestFirst)
+		.slice(0, limit);
 }
 
 /**
