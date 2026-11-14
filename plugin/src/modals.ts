@@ -251,34 +251,46 @@ export class SongPickerModal extends SuggestModal<Song> {
 	private latest = 0;
 	private shown: Song[] = [];
 
+	private modeButtons = new Map<SongKind, HTMLButtonElement>();
+
 	constructor(app: App, private apiKey: string, private onPick: (song: Song) => void) {
 		super(app);
 		this.limit = 10;
 		this.modalEl.addClass("dj-song-modal");
-		this.setInstructions([{ command: "↑↓", purpose: "to navigate" }, { command: "↵", purpose: "to pick" }, { command: "esc", purpose: "to cancel" }]);
+		this.setInstructions([{ command: "↑↓", purpose: "to navigate" }, { command: "↵", purpose: "to pick" }, { command: "tab", purpose: "music / podcasts" }, { command: "esc", purpose: "to cancel" }]);
 
-		// Music | Podcasts toggle above the search box.
-		const toggle = createDiv({ cls: "dj-song-kinds" });
-		const buttons = new Map<SongKind, HTMLButtonElement>();
+		// A slim Music | Podcasts switch above the search bar (Tab switches too); below the bar, only results.
+		this.inputEl.parentElement?.addClass("dj-song-search-row");
+		const modes = createDiv({ cls: "dj-song-modes" });
 		for (const [kind, label, icon] of [["music", "Music", "music"], ["podcast", "Podcasts", "mic"]] as Array<[SongKind, string, string]>) {
-			const b = toggle.createEl("button", { cls: "dj-song-kind" });
-			setIcon(b.createSpan(), icon);
-			b.createSpan({ text: label });
-			b.onclick = () => { this.setKind(kind, buttons); this.inputEl.focus(); };
-			buttons.set(kind, b);
+			const b = modes.createEl("button", { cls: "dj-song-mode", text: label, attr: { "aria-label": `${label} (Tab switches)`, "data-icon": icon } });
+			b.onclick = () => { this.setKind(kind); this.inputEl.focus(); };
+			this.modeButtons.set(kind, b);
 		}
-		this.modalEl.prepend(toggle);
-		this.setKind(SongPickerModal.kind, buttons);
+		this.modalEl.prepend(modes);
+		this.inputEl.addEventListener("keydown", (e) => {
+			if (e.key === "Tab" && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) { e.preventDefault(); this.switchKind(); }
+		});
+		this.setKind(SongPickerModal.kind);
 	}
 
-	private setKind(kind: SongKind, buttons: Map<SongKind, HTMLButtonElement>): void {
+	onOpen(): void {
+		super.onOpen();
+		// Ready to type straight away (after the dialog has finished opening).
+		window.setTimeout(() => this.inputEl.focus(), 0);
+	}
+
+	private switchKind(): void {
+		this.setKind(SongPickerModal.kind === "music" ? "podcast" : "music");
+	}
+
+	private setKind(kind: SongKind): void {
 		SongPickerModal.kind = kind;
-		for (const [k, b] of buttons) b.toggleClass("is-active", k === kind);
+		for (const [k, b] of this.modeButtons) b.toggleClass("is-active", k === kind);
 		// Podcast search needs no key; music search does.
 		const canSearch = kind === "podcast" || !!this.apiKey;
-		const what = kind === "podcast" ? "a podcast or episode" : "a song or artist";
-		this.setPlaceholder(canSearch ? `Search for ${what}${kind === "podcast" ? "" : ", or paste a YouTube link"}` : "Paste a YouTube or YouTube Music link");
-		this.emptyStateText = canSearch ? `Type ${what}.` : "Paste a link. Add a YouTube API key in Daily Journal's settings to search instead.";
+		this.setPlaceholder(canSearch ? (kind === "podcast" ? "Search podcasts" : "Search music, or paste a YouTube link") : "Paste a YouTube or YouTube Music link");
+		this.emptyStateText = ""; // nothing under the bar until there's something to say
 		this.inputEl.dispatchEvent(new Event("input")); // search again in the new mode
 	}
 
@@ -287,8 +299,8 @@ export class SongPickerModal extends SuggestModal<Song> {
 		const isLink = !!videoIdFromUrl(term);
 		const canSearch = SongPickerModal.kind === "podcast" || !!this.apiKey;
 		if (!term || (!isLink && (!canSearch || term.length < 2))) {
-			const what = SongPickerModal.kind === "podcast" ? "a podcast or episode" : "a song or artist";
-			this.emptyStateText = !term || canSearch ? `Type ${what}.` : "That isn't a YouTube link. Add a YouTube API key in settings to search by name.";
+			// Empty bar: show nothing below it. Only explain when typing can't work (no key for music).
+			this.emptyStateText = !term || canSearch ? "" : "Paste a YouTube link, or add a YouTube API key in settings to search music.";
 			return (this.shown = []);
 		}
 		if (!isLink) {

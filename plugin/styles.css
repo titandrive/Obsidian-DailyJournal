@@ -57,6 +57,11 @@ a.dj-navlink:hover { color: var(--interactive-accent); }
 a.dj-book-title { font-weight: 650; font-size: 1.05em; color: var(--text-normal); text-decoration: none; }
 a.dj-book-title:hover { color: var(--text-accent); }
 .dj-clickable { cursor: pointer; }
+/* Titles that still don't fit in two lines at the smallest size. */
+.dj-clamp-2 { display: -webkit-box !important; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+/* Author / artist / podcast show: one line, in both cards. */
+.dj-book .dj-book-author { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dj-book .dj-book-info { min-width: 0; }
 .dj-cover.dj-clickable:hover { filter: brightness(1.08); }
 .dj-book-author { color: var(--text-muted); font-size: .9em; }
 .dj-bar { height: 6px; border-radius: 3px; background: var(--background-modifier-border); overflow: hidden; }
@@ -171,15 +176,23 @@ a.dj-book-title:hover { color: var(--text-accent); }
 .dj-row-cell .dj-card > div:has(> .dj-song-add) { flex: 1; display: flex; }
 /* Search dialog rows. */
 .dj-song-modal .suggestion-item.dj-song-suggestion { display: flex; align-items: center; gap: .75em; }
-/* Music | Podcasts toggle at the top of the dialog. */
-.dj-song-kinds { display: flex; gap: .4em; padding: .6em .75em 0; }
-.dj-song-modal button.dj-song-kind {
-	display: inline-flex; align-items: center; gap: .4em; height: auto; padding: .3em .85em; border-radius: 999px;
-	background: transparent; box-shadow: none; border: 1px solid var(--background-modifier-border); color: var(--text-muted); cursor: pointer;
+/* Alfred-style: a big search bar; results, hints and key help only appear once there's something to show. */
+.dj-song-modal .dj-song-search-row > input { font-size: 1.25em; padding-top: .8em; padding-bottom: .8em; }
+/* Music | Podcasts above the search bar: plain text tabs, the active one underlined. */
+.dj-song-modes { display: flex; gap: 1.2em; padding: .7em 1.1em 0; }
+.dj-song-modal button.dj-song-mode {
+	height: auto; padding: .2em 0 .35em; border: none; border-radius: 0; background: none; box-shadow: none;
+	border-bottom: 2px solid transparent; color: var(--text-faint); font-size: .85em; cursor: pointer;
 }
-.dj-song-modal button.dj-song-kind svg { width: 14px; height: 14px; }
-.dj-song-modal button.dj-song-kind:hover { color: var(--text-normal); }
-.dj-song-modal button.dj-song-kind.is-active { background: var(--interactive-accent); border-color: var(--interactive-accent); color: var(--text-on-accent); }
+.dj-song-modal button.dj-song-mode:hover { color: var(--text-muted); background: none; }
+.dj-song-modal button.dj-song-mode.is-active { color: var(--text-normal); border-bottom-color: var(--interactive-accent); }
+/* The clear (x) button: small and faint until hovered. */
+.dj-song-modal .search-input-clear-button { opacity: .35; transform: scale(.75); transition: opacity .12s ease; }
+.dj-song-modal .search-input-clear-button:hover { opacity: .85; }
+.dj-song-modal .prompt-results:not(:has(.suggestion-item, .suggestion-empty:not(:empty))) { display: none; }
+.dj-song-modal:not(:has(.suggestion-item)) .prompt-instructions { display: none; }
+.dj-song-modal .suggestion-empty:empty { display: none; }
+.dj-song-modal .suggestion-empty { background: none; border: none; box-shadow: none; color: var(--text-faint); padding: 1em 1.2em; font-size: .9em; }
 .dj-song-modal .suggestion-item.is-selected .dj-song-result-meta { color: var(--text-on-accent); opacity: .85; }
 .dj-song-thumb { width: 38px; height: 38px; border-radius: 5px; object-fit: cover; flex-shrink: 0; }
 .dj-song-thumb.dj-cover-fallback, .dj-song-cover.dj-cover-fallback { display: flex; align-items: center; justify-content: center; color: var(--text-faint); background: var(--background-modifier-border); }

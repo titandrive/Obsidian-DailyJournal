@@ -868,37 +868,49 @@ var ConfirmModal = class extends import_obsidian3.Modal {
 };
 var _SongPickerModal = class _SongPickerModal extends import_obsidian3.SuggestModal {
   constructor(app, apiKey, onPick) {
+    var _a;
     super(app);
     this.apiKey = apiKey;
     this.onPick = onPick;
     this.latest = 0;
     this.shown = [];
+    this.modeButtons = /* @__PURE__ */ new Map();
     this.limit = 10;
     this.modalEl.addClass("dj-song-modal");
-    this.setInstructions([{ command: "\u2191\u2193", purpose: "to navigate" }, { command: "\u21B5", purpose: "to pick" }, { command: "esc", purpose: "to cancel" }]);
-    const toggle = createDiv({ cls: "dj-song-kinds" });
-    const buttons = /* @__PURE__ */ new Map();
+    this.setInstructions([{ command: "\u2191\u2193", purpose: "to navigate" }, { command: "\u21B5", purpose: "to pick" }, { command: "tab", purpose: "music / podcasts" }, { command: "esc", purpose: "to cancel" }]);
+    (_a = this.inputEl.parentElement) == null ? void 0 : _a.addClass("dj-song-search-row");
+    const modes = createDiv({ cls: "dj-song-modes" });
     for (const [kind, label, icon] of [["music", "Music", "music"], ["podcast", "Podcasts", "mic"]]) {
-      const b = toggle.createEl("button", { cls: "dj-song-kind" });
-      (0, import_obsidian3.setIcon)(b.createSpan(), icon);
-      b.createSpan({ text: label });
+      const b = modes.createEl("button", { cls: "dj-song-mode", text: label, attr: { "aria-label": `${label} (Tab switches)`, "data-icon": icon } });
       b.onclick = () => {
-        this.setKind(kind, buttons);
+        this.setKind(kind);
         this.inputEl.focus();
       };
-      buttons.set(kind, b);
+      this.modeButtons.set(kind, b);
     }
-    this.modalEl.prepend(toggle);
-    this.setKind(_SongPickerModal.kind, buttons);
+    this.modalEl.prepend(modes);
+    this.inputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Tab" && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        e.preventDefault();
+        this.switchKind();
+      }
+    });
+    this.setKind(_SongPickerModal.kind);
   }
-  setKind(kind, buttons) {
+  onOpen() {
+    super.onOpen();
+    window.setTimeout(() => this.inputEl.focus(), 0);
+  }
+  switchKind() {
+    this.setKind(_SongPickerModal.kind === "music" ? "podcast" : "music");
+  }
+  setKind(kind) {
     _SongPickerModal.kind = kind;
-    for (const [k, b] of buttons)
+    for (const [k, b] of this.modeButtons)
       b.toggleClass("is-active", k === kind);
     const canSearch = kind === "podcast" || !!this.apiKey;
-    const what = kind === "podcast" ? "a podcast or episode" : "a song or artist";
-    this.setPlaceholder(canSearch ? `Search for ${what}${kind === "podcast" ? "" : ", or paste a YouTube link"}` : "Paste a YouTube or YouTube Music link");
-    this.emptyStateText = canSearch ? `Type ${what}.` : "Paste a link. Add a YouTube API key in Daily Journal's settings to search instead.";
+    this.setPlaceholder(canSearch ? kind === "podcast" ? "Search podcasts" : "Search music, or paste a YouTube link" : "Paste a YouTube or YouTube Music link");
+    this.emptyStateText = "";
     this.inputEl.dispatchEvent(new Event("input"));
   }
   async getSuggestions(query2) {
@@ -906,8 +918,7 @@ var _SongPickerModal = class _SongPickerModal extends import_obsidian3.SuggestMo
     const isLink = !!videoIdFromUrl(term);
     const canSearch = _SongPickerModal.kind === "podcast" || !!this.apiKey;
     if (!term || !isLink && (!canSearch || term.length < 2)) {
-      const what = _SongPickerModal.kind === "podcast" ? "a podcast or episode" : "a song or artist";
-      this.emptyStateText = !term || canSearch ? `Type ${what}.` : "That isn't a YouTube link. Add a YouTube API key in settings to search by name.";
+      this.emptyStateText = !term || canSearch ? "" : "Paste a YouTube link, or add a YouTube API key in settings to search music.";
       return this.shown = [];
     }
     if (!isLink) {
@@ -1218,16 +1229,22 @@ function lineCount(el) {
   range.selectNodeContents(el);
   return new Set(Array.from(range.getClientRects()).filter((r) => r.width > 0).map((r) => Math.round(r.top))).size;
 }
-function shrinkToTwoLines(el, sizes = ["0.92em", "0.82em"], tries = 0) {
+var TITLE_SIZES = ["0.92em", "0.82em", "0.74em"];
+function shrinkToTwoLines(el, sizes = TITLE_SIZES, clamp = true, tries = 0) {
+  var _a;
   if (!el.isConnected || !el.offsetWidth) {
     if (tries < 30)
-      window.requestAnimationFrame(() => shrinkToTwoLines(el, sizes, tries + 1));
+      window.requestAnimationFrame(() => shrinkToTwoLines(el, sizes, clamp, tries + 1));
     return;
   }
   for (const size of sizes) {
     if (lineCount(el) <= 2)
       return;
     el.style.fontSize = size;
+  }
+  if (clamp && lineCount(el) > 2) {
+    el.addClass("dj-clamp-2");
+    el.setAttr("title", (_a = el.textContent) != null ? _a : "");
   }
 }
 function drawReading(el, day, date) {
