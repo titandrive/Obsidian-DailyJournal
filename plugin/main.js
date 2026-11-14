@@ -482,16 +482,18 @@ function playerUrl(id) {
   }
   return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?${params}`;
 }
-function songFrom(id, rawTitle, channel, cover) {
+function songFrom(id, rawTitle, channel, cover, kind = "music") {
   let title = decodeEntities(rawTitle).trim();
   let artist = decodeEntities(channel).replace(/\s+-\s+Topic$/i, "").replace(/VEVO$/i, "").trim();
+  if (kind === "podcast")
+    return { id, title: title || rawTitle, artist, cover: cover != null ? cover : thumbnailUrl(id), kind };
   const dash = title.match(/^(.+?)\s+[-–—]\s+(.+)$/);
   if (dash && !/\s-\s+Topic$/i.test(channel)) {
     artist = dash[1].trim();
     title = dash[2].trim();
   }
   title = title.replace(/\s*[([](official|lyric|lyrics|audio|video|music video|visualizer|hd|4k|remaster|remastered)[^)\]]*[)\]]/gi, "").replace(/\s*\|.*$/, "").replace(/(\s+(hq|hd|4k))?(\s*[+&]\s*|\s+with\s+)?\s*\blyrics?\s*$/i, "").replace(/\s+(hq|hd|4k)\s*$/i, "").replace(/\s+/g, " ").trim();
-  return { id, title: title || rawTitle, artist, cover: cover != null ? cover : thumbnailUrl(id) };
+  return { id, title: title || rawTitle, artist, cover: cover != null ? cover : thumbnailUrl(id), kind };
 }
 function decodeEntities(s) {
   return s.replace(/&(#\d+|#x[\da-f]+|amp|quot|apos|lt|gt|#39);/gi, (m, e) => {
@@ -502,7 +504,7 @@ function decodeEntities(s) {
     return Number.isFinite(code) ? String.fromCodePoint(code) : m;
   });
 }
-async function songFromLink(text) {
+async function songFromLink(text, kind = "music") {
   var _a, _b;
   const id = videoIdFromUrl(text);
   if (!id)
@@ -515,15 +517,16 @@ async function songFromLink(text) {
     throw new Error("YouTube couldn't find that video (it may be private or removed).");
   if (res.status >= 400)
     throw new Error(`YouTube error (${res.status}).`);
-  return songFrom(id, String((_a = res.json.title) != null ? _a : ""), String((_b = res.json.author_name) != null ? _b : ""), thumbnailUrl(id));
+  return songFrom(id, String((_a = res.json.title) != null ? _a : ""), String((_b = res.json.author_name) != null ? _b : ""), thumbnailUrl(id), kind);
 }
-async function searchSongs(apiKey, term, limit = 8) {
+async function searchSongs(apiKey, term, limit = 8, kind = "music") {
   var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
   const q2 = term.trim();
   if (!q2)
     return [];
+  const filter = kind === "podcast" ? "&videoDuration=long" : "&videoCategoryId=10&topicId=%2Fm%2F04rlf";
   const res = await requestWithin("YouTube", {
-    url: `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&maxResults=${limit}&q=${encodeURIComponent(q2)}&key=${encodeURIComponent(apiKey.trim())}`,
+    url: `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video${filter}&maxResults=${limit}&q=${encodeURIComponent(q2)}&key=${encodeURIComponent(apiKey.trim())}`,
     throw: false
   });
   if (res.status === 400 || res.status === 403) {
@@ -543,15 +546,74 @@ async function searchSongs(apiKey, term, limit = 8) {
       it.id.videoId,
       String((_b2 = (_a2 = it.snippet) == null ? void 0 : _a2.title) != null ? _b2 : ""),
       String((_d2 = (_c2 = it.snippet) == null ? void 0 : _c2.channelTitle) != null ? _d2 : ""),
-      null
+      null,
       // always the band-free thumbnail (see thumbnailUrl)
+      kind
     );
   });
 }
-function songProperties(song) {
-  return { song: song.title, artist: song.artist, song_cover: song.cover, song_id: song.id, song_url: youtubeMusicUrl(song.id) };
+async function searchEpisodes(term, limit = 10) {
+  var _a, _b;
+  const q2 = term.trim();
+  if (!q2)
+    return [];
+  const res = await requestWithin("The podcast directory", {
+    url: `https://itunes.apple.com/search?media=podcast&entity=podcastEpisode&limit=${limit}&term=${encodeURIComponent(q2)}`,
+    throw: false
+  });
+  if (res.status >= 400)
+    throw new Error(`Podcast search failed (${res.status}).`);
+  return ((_b = (_a = res.json) == null ? void 0 : _a.results) != null ? _b : []).filter((r) => r.episodeUrl && r.trackName).map((r) => {
+    var _a2, _b2, _c, _d, _e;
+    return {
+      id: String((_a2 = r.trackId) != null ? _a2 : ""),
+      title: decodeEntities(String(r.trackName)).trim(),
+      artist: decodeEntities(String((_b2 = r.collectionName) != null ? _b2 : "")).trim(),
+      cover: (_e = (_d = (_c = r.artworkUrl600) != null ? _c : r.artworkUrl160) != null ? _d : r.artworkUrl100) != null ? _e : null,
+      kind: "podcast",
+      audio: String(r.episodeUrl),
+      page: null,
+      feedUrl: r.feedUrl ? String(r.feedUrl) : null,
+      guid: r.episodeGuid ? String(r.episodeGuid) : null,
+      date: r.releaseDate ? String(r.releaseDate).slice(0, 10) : null
+    };
+  });
 }
-var SONG_KEYS = ["song", "artist", "song_cover", "song_id", "song_url", "song_album", "song_apple"];
+async function episodePage(song) {
+  var _a, _b, _c, _d;
+  if (song.guid && /^https?:\/\//.test(song.guid))
+    return song.guid;
+  if (!song.feedUrl)
+    return null;
+  try {
+    const res = await requestWithin("The podcast's feed", { url: song.feedUrl, throw: false });
+    if (res.status >= 400)
+      return null;
+    const xml = new DOMParser().parseFromString(res.text, "text/xml");
+    const items = Array.from(xml.querySelectorAll("item"));
+    const item = items.find((it) => {
+      var _a2, _b2, _c2;
+      return song.guid && ((_b2 = (_a2 = it.querySelector("guid")) == null ? void 0 : _a2.textContent) == null ? void 0 : _b2.trim()) === song.guid || song.audio && ((_c2 = it.querySelector("enclosure")) == null ? void 0 : _c2.getAttribute("url")) === song.audio;
+    });
+    const link2 = ((_b = (_a = item == null ? void 0 : item.querySelector("link")) == null ? void 0 : _a.textContent) == null ? void 0 : _b.trim()) || ((_d = (_c = xml.querySelector("channel > link")) == null ? void 0 : _c.textContent) == null ? void 0 : _d.trim());
+    return link2 && /^https?:\/\//.test(link2) ? link2 : null;
+  } catch (e) {
+    return null;
+  }
+}
+function songProperties(song) {
+  if (song.audio) {
+    const props2 = { song: song.title, artist: song.artist, song_cover: song.cover, song_kind: "podcast", song_audio: song.audio, song_id: song.id };
+    if (song.page)
+      props2.song_url = song.page;
+    return props2;
+  }
+  const props = { song: song.title, artist: song.artist, song_cover: song.cover, song_id: song.id, song_url: youtubeMusicUrl(song.id) };
+  if (song.kind === "podcast")
+    props.song_kind = "podcast";
+  return props;
+}
+var SONG_KEYS = ["song", "artist", "song_cover", "song_id", "song_url", "song_kind", "song_audio", "song_album", "song_apple"];
 
 // src/modals.ts
 var MonthPicker = class extends import_obsidian3.Modal {
@@ -804,24 +866,48 @@ var ConfirmModal = class extends import_obsidian3.Modal {
     this.contentEl.empty();
   }
 };
-var SongPickerModal = class extends import_obsidian3.SuggestModal {
+var _SongPickerModal = class _SongPickerModal extends import_obsidian3.SuggestModal {
   constructor(app, apiKey, onPick) {
     super(app);
     this.apiKey = apiKey;
     this.onPick = onPick;
     this.latest = 0;
     this.shown = [];
-    this.setPlaceholder(apiKey ? "Search for a song or artist, or paste a YouTube link" : "Paste a YouTube or YouTube Music link");
-    this.emptyStateText = apiKey ? "Type a song or artist." : "Paste a link. Add a YouTube API key in Daily Journal's settings to search instead.";
     this.limit = 10;
     this.modalEl.addClass("dj-song-modal");
     this.setInstructions([{ command: "\u2191\u2193", purpose: "to navigate" }, { command: "\u21B5", purpose: "to pick" }, { command: "esc", purpose: "to cancel" }]);
+    const toggle = createDiv({ cls: "dj-song-kinds" });
+    const buttons = /* @__PURE__ */ new Map();
+    for (const [kind, label, icon] of [["music", "Music", "music"], ["podcast", "Podcasts", "mic"]]) {
+      const b = toggle.createEl("button", { cls: "dj-song-kind" });
+      (0, import_obsidian3.setIcon)(b.createSpan(), icon);
+      b.createSpan({ text: label });
+      b.onclick = () => {
+        this.setKind(kind, buttons);
+        this.inputEl.focus();
+      };
+      buttons.set(kind, b);
+    }
+    this.modalEl.prepend(toggle);
+    this.setKind(_SongPickerModal.kind, buttons);
+  }
+  setKind(kind, buttons) {
+    _SongPickerModal.kind = kind;
+    for (const [k, b] of buttons)
+      b.toggleClass("is-active", k === kind);
+    const canSearch = kind === "podcast" || !!this.apiKey;
+    const what = kind === "podcast" ? "a podcast or episode" : "a song or artist";
+    this.setPlaceholder(canSearch ? `Search for ${what}${kind === "podcast" ? "" : ", or paste a YouTube link"}` : "Paste a YouTube or YouTube Music link");
+    this.emptyStateText = canSearch ? `Type ${what}.` : "Paste a link. Add a YouTube API key in Daily Journal's settings to search instead.";
+    this.inputEl.dispatchEvent(new Event("input"));
   }
   async getSuggestions(query2) {
     const term = query2.trim(), mine = ++this.latest;
     const isLink = !!videoIdFromUrl(term);
-    if (!term || !isLink && (!this.apiKey || term.length < 2)) {
-      this.emptyStateText = !term || this.apiKey ? "Type a song or artist." : "That isn't a YouTube link. Add a YouTube API key in settings to search by name.";
+    const canSearch = _SongPickerModal.kind === "podcast" || !!this.apiKey;
+    if (!term || !isLink && (!canSearch || term.length < 2)) {
+      const what = _SongPickerModal.kind === "podcast" ? "a podcast or episode" : "a song or artist";
+      this.emptyStateText = !term || canSearch ? `Type ${what}.` : "That isn't a YouTube link. Add a YouTube API key in settings to search by name.";
       return this.shown = [];
     }
     if (!isLink) {
@@ -830,10 +916,11 @@ var SongPickerModal = class extends import_obsidian3.SuggestModal {
         return this.shown;
     }
     try {
-      const songs = isLink ? [await songFromLink(term)] : await searchSongs(this.apiKey, term, this.limit);
+      const kind = _SongPickerModal.kind;
+      const songs = isLink ? [await songFromLink(term, kind)] : kind === "podcast" ? await searchEpisodes(term, this.limit) : await searchSongs(this.apiKey, term, this.limit, kind);
       if (mine !== this.latest)
         return this.shown;
-      this.emptyStateText = "No songs found.";
+      this.emptyStateText = kind === "podcast" ? "No episodes found." : "No songs found.";
       return this.shown = songs;
     } catch (e) {
       this.emptyStateText = e instanceof Error ? e.message : String(e);
@@ -855,13 +942,18 @@ var SongPickerModal = class extends import_obsidian3.SuggestModal {
       fallback();
     const text = el.createDiv({ cls: "dj-song-result-text" });
     text.createDiv({ cls: "dj-song-result-title", text: song.title });
-    if (song.artist)
-      text.createDiv({ cls: "dj-song-result-meta", text: song.artist });
+    const date = song.date ? (0, import_obsidian3.moment)(song.date, "YYYY-MM-DD").format("MMM D, YYYY") : null;
+    const meta = [song.artist, date].filter(Boolean).join(" \xB7 ");
+    if (meta)
+      text.createDiv({ cls: "dj-song-result-meta", text: meta });
   }
   onChooseSuggestion(song) {
     this.onPick(song);
   }
 };
+/** Music or Podcasts: remembered for the next time the dialog opens (this session). */
+_SongPickerModal.kind = "music";
+var SongPickerModal = _SongPickerModal;
 
 // src/render.ts
 var import_obsidian4 = require("obsidian");
@@ -1359,10 +1451,22 @@ function renderCheckIn(host, el, file, fm, fields) {
   }
 }
 function savedSong(fm) {
+  var _a;
+  if (fm.song && fm.song_kind === "podcast" && typeof fm.song_audio === "string" && fm.song_audio) {
+    return {
+      id: String((_a = fm.song_id) != null ? _a : ""),
+      title: String(fm.song),
+      artist: fm.artist ? String(fm.artist) : "",
+      cover: fm.song_cover ? String(fm.song_cover) : null,
+      kind: "podcast",
+      audio: fm.song_audio,
+      page: typeof fm.song_url === "string" ? fm.song_url : null
+    };
+  }
   const id = typeof fm.song_id === "string" && /^[\w-]{11}$/.test(fm.song_id) ? fm.song_id : null;
   if (!fm.song || !id)
     return null;
-  return { id, title: String(fm.song), artist: fm.artist ? String(fm.artist) : "", cover: thumbnailUrl(id) };
+  return { id, title: String(fm.song), artist: fm.artist ? String(fm.artist) : "", cover: thumbnailUrl(id), kind: fm.song_kind === "podcast" ? "podcast" : "music" };
 }
 function renderSong(host, el, file, fm) {
   const { app, settings } = host;
@@ -1391,8 +1495,12 @@ function renderSong(host, el, file, fm) {
     var _a;
     return (_a = el.closest(".dj-row-wrap")) != null ? _a : body;
   };
-  const closePlayer = () => playerHost().querySelectorAll(":scope > .dj-song-player").forEach((p) => p.remove());
+  const closePlayer = () => {
+    for (const host2 of /* @__PURE__ */ new Set([playerHost(), body]))
+      host2.querySelectorAll(":scope > .dj-song-player").forEach((p) => p.remove());
+  };
   const showSong = (song2) => {
+    var _a;
     closePlayer();
     body.empty();
     const row = body.createDiv({ cls: "dj-book dj-song" });
@@ -1401,13 +1509,16 @@ function renderSong(host, el, file, fm) {
     const play = cover.createEl("button", { cls: "dj-song-play", attr: { "aria-label": "Play" } });
     (0, import_obsidian4.setIcon)(play, "play");
     const info = row.createDiv({ cls: "dj-book-info" });
-    const title = info.createEl("a", { cls: "dj-book-title", text: song2.title, href: youtubeMusicUrl(song2.id), attr: { "aria-label": "Open in YouTube Music" } });
+    const link2 = song2.audio ? (_a = song2.page) != null ? _a : song2.audio : youtubeMusicUrl(song2.id);
+    const title = info.createEl("a", { cls: "dj-book-title", text: song2.title, href: link2, attr: { "aria-label": song2.audio ? "Open the episode's page" : "Open in YouTube Music" } });
     title.onclick = (e) => {
       e.preventDefault();
-      window.open(youtubeMusicUrl(song2.id), "_blank");
+      window.open(link2, "_blank");
     };
-    if (song2.artist)
-      info.createDiv({ cls: "dj-book-author", text: song2.artist });
+    shrinkToTwoLines(title);
+    const by = song2.kind === "podcast" ? ["Podcast", song2.artist].filter(Boolean).join(" \xB7 ") : song2.artist;
+    if (by)
+      info.createDiv({ cls: "dj-book-author", text: by });
     const actions = info.createDiv({ cls: "dj-song-actions" });
     const change = actions.createEl("a", { cls: "dj-song-change", text: "Change", href: "#" });
     change.onclick = (e) => {
@@ -1430,6 +1541,13 @@ function renderSong(host, el, file, fm) {
         return;
       }
       closePlayer();
+      if (song2.audio) {
+        player = body.createDiv({ cls: "dj-song-player dj-song-audio" });
+        player.createEl("audio", { attr: { src: song2.audio, controls: "", autoplay: "", preload: "none" } });
+        (0, import_obsidian4.setIcon)(play, "square");
+        play.setAttr("aria-label", "Stop");
+        return;
+      }
       player = playerHost().createDiv({ cls: "dj-song-player" });
       player.createEl("iframe", { cls: "external-embed", attr: {
         src: playerUrl(song2.id),
@@ -1444,9 +1562,13 @@ function renderSong(host, el, file, fm) {
       play.setAttr("aria-label", "Stop");
     };
   };
-  const pick = () => new SongPickerModal(app, settings.youtubeApiKey, (song2) => {
+  const pick = () => new SongPickerModal(app, settings.youtubeApiKey, async (song2) => {
     showSong(song2);
+    if (song2.audio && !song2.page)
+      song2.page = await episodePage(song2);
     void save(song2);
+    if (song2.page)
+      showSong(song2);
   }).open();
   const showEmpty = () => {
     closePlayer();

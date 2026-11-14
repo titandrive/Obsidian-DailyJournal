@@ -2,7 +2,7 @@ import { App, Modal, moment, setIcon, SuggestModal } from "obsidian";
 import { Moment } from "./dates";
 import { MAX_PROMPT_LEVEL, Place, Prompt } from "./settings";
 import { PlaceResult, searchPlaces } from "./weather";
-import { searchSongs, Song, songFromLink, videoIdFromUrl } from "./music";
+import { searchEpisodes, searchSongs, Song, SongKind, songFromLink, videoIdFromUrl } from "./music";
 
 /** Month calendar for choosing a date. Days that already have an entry are marked (and can't be picked unless allowTaken). */
 export class MonthPicker extends Modal {
@@ -246,23 +246,49 @@ export class ConfirmModal extends Modal {
  * each one uses part of the key's daily allowance; links resolve right away.
  */
 export class SongPickerModal extends SuggestModal<Song> {
+	/** Music or Podcasts: remembered for the next time the dialog opens (this session). */
+	private static kind: SongKind = "music";
 	private latest = 0;
 	private shown: Song[] = [];
 
 	constructor(app: App, private apiKey: string, private onPick: (song: Song) => void) {
 		super(app);
-		this.setPlaceholder(apiKey ? "Search for a song or artist, or paste a YouTube link" : "Paste a YouTube or YouTube Music link");
-		this.emptyStateText = apiKey ? "Type a song or artist." : "Paste a link. Add a YouTube API key in Daily Journal's settings to search instead.";
 		this.limit = 10;
 		this.modalEl.addClass("dj-song-modal");
 		this.setInstructions([{ command: "↑↓", purpose: "to navigate" }, { command: "↵", purpose: "to pick" }, { command: "esc", purpose: "to cancel" }]);
+
+		// Music | Podcasts toggle above the search box.
+		const toggle = createDiv({ cls: "dj-song-kinds" });
+		const buttons = new Map<SongKind, HTMLButtonElement>();
+		for (const [kind, label, icon] of [["music", "Music", "music"], ["podcast", "Podcasts", "mic"]] as Array<[SongKind, string, string]>) {
+			const b = toggle.createEl("button", { cls: "dj-song-kind" });
+			setIcon(b.createSpan(), icon);
+			b.createSpan({ text: label });
+			b.onclick = () => { this.setKind(kind, buttons); this.inputEl.focus(); };
+			buttons.set(kind, b);
+		}
+		this.modalEl.prepend(toggle);
+		this.setKind(SongPickerModal.kind, buttons);
+	}
+
+	private setKind(kind: SongKind, buttons: Map<SongKind, HTMLButtonElement>): void {
+		SongPickerModal.kind = kind;
+		for (const [k, b] of buttons) b.toggleClass("is-active", k === kind);
+		// Podcast search needs no key; music search does.
+		const canSearch = kind === "podcast" || !!this.apiKey;
+		const what = kind === "podcast" ? "a podcast or episode" : "a song or artist";
+		this.setPlaceholder(canSearch ? `Search for ${what}${kind === "podcast" ? "" : ", or paste a YouTube link"}` : "Paste a YouTube or YouTube Music link");
+		this.emptyStateText = canSearch ? `Type ${what}.` : "Paste a link. Add a YouTube API key in Daily Journal's settings to search instead.";
+		this.inputEl.dispatchEvent(new Event("input")); // search again in the new mode
 	}
 
 	async getSuggestions(query: string): Promise<Song[]> {
 		const term = query.trim(), mine = ++this.latest;
 		const isLink = !!videoIdFromUrl(term);
-		if (!term || (!isLink && (!this.apiKey || term.length < 2))) {
-			this.emptyStateText = !term || this.apiKey ? "Type a song or artist." : "That isn't a YouTube link. Add a YouTube API key in settings to search by name.";
+		const canSearch = SongPickerModal.kind === "podcast" || !!this.apiKey;
+		if (!term || (!isLink && (!canSearch || term.length < 2))) {
+			const what = SongPickerModal.kind === "podcast" ? "a podcast or episode" : "a song or artist";
+			this.emptyStateText = !term || canSearch ? `Type ${what}.` : "That isn't a YouTube link. Add a YouTube API key in settings to search by name.";
 			return (this.shown = []);
 		}
 		if (!isLink) {
@@ -270,9 +296,12 @@ export class SongPickerModal extends SuggestModal<Song> {
 			if (mine !== this.latest) return this.shown; // a newer keystroke took over
 		}
 		try {
-			const songs = isLink ? [await songFromLink(term)] : await searchSongs(this.apiKey, term, this.limit);
+			const kind = SongPickerModal.kind;
+			const songs = isLink ? [await songFromLink(term, kind)]
+				: kind === "podcast" ? await searchEpisodes(term, this.limit)
+				: await searchSongs(this.apiKey, term, this.limit, kind);
 			if (mine !== this.latest) return this.shown;
-			this.emptyStateText = "No songs found.";
+			this.emptyStateText = kind === "podcast" ? "No episodes found." : "No songs found.";
 			return (this.shown = songs);
 		} catch (e) {
 			this.emptyStateText = e instanceof Error ? e.message : String(e);
@@ -287,7 +316,9 @@ export class SongPickerModal extends SuggestModal<Song> {
 		if (img) img.onerror = fallback; else fallback();
 		const text = el.createDiv({ cls: "dj-song-result-text" });
 		text.createDiv({ cls: "dj-song-result-title", text: song.title });
-		if (song.artist) text.createDiv({ cls: "dj-song-result-meta", text: song.artist });
+		const date = song.date ? moment(song.date, "YYYY-MM-DD").format("MMM D, YYYY") : null;
+		const meta = [song.artist, date].filter(Boolean).join(" · ");
+		if (meta) text.createDiv({ cls: "dj-song-result-meta", text: meta });
 	}
 
 	onChooseSuggestion(song: Song): void {
