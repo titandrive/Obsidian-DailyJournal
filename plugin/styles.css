@@ -151,9 +151,6 @@ a.dj-book-title:hover { color: var(--text-accent); }
 .dj-card button.dj-song-play svg { width: 16px; height: 16px; fill: currentColor; }
 .dj-song-player { margin-top: .8em; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: #000; }
 .dj-song-player iframe { width: 100%; height: 100%; border: 0; display: block; }
-/* Podcast audio: a slim player inside the card instead of a video frame. */
-.dj-song-player.dj-song-audio { aspect-ratio: auto; background: none; border-radius: 0; overflow: visible; }
-.dj-song-audio audio { width: 100%; height: 40px; display: block; }
 /* Under a side-by-side row: full width, but capped so a wide note doesn't get a giant video. */
 .dj-row-wrap > .dj-song-player { margin-top: 1em; max-height: 360px; aspect-ratio: auto; height: min(360px, calc((100cqw) * 9 / 16)); }
 .dj-song-change { font-size: .85em; color: var(--text-muted); text-decoration: none; align-self: flex-start; }
@@ -171,15 +168,6 @@ a.dj-book-title:hover { color: var(--text-accent); }
 .dj-row-cell .dj-card > div:has(> .dj-song-add) { flex: 1; display: flex; }
 /* Search dialog rows. */
 .dj-song-modal .suggestion-item.dj-song-suggestion { display: flex; align-items: center; gap: .75em; }
-/* Music | Podcasts toggle at the top of the dialog. */
-.dj-song-kinds { display: flex; gap: .4em; padding: .6em .75em 0; }
-.dj-song-modal button.dj-song-kind {
-	display: inline-flex; align-items: center; gap: .4em; height: auto; padding: .3em .85em; border-radius: 999px;
-	background: transparent; box-shadow: none; border: 1px solid var(--background-modifier-border); color: var(--text-muted); cursor: pointer;
-}
-.dj-song-modal button.dj-song-kind svg { width: 14px; height: 14px; }
-.dj-song-modal button.dj-song-kind:hover { color: var(--text-normal); }
-.dj-song-modal button.dj-song-kind.is-active { background: var(--interactive-accent); border-color: var(--interactive-accent); color: var(--text-on-accent); }
 .dj-song-modal .suggestion-item.is-selected .dj-song-result-meta { color: var(--text-on-accent); opacity: .85; }
 .dj-song-thumb { width: 38px; height: 38px; border-radius: 5px; object-fit: cover; flex-shrink: 0; }
 .dj-song-thumb.dj-cover-fallback, .dj-song-cover.dj-cover-fallback { display: flex; align-items: center; justify-content: center; color: var(--text-faint); background: var(--background-modifier-border); }
@@ -197,7 +185,7 @@ a.dj-book-title:hover { color: var(--text-accent); }
 .dj-row-cell .dj-book { gap: .85em; }
 .dj-row-cell .dj-cover { width: 66px; }
 /* The song has room to spare beside a book: big art, filling the card's height. */
-.dj-row-cell .dj-card > div:has(> .dj-song) { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: .8em; }
+.dj-row-cell .dj-card > div:has(> .dj-song) { flex: 1; display: flex; align-items: center; }
 .dj-row-cell .dj-song { gap: 1.1em; width: 100%; }
 .dj-row-cell .dj-song .dj-song-cover { width: 99px; height: 99px; border-radius: 10px; } /* same height as the book cover beside it (66px wide, 2:3) */
 .dj-row-cell .dj-card button.dj-song-play { width: 42px; height: 42px; }

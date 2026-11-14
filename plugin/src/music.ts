@@ -7,28 +7,13 @@ import { requestWithin } from "./net";
  *   - With a YouTube Data API key: search by song, artist or both.
  * Either way the song plays in full in YouTube's embedded player, and the title opens it in
  * YouTube Music.
- *
- * Podcasts come from Apple's podcast directory (free, no key): search finds episodes with their
- * show, artwork and the episode's own audio file (from the show's public feed), which plays in a
- * plain audio player. Nothing opens in Apple: the title links to the episode's page from its feed.
- * A pasted YouTube link in podcast mode still works as a YouTube episode.
  */
-
-export type SongKind = "music" | "podcast";
 
 export interface Song {
 	id: string; // YouTube video id
-	title: string; // song, or podcast episode
-	artist: string; // artist, or podcast show
+	title: string;
+	artist: string;
 	cover: string | null; // thumbnail URL
-	kind: SongKind;
-	/** Directory podcasts: the episode's audio file, and its web page (when known). YouTube items have neither. */
-	audio?: string | null;
-	page?: string | null;
-	/** Directory podcasts: what's needed to find the episode's page in its feed when picked. */
-	feedUrl?: string | null;
-	guid?: string | null;
-	date?: string | null; // YYYY-MM-DD
 }
 
 /** The video id in a YouTube / YouTube Music / youtu.be link, or null when it isn't one. */
@@ -58,13 +43,11 @@ export function playerUrl(id: string): string {
 
 /**
  * Song and artist from a video's title and channel. Official "Artist - Topic" uploads have a clean
- * title; music videos are usually "Artist - Song (Official Video)". Podcast episodes keep their
- * whole title, with the channel as the show.
+ * title; music videos are usually "Artist - Song (Official Video)".
  */
-function songFrom(id: string, rawTitle: string, channel: string, cover: string | null, kind: SongKind = "music"): Song {
+function songFrom(id: string, rawTitle: string, channel: string, cover: string | null): Song {
 	let title = decodeEntities(rawTitle).trim();
 	let artist = decodeEntities(channel).replace(/\s+-\s+Topic$/i, "").replace(/VEVO$/i, "").trim();
-	if (kind === "podcast") return { id, title: title || rawTitle, artist, cover: cover ?? thumbnailUrl(id), kind };
 	const dash = title.match(/^(.+?)\s+[-–—]\s+(.+)$/);
 	if (dash && !/\s-\s+Topic$/i.test(channel)) { artist = dash[1].trim(); title = dash[2].trim(); }
 	title = title
@@ -73,7 +56,7 @@ function songFrom(id: string, rawTitle: string, channel: string, cover: string |
 		.replace(/(\s+(hq|hd|4k))?(\s*[+&]\s*|\s+with\s+)?\s*\blyrics?\s*$/i, "") // "Song HQ + Lyrics", "Song Lyrics"
 		.replace(/\s+(hq|hd|4k)\s*$/i, "")
 		.replace(/\s+/g, " ").trim();
-	return { id, title: title || rawTitle, artist, cover: cover ?? thumbnailUrl(id), kind };
+	return { id, title: title || rawTitle, artist, cover: cover ?? thumbnailUrl(id) };
 }
 
 function decodeEntities(s: string): string {
@@ -86,7 +69,7 @@ function decodeEntities(s: string): string {
 }
 
 /** A pasted link's song, via YouTube's oEmbed service (no key needed). */
-export async function songFromLink(text: string, kind: SongKind = "music"): Promise<Song> {
+export async function songFromLink(text: string): Promise<Song> {
 	const id = videoIdFromUrl(text);
 	if (!id) throw new Error("That isn't a YouTube or YouTube Music link.");
 	const res = await requestWithin("YouTube", {
@@ -95,20 +78,15 @@ export async function songFromLink(text: string, kind: SongKind = "music"): Prom
 	});
 	if (res.status === 400 || res.status === 401 || res.status === 404) throw new Error("YouTube couldn't find that video (it may be private or removed).");
 	if (res.status >= 400) throw new Error(`YouTube error (${res.status}).`);
-	return songFrom(id, String(res.json.title ?? ""), String(res.json.author_name ?? ""), thumbnailUrl(id), kind);
+	return songFrom(id, String(res.json.title ?? ""), String(res.json.author_name ?? ""), thumbnailUrl(id));
 }
 
-/**
- * Videos matching a song, an artist or both (needs a YouTube Data API key). Music searches YouTube's
- * Music category; podcasts search long videos (over 20 minutes), where full episodes are.
- */
-export async function searchSongs(apiKey: string, term: string, limit = 8, kind: SongKind = "music"): Promise<Song[]> {
+/** Music videos matching a song, an artist or both (needs a YouTube Data API key). */
+export async function searchSongs(apiKey: string, term: string, limit = 8): Promise<Song[]> {
 	const q = term.trim();
 	if (!q) return [];
-	// Music: the Music category plus YouTube's music topic, which drops talk clips and Shorts filed as music.
-	const filter = kind === "podcast" ? "&videoDuration=long" : "&videoCategoryId=10&topicId=%2Fm%2F04rlf";
 	const res = await requestWithin("YouTube", {
-		url: `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video${filter}` +
+		url: "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10" +
 			`&maxResults=${limit}&q=${encodeURIComponent(q)}&key=${encodeURIComponent(apiKey.trim())}`,
 		throw: false,
 	});
@@ -123,66 +101,12 @@ export async function searchSongs(apiKey: string, term: string, limit = 8, kind:
 		.map((it: Record<string, any>) => songFrom(
 			it.id.videoId, String(it.snippet?.title ?? ""), String(it.snippet?.channelTitle ?? ""),
 			null, // always the band-free thumbnail (see thumbnailUrl)
-			kind,
 		));
 }
 
-/** Podcast episodes matching a show, an episode title or both, newest-relevant first (no key needed). */
-export async function searchEpisodes(term: string, limit = 10): Promise<Song[]> {
-	const q = term.trim();
-	if (!q) return [];
-	const res = await requestWithin("The podcast directory", {
-		url: `https://itunes.apple.com/search?media=podcast&entity=podcastEpisode&limit=${limit}&term=${encodeURIComponent(q)}`,
-		throw: false,
-	});
-	if (res.status >= 400) throw new Error(`Podcast search failed (${res.status}).`);
-	return (res.json?.results ?? [])
-		.filter((r: Record<string, any>) => r.episodeUrl && r.trackName)
-		.map((r: Record<string, any>): Song => ({
-			id: String(r.trackId ?? ""),
-			title: decodeEntities(String(r.trackName)).trim(),
-			artist: decodeEntities(String(r.collectionName ?? "")).trim(),
-			cover: r.artworkUrl600 ?? r.artworkUrl160 ?? r.artworkUrl100 ?? null,
-			kind: "podcast",
-			audio: String(r.episodeUrl),
-			page: null,
-			feedUrl: r.feedUrl ? String(r.feedUrl) : null,
-			guid: r.episodeGuid ? String(r.episodeGuid) : null,
-			date: r.releaseDate ? String(r.releaseDate).slice(0, 10) : null,
-		}));
-}
-
-/**
- * The episode's web page: its feed id when that's a link, else the episode's <link> in the show's
- * feed, else the show's website. Looked up once, when the episode is picked.
- */
-export async function episodePage(song: Song): Promise<string | null> {
-	if (song.guid && /^https?:\/\//.test(song.guid)) return song.guid;
-	if (!song.feedUrl) return null;
-	try {
-		const res = await requestWithin("The podcast's feed", { url: song.feedUrl, throw: false });
-		if (res.status >= 400) return null;
-		const xml = new DOMParser().parseFromString(res.text, "text/xml");
-		const items = Array.from(xml.querySelectorAll("item"));
-		const item = items.find((it) => (song.guid && it.querySelector("guid")?.textContent?.trim() === song.guid)
-			|| (song.audio && it.querySelector("enclosure")?.getAttribute("url") === song.audio));
-		const link = item?.querySelector("link")?.textContent?.trim() || xml.querySelector("channel > link")?.textContent?.trim();
-		return link && /^https?:\/\//.test(link) ? link : null;
-	} catch {
-		return null;
-	}
-}
-
-/** Properties saved in the entry for the chosen song or episode. */
+/** Properties saved in the entry for the chosen song. */
 export function songProperties(song: Song): Record<string, unknown> {
-	if (song.audio) {
-		const props: Record<string, unknown> = { song: song.title, artist: song.artist, song_cover: song.cover, song_kind: "podcast", song_audio: song.audio, song_id: song.id };
-		if (song.page) props.song_url = song.page;
-		return props;
-	}
-	const props: Record<string, unknown> = { song: song.title, artist: song.artist, song_cover: song.cover, song_id: song.id, song_url: youtubeMusicUrl(song.id) };
-	if (song.kind === "podcast") props.song_kind = "podcast";
-	return props;
+	return { song: song.title, artist: song.artist, song_cover: song.cover, song_id: song.id, song_url: youtubeMusicUrl(song.id) };
 }
 
-export const SONG_KEYS = ["song", "artist", "song_cover", "song_id", "song_url", "song_kind", "song_audio", "song_album", "song_apple"];
+export const SONG_KEYS = ["song", "artist", "song_cover", "song_id", "song_url", "song_album", "song_apple"];

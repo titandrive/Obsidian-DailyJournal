@@ -4,7 +4,7 @@ import { PlaceModal, SongPickerModal } from "./modals";
 import { CheckInFields, JournalSettings, Place } from "./settings";
 import { HardcoverDay, savedReading } from "./hardcover";
 import { meteoconSvg } from "./meteocons";
-import { episodePage, playerUrl, Song, SONG_KEYS, songProperties, thumbnailUrl, youtubeMusicUrl } from "./music";
+import { playerUrl, Song, SONG_KEYS, songProperties, thumbnailUrl, youtubeMusicUrl } from "./music";
 import { blockFields, blockShowsWeather, parseBlock } from "./template";
 import { entryPlace, fetchWeather, PIN_ICON, weatherIcon, weatherText } from "./weather";
 import { RETRY_AFTER_MS } from "./net";
@@ -398,18 +398,10 @@ function renderCheckIn(host: JournalHost, el: HTMLElement, file: TFile, fm: Fron
 
 /** The song saved in an entry, or null (older Apple-based picks have no YouTube id and are ignored). */
 function savedSong(fm: Frontmatter): Song | null {
-	// Directory podcast episode: plays from its audio file.
-	if (fm.song && fm.song_kind === "podcast" && typeof fm.song_audio === "string" && fm.song_audio) {
-		return {
-			id: String(fm.song_id ?? ""), title: String(fm.song), artist: fm.artist ? String(fm.artist) : "",
-			cover: fm.song_cover ? String(fm.song_cover) : null, kind: "podcast", audio: fm.song_audio,
-			page: typeof fm.song_url === "string" ? fm.song_url : null,
-		};
-	}
 	const id = typeof fm.song_id === "string" && /^[\w-]{11}$/.test(fm.song_id) ? fm.song_id : null;
 	if (!fm.song || !id) return null;
 	// Always show the band-free thumbnail, also for songs saved with an older one.
-	return { id, title: String(fm.song), artist: fm.artist ? String(fm.artist) : "", cover: thumbnailUrl(id), kind: fm.song_kind === "podcast" ? "podcast" : "music" };
+	return { id, title: String(fm.song), artist: fm.artist ? String(fm.artist) : "", cover: thumbnailUrl(id) };
 }
 
 function renderSong(host: JournalHost, el: HTMLElement, file: TFile, fm: Frontmatter): void {
@@ -428,9 +420,7 @@ function renderSong(host: JournalHost, el: HTMLElement, file: TFile, fm: Frontma
 
 	// In a side-by-side row the card is too narrow for a video: the player opens full-width under the row.
 	const playerHost = () => (el.closest(".dj-row-wrap") as HTMLElement | null) ?? body;
-	const closePlayer = () => {
-		for (const host of new Set([playerHost(), body])) host.querySelectorAll(":scope > .dj-song-player").forEach((p) => p.remove());
-	};
+	const closePlayer = () => playerHost().querySelectorAll(":scope > .dj-song-player").forEach((p) => p.remove());
 
 	const showSong = (song: Song) => {
 		closePlayer();
@@ -442,13 +432,9 @@ function renderSong(host: JournalHost, el: HTMLElement, file: TFile, fm: Frontma
 		const play = cover.createEl("button", { cls: "dj-song-play", attr: { "aria-label": "Play" } });
 		setIcon(play, "play");
 		const info = row.createDiv({ cls: "dj-book-info" });
-		// YouTube items open in YouTube Music; directory episodes open their own page (or the audio file).
-		const link = song.audio ? (song.page ?? song.audio) : youtubeMusicUrl(song.id);
-		const title = info.createEl("a", { cls: "dj-book-title", text: song.title, href: link, attr: { "aria-label": song.audio ? "Open the episode's page" : "Open in YouTube Music" } });
-		title.onclick = (e) => { e.preventDefault(); window.open(link, "_blank"); };
-		shrinkToTwoLines(title); // podcast episode titles run long
-		const by = song.kind === "podcast" ? ["Podcast", song.artist].filter(Boolean).join(" · ") : song.artist;
-		if (by) info.createDiv({ cls: "dj-book-author", text: by });
+		const title = info.createEl("a", { cls: "dj-book-title", text: song.title, href: youtubeMusicUrl(song.id), attr: { "aria-label": "Open in YouTube Music" } });
+		title.onclick = (e) => { e.preventDefault(); window.open(youtubeMusicUrl(song.id), "_blank"); };
+		if (song.artist) info.createDiv({ cls: "dj-book-author", text: song.artist });
 		const actions = info.createDiv({ cls: "dj-song-actions" });
 		const change = actions.createEl("a", { cls: "dj-song-change", text: "Change", href: "#" });
 		change.onclick = (e) => { e.preventDefault(); pick(); };
@@ -459,13 +445,6 @@ function renderSong(host: JournalHost, el: HTMLElement, file: TFile, fm: Frontma
 		play.onclick = () => {
 			if (player) { player.remove(); player = null; setIcon(play, "play"); play.setAttr("aria-label", "Play"); return; }
 			closePlayer();
-			if (song.audio) {
-				// A podcast episode is just audio: a compact player that fits inside the card, even half-width.
-				player = body.createDiv({ cls: "dj-song-player dj-song-audio" });
-				player.createEl("audio", { attr: { src: song.audio, controls: "", autoplay: "", preload: "none" } });
-				setIcon(play, "square"); play.setAttr("aria-label", "Stop");
-				return;
-			}
 			player = playerHost().createDiv({ cls: "dj-song-player" });
 			// Same frame settings as Obsidian's own YouTube embeds.
 			player.createEl("iframe", { cls: "external-embed", attr: {
@@ -479,13 +458,7 @@ function renderSong(host: JournalHost, el: HTMLElement, file: TFile, fm: Frontma
 	};
 
 	// Picking happens in a search dialog (roomy even when the card is half a row wide).
-	const pick = () => new SongPickerModal(app, settings.youtubeApiKey, async (song) => {
-		showSong(song);
-		// For a directory episode, look up its web page once (from the show's feed) before saving.
-		if (song.audio && !song.page) song.page = await episodePage(song);
-		void save(song);
-		if (song.page) showSong(song);
-	}).open();
+	const pick = () => new SongPickerModal(app, settings.youtubeApiKey, (song) => { showSong(song); void save(song); }).open();
 	const showEmpty = () => {
 		closePlayer();
 		body.empty();
