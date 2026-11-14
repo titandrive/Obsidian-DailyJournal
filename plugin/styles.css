@@ -15,7 +15,7 @@
 	container-type: inline-size;
 	background: var(--background-secondary);
 	border: 1px solid color-mix(in srgb, var(--background-modifier-border) 70%, transparent);
-	border-radius: 18px; padding: 1.3em 1.4em; margin: 1em 0;
+	border-radius: 18px; padding: 1.3em 1.4em; margin: 0; /* the blank line between blocks is the gap */
 	display: flex; flex-direction: column; gap: 1em;
 	box-shadow: 0 1px 2px rgba(0, 0, 0, .12), 0 10px 30px -12px rgba(0, 0, 0, .35);
 }
@@ -220,8 +220,9 @@ a.dj-book-title:hover { color: var(--text-accent); }
 .dj-song-result-meta { font-size: .85em; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Cards side by side ("row reading song"): one column per card that has something to show. */
-.dj-row-wrap { container-type: inline-size; margin: 1em 0; }
-.dj-row-cards { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 1em; align-items: stretch; }
+.dj-row-wrap { container-type: inline-size; margin: 0; }
+/* Same gap as the blank line between card blocks, side by side or stacked. */
+.dj-row-cards { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: calc(var(--line-height-normal, 1.5) * 1em); align-items: stretch; }
 .dj-row-cell { min-width: 0; display: flex; flex-direction: column; }
 .dj-row-cell:empty { display: none; }
 .dj-row-cell > .dj-card { flex: 1; margin: 0; padding: 1.05em 1.15em; gap: .8em; }

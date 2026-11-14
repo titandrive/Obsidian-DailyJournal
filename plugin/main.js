@@ -1180,7 +1180,7 @@ function entryTemplate(settings) {
     parts.push(block(line));
   }
   for (const prompt of settings.prompts) {
-    parts.push(`${"#".repeat(2 + prompt.level)} ${prompt.text}`, "", "");
+    parts.push(`${"#".repeat(2 + prompt.level)} ${prompt.text}`, "");
   }
   if (lines.onthisday)
     parts.push(block(lines.onthisday));

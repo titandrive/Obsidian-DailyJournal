@@ -67,7 +67,7 @@ export function entryTemplate(settings: JournalSettings): string {
 		parts.push(block(line));
 	}
 	for (const prompt of settings.prompts) {
-		parts.push(`${"#".repeat(2 + prompt.level)} ${prompt.text}`, "", "");
+		parts.push(`${"#".repeat(2 + prompt.level)} ${prompt.text}`, ""); // one empty line to write on
 	}
 	if (lines.onthisday) parts.push(block(lines.onthisday));
 	return parts.join("\n");
