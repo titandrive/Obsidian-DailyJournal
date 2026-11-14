@@ -1593,7 +1593,7 @@ function renderSong(host, el, file, fm) {
     body.empty();
     const add = body.createEl("button", { cls: "dj-song-add" });
     (0, import_obsidian4.setIcon)(add.createSpan({ cls: "dj-song-add-icon" }), "music");
-    add.createSpan({ text: "Add a song" });
+    add.createSpan({ text: "Add a song or podcast" });
     add.onclick = pick;
   };
   const song = savedSong(fm);
@@ -1791,12 +1791,17 @@ var JournalBlock = class extends import_obsidian6.MarkdownRenderChild {
     this.section = section;
     this.file = file;
     this.timer = 0;
+    /** The entry's properties as last drawn: typing in the note body doesn't change them, so no redraw. */
+    this.drawnProps = "";
   }
   onload() {
     this.plugin.blocks.add(this);
     this.render();
-    this.registerEvent(this.plugin.app.metadataCache.on("changed", (changed) => {
+    this.registerEvent(this.plugin.app.metadataCache.on("changed", (changed, _data, cache) => {
+      var _a;
       if (changed.path !== this.file.path)
+        return;
+      if (JSON.stringify((_a = cache.frontmatter) != null ? _a : {}) === this.drawnProps)
         return;
       if (this.containerEl.contains(document.activeElement))
         return;
@@ -1819,6 +1824,8 @@ var JournalBlock = class extends import_obsidian6.MarkdownRenderChild {
     drawReading(this.containerEl, day, date);
   }
   render() {
+    var _a, _b;
+    this.drawnProps = JSON.stringify((_b = (_a = this.plugin.app.metadataCache.getFileCache(this.file)) == null ? void 0 : _a.frontmatter) != null ? _b : {});
     this.containerEl.empty();
     this.containerEl.addClass("dj-block");
     void renderSection(this.plugin, this.section, this.containerEl, this.file);

@@ -13,6 +13,8 @@ import { entryPlace, fetchWeather } from "./src/weather";
 /** One rendered `journal` block. Redraws when its entry's properties change (e.g. weather arrives). */
 class JournalBlock extends MarkdownRenderChild {
 	private timer = 0;
+	/** The entry's properties as last drawn: typing in the note body doesn't change them, so no redraw. */
+	private drawnProps = "";
 
 	constructor(private plugin: DailyJournal, containerEl: HTMLElement, private section: string, private file: TFile) {
 		super(containerEl);
@@ -21,8 +23,10 @@ class JournalBlock extends MarkdownRenderChild {
 	onload(): void {
 		this.plugin.blocks.add(this);
 		this.render();
-		this.registerEvent(this.plugin.app.metadataCache.on("changed", (changed) => {
+		this.registerEvent(this.plugin.app.metadataCache.on("changed", (changed, _data, cache) => {
 			if (changed.path !== this.file.path) return;
+			// Obsidian reports a change on every autosave while you type; the cards only show properties.
+			if (JSON.stringify(cache.frontmatter ?? {}) === this.drawnProps) return;
 			// Don't redraw under someone typing in one of the card's fields.
 			if (this.containerEl.contains(document.activeElement)) return;
 			window.clearTimeout(this.timer);
@@ -46,6 +50,7 @@ class JournalBlock extends MarkdownRenderChild {
 	}
 
 	private render(): void {
+		this.drawnProps = JSON.stringify(this.plugin.app.metadataCache.getFileCache(this.file)?.frontmatter ?? {});
 		this.containerEl.empty();
 		this.containerEl.addClass("dj-block");
 		void renderSection(this.plugin, this.section, this.containerEl, this.file);

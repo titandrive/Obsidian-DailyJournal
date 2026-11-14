@@ -500,7 +500,7 @@ function renderSong(host: JournalHost, el: HTMLElement, file: TFile, fm: Frontma
 		body.empty();
 		const add = body.createEl("button", { cls: "dj-song-add" });
 		setIcon(add.createSpan({ cls: "dj-song-add-icon" }), "music");
-		add.createSpan({ text: "Add a song" });
+		add.createSpan({ text: "Add a song or podcast" });
 		add.onclick = pick;
 	};
 
