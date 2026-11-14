@@ -1112,7 +1112,8 @@ async function renderSection(host, source, el, file) {
       return renderOnThisDay(host, el, date);
     case "row": {
       const grid = el.createDiv({ cls: "dj-row-wrap" }).createDiv({ cls: "dj-row-cards" });
-      await Promise.all(options.filter((o) => o !== "row" && o !== "header").map((o) => renderSection(host, o, grid.createDiv({ cls: "dj-row-cell" }), file)));
+      const cells = options.filter((o) => o !== "row" && o !== "header").map((o) => [o, grid.createDiv({ cls: "dj-row-cell" })]);
+      await Promise.all(cells.map(([o, cell]) => renderSection(host, o, cell, file)));
       return;
     }
   }
@@ -1232,7 +1233,7 @@ function lineCount(el) {
 var TITLE_SIZES = ["0.92em", "0.82em", "0.74em"];
 function shrinkToTwoLines(el, sizes = TITLE_SIZES, clamp = true, tries = 0) {
   var _a;
-  if (!el.isConnected || !el.offsetWidth) {
+  if (tries === 0 || !el.isConnected || !el.offsetWidth) {
     if (tries < 30)
       window.requestAnimationFrame(() => shrinkToTwoLines(el, sizes, clamp, tries + 1));
     return;

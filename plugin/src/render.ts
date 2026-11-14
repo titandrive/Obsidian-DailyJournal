@@ -65,7 +65,9 @@ export async function renderSection(host: JournalHost, source: string, el: HTMLE
 			// Several cards side by side in one block, e.g. "row reading song": compact versions of each,
 			// stacked again when the note is too narrow (see .dj-row-cards).
 			const grid = el.createDiv({ cls: "dj-row-wrap" }).createDiv({ cls: "dj-row-cards" });
-			await Promise.all(options.filter((o) => o !== "row" && o !== "header").map((o) => renderSection(host, o, grid.createDiv({ cls: "dj-row-cell" }), file)));
+			// Create every column first, then fill them, so each card is laid out at its final width.
+			const cells = options.filter((o) => o !== "row" && o !== "header").map((o) => [o, grid.createDiv({ cls: "dj-row-cell" })] as const);
+			await Promise.all(cells.map(([o, cell]) => renderSection(host, o, cell, file)));
 			return;
 		}
 	}
@@ -191,7 +193,9 @@ function lineCount(el: HTMLElement): number {
 const TITLE_SIZES = ["0.92em", "0.82em", "0.74em"];
 
 function shrinkToTwoLines(el: HTMLElement, sizes = TITLE_SIZES, clamp = true, tries = 0): void {
-	if (!el.isConnected || !el.offsetWidth) {
+	// Always wait for the next frame first: in a side-by-side row the other card is drawn just after
+	// this one, and until it is, this card briefly has the whole row's width.
+	if (tries === 0 || !el.isConnected || !el.offsetWidth) {
 		if (tries < 30) window.requestAnimationFrame(() => shrinkToTwoLines(el, sizes, clamp, tries + 1));
 		return;
 	}
