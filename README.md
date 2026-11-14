@@ -4,7 +4,7 @@ A daily journal for Obsidian. Each entry gets a set of cards above your writing:
 
 - **Header**: the date, links to your previous and next entries, that day's weather, and the entry's location (defaults to your default location; change it per entry while traveling).
 - **Currently reading**: what you read that day, from your [Hardcover](https://hardcover.app) reading journal: each book's cover, progress and pages read, books started or finished (with your rating), and quotes you saved. On days with no reading it shows when you last read. Works for past entries too. Needs a Hardcover API token. Each entry asks Hardcover once and saves the result in its properties (`reading`, plus `books` and `pages_read` for Bases); after that it only updates when you run **Refresh reading**.
-- **Earworm of the day**: a song for the day from YouTube. Paste a YouTube or YouTube Music link (works out of the box), or add a free YouTube Data API key in settings to search by song, artist or both. The card shows the art, title and artist; the play button plays the whole song in the card, and the title opens it in YouTube Music. Saved as properties (`song`, `artist`, plus the video id, link and art), so the Journal base lists your songs. With Currently reading on too, the two cards sit side by side in one row (stacked again on narrow screens).
+- **Earworm of the day**: a song for the day from YouTube. Paste a YouTube or YouTube Music link (works out of the box), or add a free YouTube Data API key in settings to search by song, artist or both. The card shows the art, title and artist; the play button plays the whole song in the card, and the title opens it in YouTube Music. Saved as properties (`song`, `artist`, plus the video id, link and art), so the Journal base lists your songs. With Currently reading on too, the two cards sit side by side in one row (stacked again on narrow screens). The search dialog has a **Music | Podcasts** toggle: podcasts are searched in Apple's podcast directory (no key needed) and the whole episode plays in a small audio player in the card, straight from the show's own feed; the title opens the episode's web page. Episodes are saved like songs (episode and show), marked `song_kind: podcast`.
 - **Check-in**: day rating (1–10), sleep, whether you worked, exercise, food (breakfast, lunch, dinner) and tags, saved as note properties so you can chart or query them with Bases.
 - **On this day**: links to entries from the same date in earlier months and years.
 
@@ -61,7 +61,7 @@ The free allowance is 10,000 units a day and a search costs 100, so about 100 se
 
 Weather icons are [Meteocons](https://github.com/basmilius/weather-icons) by Bas Milius (MIT License).
 
-Songs come from YouTube: pasted links are looked up with YouTube's oEmbed service (no key needed), search uses the YouTube Data API with your key, and songs play through the embed page Obsidian uses for its own YouTube embeds.
+Podcast episodes come from Apple's podcast directory (search only; audio plays from each show's public feed). Songs come from YouTube: pasted links are looked up with YouTube's oEmbed service (no key needed), search uses the YouTube Data API with your key, and songs play through the embed page Obsidian uses for its own YouTube embeds.
 
 Weather comes from [Open-Meteo](https://open-meteo.com) (no account needed). Location search uses Open-Meteo's geocoding API. Each entry stores its weather once, so past entries don't change.
 
