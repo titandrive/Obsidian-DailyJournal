@@ -207,6 +207,19 @@ function shrinkToTwoLines(el: HTMLElement, sizes = TITLE_SIZES, clamp = true, tr
 	if (clamp && lineCount(el) > 2) { el.addClass("dj-clamp-2"); el.setAttr("title", el.textContent ?? ""); }
 }
 
+/** A one-line text that's too wide steps down in size (same steps as titles), then ends in "…". */
+function shrinkToOneLine(el: HTMLElement, sizes = TITLE_SIZES, tries = 0): void {
+	if (tries === 0 || !el.isConnected || !el.offsetWidth) {
+		if (tries < 30) window.requestAnimationFrame(() => shrinkToOneLine(el, sizes, tries + 1));
+		return;
+	}
+	for (const size of sizes) {
+		if (el.scrollWidth <= el.clientWidth) return;
+		el.style.fontSize = size;
+	}
+	if (el.scrollWidth > el.clientWidth) el.setAttr("title", el.textContent ?? "");
+}
+
 export function drawReading(el: HTMLElement, day: HardcoverDay, date: Moment): void {
 	const c = card(el, "Currently reading");
 	if (!day.books.length && !day.quotes.length) {
@@ -456,8 +469,8 @@ function renderSong(host: JournalHost, el: HTMLElement, file: TFile, fm: Frontma
 		const title = info.createEl("a", { cls: "dj-book-title", text: song.title, href: link, attr: { "aria-label": song.audio ? "Open the episode's page" : "Open in YouTube Music" } });
 		title.onclick = (e) => { e.preventDefault(); window.open(link, "_blank"); };
 		shrinkToTwoLines(title); // podcast episode titles run long
-		const by = song.kind === "podcast" ? ["Podcast", song.artist].filter(Boolean).join(" · ") : song.artist;
-		if (by) info.createDiv({ cls: "dj-book-author", text: by });
+		// Artist, or the podcast's show name; long names shrink to fit one line like titles do.
+		if (song.artist) shrinkToOneLine(info.createDiv({ cls: "dj-book-author", text: song.artist }));
 		const actions = info.createDiv({ cls: "dj-song-actions" });
 		const change = actions.createEl("a", { cls: "dj-song-change", text: "Change", href: "#" });
 		change.onclick = (e) => { e.preventDefault(); pick(); };

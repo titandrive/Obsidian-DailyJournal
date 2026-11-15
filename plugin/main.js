@@ -1399,6 +1399,21 @@ function shrinkToTwoLines(el, sizes = TITLE_SIZES, clamp = true, tries = 0) {
     el.setAttr("title", (_a = el.textContent) != null ? _a : "");
   }
 }
+function shrinkToOneLine(el, sizes = TITLE_SIZES, tries = 0) {
+  var _a;
+  if (tries === 0 || !el.isConnected || !el.offsetWidth) {
+    if (tries < 30)
+      window.requestAnimationFrame(() => shrinkToOneLine(el, sizes, tries + 1));
+    return;
+  }
+  for (const size of sizes) {
+    if (el.scrollWidth <= el.clientWidth)
+      return;
+    el.style.fontSize = size;
+  }
+  if (el.scrollWidth > el.clientWidth)
+    el.setAttr("title", (_a = el.textContent) != null ? _a : "");
+}
 function drawReading(el, day, date) {
   var _a;
   const c = card(el, "Currently reading");
@@ -1685,9 +1700,8 @@ function renderSong(host, el, file, fm) {
       window.open(link2, "_blank");
     };
     shrinkToTwoLines(title);
-    const by = song2.kind === "podcast" ? ["Podcast", song2.artist].filter(Boolean).join(" \xB7 ") : song2.artist;
-    if (by)
-      info.createDiv({ cls: "dj-book-author", text: by });
+    if (song2.artist)
+      shrinkToOneLine(info.createDiv({ cls: "dj-book-author", text: song2.artist }));
     const actions = info.createDiv({ cls: "dj-song-actions" });
     const change = actions.createEl("a", { cls: "dj-song-change", text: "Change", href: "#" });
     change.onclick = (e) => {
