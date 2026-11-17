@@ -58,7 +58,7 @@ export function entryTemplate(settings: JournalSettings): string {
 		`location: ${JSON.stringify(home.name)}`, `latitude: ${home.lat}`, `longitude: ${home.lon}`, `timezone: ${JSON.stringify(home.tz)}`,
 		"---", "",
 	];
-	for (const section of ["header", "reading", "song", "checkin"] as Section[]) {
+	for (const section of ["header", "onthisday", "reading", "song", "checkin"] as Section[]) {
 		const line = lines[section];
 		if (!line) continue;
 		// Reading and Song share one row, side by side, when both are on.
@@ -69,7 +69,6 @@ export function entryTemplate(settings: JournalSettings): string {
 	for (const prompt of settings.prompts) {
 		parts.push(`${"#".repeat(2 + prompt.level)} ${prompt.text}`, ""); // one empty line to write on
 	}
-	if (lines.onthisday) parts.push(block(lines.onthisday));
 	return parts.join("\n");
 }
 
@@ -118,7 +117,8 @@ export function applyLayout(text: string, settings: JournalSettings): string {
 		out = out.replace(BLOCK("reading"), block(ROW_LINE)).replace(new RegExp(BLOCK("song").source + "\\n?"), "");
 	}
 
-	if (lines.onthisday && !BLOCK("onthisday").test(out)) out = out.replace(/\n*$/, "\n\n" + block(lines.onthisday));
-	else if (!lines.onthisday) out = out.replace(new RegExp("\\n*" + BLOCK("onthisday").source), "\n");
+	// On this day sits right after the header (it used to be at the end of the entry).
+	out = out.replace(new RegExp("\\n*" + BLOCK("onthisday").source), "\n");
+	if (lines.onthisday) out = out.replace(BLOCK("header"), (m) => m + "\n" + block(lines.onthisday as string));
 	return out;
 }

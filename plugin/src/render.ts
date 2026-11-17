@@ -628,12 +628,71 @@ function mealSuggest(host: JournalHost, input: HTMLTextAreaElement, box: HTMLEle
 	});
 }
 
-function renderOnThisDay(host: JournalHost, el: HTMLElement, date: Moment): void {
+/** The first line written under an entry's first writing prompt, as plain text. */
+function firstAnswer(text: string): string | null {
+	const body = text.replace(/^---\n[\s\S]*?\n---\n/, "");
+	const lines = body.split("\n");
+	const start = lines.findIndex((l) => /^#{1,6}\s/.test(l));
+	if (start < 0) return null;
+	for (const line of lines.slice(start + 1)) {
+		if (/^#{1,6}\s|^```/.test(line)) break;
+		const plain = line.replace(/[*_`>#]|\[\[([^\]|]*\|)?|\]\]/g, "").trim();
+		if (plain) return plain;
+	}
+	return null;
+}
+
+/** "1 month ago", "1 year ago", "3 years ago" */
+function agoLabel(then: Moment, now: Moment): string {
+	const years = now.diff(then, "years");
+	if (years >= 1) return years === 1 ? "1 year ago" : `${years} years ago`;
+	const months = now.diff(then, "months");
+	return months <= 1 ? "1 month ago" : `${months} months ago`;
+}
+
+async function renderOnThisDay(host: JournalHost, el: HTMLElement, date: Moment): Promise<void> {
+	const { app } = host;
 	const monthAgo = date.clone().subtract(1, "month");
 	const hits = host.journalEntries().filter((d) => d.date.isBefore(date, "day") && (
 		d.date.isSame(monthAgo, "day") || (d.date.month() === date.month() && d.date.date() === date.date())
 	)).reverse();
 	if (!hits.length) return;
-	const row = card(el, "On this day").createDiv({ cls: "dj-row" });
-	for (const d of hits) link(host.app, row, d.date.format("MMM D, YYYY"), d.file, "dj-chip");
+	const grid = card(el, "On this day").createDiv({ cls: "dj-otd" });
+	for (const { file, date: then } of hits) {
+		const fm = (app.metadataCache.getFileCache(file)?.frontmatter ?? {}) as Frontmatter;
+		const tile = grid.createEl("a", { cls: "dj-otd-tile", href: "#" });
+		tile.onclick = openFile(app, file);
+
+		// Top: when, then weather and rating.
+		const head = tile.createDiv({ cls: "dj-otd-head" });
+		const when = head.createDiv({ cls: "dj-otd-when" });
+		when.createDiv({ cls: "dj-otd-ago", text: agoLabel(then, date) });
+		when.createDiv({ cls: "dj-otd-date", text: then.format(then.year() === date.year() ? "ddd, MMM D" : "ddd, MMM D, YYYY") });
+		const meta = head.createDiv({ cls: "dj-otd-meta" });
+		if (fm.weather) {
+			const sky = meta.createSpan({ cls: "dj-otd-sky", attr: { "aria-label": weatherText(String(fm.weather)) } });
+			sky.innerHTML = meteoconSvg(weatherIcon(String(fm.weather)));
+		}
+		if (Number(fm.day_rating)) meta.createSpan({ cls: "dj-otd-rating", text: `${Number(fm.day_rating)}/10` });
+
+		// Below: two lines of what you wrote, with that day's book and song art beside them.
+		const body = tile.createDiv({ cls: "dj-otd-body" });
+		const snippet = body.createDiv({ cls: "dj-otd-snippet" });
+		const reading = fm.reading as { books?: Array<{ title?: string; cover?: string }> } | undefined;
+		const book = reading?.books?.[0];
+		const media: Array<{ src: string; title: string; cls: string }> = [];
+		if (book?.cover) media.push({ src: String(book.cover), title: String(book.title ?? ""), cls: "dj-otd-book" });
+		if (fm.song_cover) media.push({ src: String(fm.song_cover), title: [fm.song, fm.artist].filter(Boolean).join(" · "), cls: "dj-otd-song" });
+		if (media.length) {
+			const strip = body.createDiv({ cls: "dj-otd-media" });
+			for (const m of media) {
+				const img = strip.createEl("img", { cls: m.cls, attr: { src: m.src, alt: "", "aria-label": m.title } });
+				img.onerror = () => img.remove();
+			}
+		}
+		void app.vault.cachedRead(file).then((text) => {
+			const line = firstAnswer(text);
+			if (line) snippet.setText(line); else snippet.addClass("is-empty");
+		});
+	}
 }

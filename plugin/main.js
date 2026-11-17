@@ -1167,7 +1167,7 @@ function entryTemplate(settings) {
     "---",
     ""
   ];
-  for (const section of ["header", "reading", "song", "checkin"]) {
+  for (const section of ["header", "onthisday", "reading", "song", "checkin"]) {
     const line = lines[section];
     if (!line)
       continue;
@@ -1182,8 +1182,6 @@ function entryTemplate(settings) {
   for (const prompt of settings.prompts) {
     parts.push(`${"#".repeat(2 + prompt.level)} ${prompt.text}`, "");
   }
-  if (lines.onthisday)
-    parts.push(block(lines.onthisday));
   return parts.join("\n");
 }
 var BLOCK = (section) => new RegExp("```journal\\n" + section + "(?:[ \\t][^\\n]*)?\\n```\\n?");
@@ -1215,10 +1213,9 @@ function applyLayout(text, settings) {
   if (lines.reading && lines.song && BLOCK("reading").test(out) && BLOCK("song").test(out)) {
     out = out.replace(BLOCK("reading"), block(ROW_LINE)).replace(new RegExp(BLOCK("song").source + "\\n?"), "");
   }
-  if (lines.onthisday && !BLOCK("onthisday").test(out))
-    out = out.replace(/\n*$/, "\n\n" + block(lines.onthisday));
-  else if (!lines.onthisday)
-    out = out.replace(new RegExp("\\n*" + BLOCK("onthisday").source), "\n");
+  out = out.replace(new RegExp("\\n*" + BLOCK("onthisday").source), "\n");
+  if (lines.onthisday)
+    out = out.replace(BLOCK("header"), (m) => m + "\n" + block(lines.onthisday));
   return out;
 }
 
@@ -1883,14 +1880,75 @@ function mealSuggest(host, input, box, commit) {
     }
   });
 }
-function renderOnThisDay(host, el, date) {
+function firstAnswer(text) {
+  const body = text.replace(/^---\n[\s\S]*?\n---\n/, "");
+  const lines = body.split("\n");
+  const start = lines.findIndex((l) => /^#{1,6}\s/.test(l));
+  if (start < 0)
+    return null;
+  for (const line of lines.slice(start + 1)) {
+    if (/^#{1,6}\s|^```/.test(line))
+      break;
+    const plain = line.replace(/[*_`>#]|\[\[([^\]|]*\|)?|\]\]/g, "").trim();
+    if (plain)
+      return plain;
+  }
+  return null;
+}
+function agoLabel(then, now) {
+  const years = now.diff(then, "years");
+  if (years >= 1)
+    return years === 1 ? "1 year ago" : `${years} years ago`;
+  const months = now.diff(then, "months");
+  return months <= 1 ? "1 month ago" : `${months} months ago`;
+}
+async function renderOnThisDay(host, el, date) {
+  var _a, _b, _c, _d;
+  const { app } = host;
   const monthAgo = date.clone().subtract(1, "month");
   const hits = host.journalEntries().filter((d) => d.date.isBefore(date, "day") && (d.date.isSame(monthAgo, "day") || d.date.month() === date.month() && d.date.date() === date.date())).reverse();
   if (!hits.length)
     return;
-  const row = card(el, "On this day").createDiv({ cls: "dj-row" });
-  for (const d of hits)
-    link(host.app, row, d.date.format("MMM D, YYYY"), d.file, "dj-chip");
+  const grid = card(el, "On this day").createDiv({ cls: "dj-otd" });
+  for (const { file, date: then } of hits) {
+    const fm = (_b = (_a = app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter) != null ? _b : {};
+    const tile = grid.createEl("a", { cls: "dj-otd-tile", href: "#" });
+    tile.onclick = openFile(app, file);
+    const head = tile.createDiv({ cls: "dj-otd-head" });
+    const when = head.createDiv({ cls: "dj-otd-when" });
+    when.createDiv({ cls: "dj-otd-ago", text: agoLabel(then, date) });
+    when.createDiv({ cls: "dj-otd-date", text: then.format(then.year() === date.year() ? "ddd, MMM D" : "ddd, MMM D, YYYY") });
+    const meta = head.createDiv({ cls: "dj-otd-meta" });
+    if (fm.weather) {
+      const sky = meta.createSpan({ cls: "dj-otd-sky", attr: { "aria-label": weatherText(String(fm.weather)) } });
+      sky.innerHTML = meteoconSvg(weatherIcon(String(fm.weather)));
+    }
+    if (Number(fm.day_rating))
+      meta.createSpan({ cls: "dj-otd-rating", text: `${Number(fm.day_rating)}/10` });
+    const body = tile.createDiv({ cls: "dj-otd-body" });
+    const snippet = body.createDiv({ cls: "dj-otd-snippet" });
+    const reading = fm.reading;
+    const book = (_c = reading == null ? void 0 : reading.books) == null ? void 0 : _c[0];
+    const media = [];
+    if (book == null ? void 0 : book.cover)
+      media.push({ src: String(book.cover), title: String((_d = book.title) != null ? _d : ""), cls: "dj-otd-book" });
+    if (fm.song_cover)
+      media.push({ src: String(fm.song_cover), title: [fm.song, fm.artist].filter(Boolean).join(" \xB7 "), cls: "dj-otd-song" });
+    if (media.length) {
+      const strip = body.createDiv({ cls: "dj-otd-media" });
+      for (const m of media) {
+        const img = strip.createEl("img", { cls: m.cls, attr: { src: m.src, alt: "", "aria-label": m.title } });
+        img.onerror = () => img.remove();
+      }
+    }
+    void app.vault.cachedRead(file).then((text) => {
+      const line = firstAnswer(text);
+      if (line)
+        snippet.setText(line);
+      else
+        snippet.addClass("is-empty");
+    });
+  }
 }
 
 // src/settings-tab.ts

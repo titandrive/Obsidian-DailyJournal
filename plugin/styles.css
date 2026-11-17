@@ -255,6 +255,32 @@ a.dj-book-title:hover { color: var(--text-accent); }
 	.dj-date { font-size: 1.55em; }
 }
 
+/* On this day: a tile per past entry. Header line on top; two lines of writing with the day's
+   book and song art beside them, so there's no empty band at the bottom. */
+.dj-otd { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: .8em; }
+a.dj-otd-tile {
+	display: flex; flex-direction: column; gap: .55em; padding: .8em .95em; border-radius: 14px; min-width: 0;
+	text-decoration: none; color: var(--text-normal);
+	background: var(--background-primary); border: 1px solid var(--background-modifier-border); transition: border-color .12s ease;
+}
+a.dj-otd-tile:hover { border-color: var(--interactive-accent); }
+.dj-otd-head { display: flex; align-items: flex-start; justify-content: space-between; gap: .6em; }
+.dj-otd-ago { font-size: .7em; font-weight: 650; letter-spacing: .07em; text-transform: uppercase; color: var(--text-accent); }
+.dj-otd-date { font-weight: 600; white-space: nowrap; }
+.dj-otd-meta { display: flex; align-items: center; gap: .35em; flex-shrink: 0; }
+.dj-otd-sky svg { width: 24px; height: 24px; display: block; }
+.dj-otd-rating { font-size: .78em; font-weight: 650; padding: .12em .5em; border-radius: 999px; background: var(--background-secondary); color: var(--text-muted); }
+.dj-otd-body { display: flex; align-items: center; gap: .8em; }
+.dj-otd-snippet {
+	flex: 1; min-width: 0; color: var(--text-muted); font-size: .88em; line-height: 1.45;
+	display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+.dj-otd-snippet.is-empty { visibility: hidden; }
+.dj-otd-media { display: flex; gap: .35em; flex-shrink: 0; }
+.dj-otd-media img { height: 46px; border-radius: 5px; object-fit: cover; box-shadow: 0 2px 6px -2px rgba(0, 0, 0, .5); display: block; }
+.dj-otd-media .dj-otd-book { width: 31px; }
+.dj-otd-media .dj-otd-song { width: 46px; }
+
 /* Meal suggestions from past entries, shown under the box being typed in. */
 .dj-meal-box { position: relative; min-width: 0; }
 .dj-suggest {
