@@ -2337,42 +2337,45 @@ var TrendsView = class extends import_obsidian6.BasesView {
       return sum + ((_a2 = num(d.fm.pages_read)) != null ? _a2 : 0);
     }, 0);
     const { current, longest } = streaks(days);
-    const tiles = root.createDiv({ cls: "dj-trends-tiles" });
-    const tile = (label, value, hint) => {
-      const t = tiles.createDiv({ cls: "dj-trends-tile" });
-      t.createDiv({ cls: "dj-trends-tile-value", text: value });
-      t.createDiv({ cls: "dj-trends-tile-label", text: label });
-      if (hint)
-        t.createDiv({ cls: "dj-trends-tile-hint", text: hint });
+    const section = (title) => {
+      const el2 = root.createDiv({ cls: "dj-trends-section" });
+      el2.createDiv({ cls: "dj-trends-section-title", text: title });
+      let tiles = null, grid = null;
+      return {
+        el: el2,
+        tile(label, value, hint) {
+          tiles != null ? tiles : tiles = el2.createDiv({ cls: "dj-trends-tiles" });
+          const t = tiles.createDiv({ cls: "dj-trends-tile" });
+          t.createDiv({ cls: "dj-trends-tile-value", text: value });
+          t.createDiv({ cls: "dj-trends-tile-label", text: label });
+          if (hint)
+            t.createDiv({ cls: "dj-trends-tile-hint", text: hint });
+        },
+        card(title2, note) {
+          grid != null ? grid : grid = el2.createDiv({ cls: "dj-trends-grid" });
+          const c = grid.createDiv({ cls: "dj-trends-card" });
+          const head = c.createDiv({ cls: "dj-trends-card-head" });
+          head.createDiv({ cls: "dj-trends-card-title", text: title2 });
+          if (note)
+            head.createDiv({ cls: "dj-trends-card-note", text: note });
+          return c;
+        }
+      };
     };
-    tile("Entries", String(days.length), `${days[0].date.format("MMM D, YYYY")} \u2013 ${days[days.length - 1].date.format("MMM D, YYYY")}`);
-    tile("Streak", `${current} day${current === 1 ? "" : "s"}`, `Longest ${longest}`);
+    const overview = section("Overview");
+    overview.tile("Entries", String(days.length), `${days[0].date.format("MMM D, YYYY")} \u2013 ${days[days.length - 1].date.format("MMM D, YYYY")}`);
+    overview.tile("Streak", `${current} day${current === 1 ? "" : "s"}`, `Longest ${longest}`);
     if (ratings.length)
-      tile("Avg. day rating", one(mean(ratings)), "out of 10");
+      overview.tile("Avg. day rating", one(mean(ratings)), "out of 10");
     if (sleeps.length)
-      tile("Avg. sleep", `${one(mean(sleeps))} h`);
+      overview.tile("Avg. sleep", `${one(mean(sleeps))} h`);
     if (exercised.length)
-      tile("Exercised", `${Math.round(100 * exercised.filter((d) => d.fm.exercise).length / exercised.length)}%`, "of days");
-    if (pages)
-      tile("Pages read", pages.toLocaleString());
-    const grid = root.createDiv({ cls: "dj-trends-grid" });
-    const card2 = (title, note) => {
-      const c = grid.createDiv({ cls: "dj-trends-card" });
-      const head = c.createDiv({ cls: "dj-trends-card-head" });
-      head.createDiv({ cls: "dj-trends-card-title", text: title });
-      if (note)
-        head.createDiv({ cls: "dj-trends-card-note", text: note });
-      return c;
-    };
+      overview.tile("Exercised", `${Math.round(100 * exercised.filter((d) => d.fm.exercise).length / exercised.length)}%`, "of days");
+    const moodSleep = section("Averages");
     const recent = days.filter((d) => !d.date.isBefore(days[days.length - 1].date.clone().subtract(89, "days"), "day"));
-    lineChart(card2("Day rating", "Last 90 days \xB7 line is the 7-day average"), recent, (d) => num(d.fm.day_rating), 10);
-    lineChart(card2("Sleep", "Last 90 days \xB7 hours \xB7 line is the 7-day average"), recent, (d) => num(d.fm.sleep), 12);
-    const meals = ranked(days.flatMap((d) => ["breakfast", "lunch", "dinner"].map((k) => str(d.fm[k]))), 10);
-    if (meals.length)
-      barList(card2("Most eaten", "Breakfast, lunch and dinner"), meals);
-    const weekday = ratingBy(days, [1, 2, 3, 4, 5, 6, 0].map((w) => [days[0].date.clone().day(w).format("dddd"), (d) => d.date.day() === w]));
-    if (weekday.length)
-      barList(card2("Day rating by weekday"), weekday, 10);
+    lineChart(moodSleep.card("Day rating", "Last 90 days \xB7 line is the 7-day average"), recent, (d) => num(d.fm.day_rating), 10);
+    lineChart(moodSleep.card("Sleep", "Last 90 days \xB7 hours \xB7 line is the 7-day average"), recent, (d) => num(d.fm.sleep), 12);
+    const patterns = section("Good and bad days");
     const good = [
       ...ratingBy(days, [["Exercised", (d) => d.fm.exercise === true], ["Didn't exercise", (d) => d.fm.exercise === false]]),
       ...ratingBy(days, [
@@ -2397,11 +2400,32 @@ var TrendsView = class extends import_obsidian6.BasesView {
       ])
     ];
     if (good.length)
-      barList(card2("What goes with good days", "Average day rating"), good, 10);
+      barList(patterns.card("What goes with good days", "Average day rating"), good, 10);
+    const bad = days.filter((d) => {
+      const r = num(d.fm.day_rating);
+      return r !== null && r <= BAD_DAY;
+    });
+    if (ratings.length)
+      badDays(patterns.card("What goes with bad days", `Days rated ${BAD_DAY} or lower, next to your typical day`), bad, days);
     const skies = [...new Set(days.map((d) => sky(d.fm)).filter(Boolean))];
     const byWeather = ratingBy(days, skies.map((s) => [s, (d) => sky(d.fm) === s])).sort((a, b) => b.value - a.value);
     if (byWeather.length > 1)
-      barList(card2("Day rating by weather"), byWeather, 10);
+      barList(patterns.card("Day rating by weather"), byWeather, 10);
+    const food = section("Food");
+    const meals = ranked(days.flatMap((d) => MEALS.map((k) => str(d.fm[k]))), 5);
+    if (meals.length)
+      barList(food.card("Favorite meals", "Breakfast, lunch and dinner"), meals);
+    const reading = section("Reading");
+    const finished = days.flatMap((d) => finishedBooks(d.fm).map((title) => ({ title, date: d.date })));
+    if (pages) {
+      const readDays = days.filter((d) => {
+        var _a2;
+        return ((_a2 = num(d.fm.pages_read)) != null ? _a2 : 0) > 0;
+      }).length;
+      reading.tile("Pages read", pages.toLocaleString());
+      reading.tile("Avg. pages per day", one(pages / days.length), `${one(pages / readDays)} on days you read`);
+      reading.tile("Books finished", String(finished.length));
+    }
     const months = /* @__PURE__ */ new Map();
     for (const d of days) {
       const p = num(d.fm.pages_read);
@@ -2410,24 +2434,72 @@ var TrendsView = class extends import_obsidian6.BasesView {
     }
     if (months.size) {
       const rows = [...months].sort((a, b) => b[0].localeCompare(a[0])).slice(0, 12).map(([m, n]) => ({ label: window.moment(m, "YYYY-MM").format("MMMM YYYY"), value: n, text: n.toLocaleString() }));
-      const c = card2("Pages read by month");
-      barList(c, rows);
-      const finished = days.flatMap((d) => finishedBooks(d.fm).map((title) => ({ title, date: d.date })));
-      if (finished.length) {
-        c.createDiv({ cls: "dj-trends-subhead", text: "Finished" });
-        const list = c.createDiv({ cls: "dj-trends-books" });
-        for (const b of finished.reverse()) {
-          const row = list.createDiv({ cls: "dj-trends-book" });
-          row.createSpan({ text: b.title });
-          row.createSpan({ cls: "dj-trends-muted", text: b.date.format("MMM D, YYYY") });
-        }
+      barList(reading.card("Pages read by month"), rows);
+    }
+    if (finished.length) {
+      const list = reading.card("Finished").createDiv({ cls: "dj-trends-books" });
+      for (const b of finished.reverse()) {
+        const row = list.createDiv({ cls: "dj-trends-book" });
+        row.createSpan({ text: b.title });
+        row.createSpan({ cls: "dj-trends-muted", text: b.date.format("MMM D, YYYY") });
       }
     }
-    const artists = ranked(days.map((d) => str(d.fm.artist)), 8);
+    const listening = section("Listening");
+    const podcast = (d) => d.fm.song_kind === "podcast";
+    const artists = ranked(days.filter((d) => !podcast(d)).map((d) => str(d.fm.artist)), 5);
     if (artists.length)
-      barList(card2("Top artists", "Earworm of the day"), artists);
+      barList(listening.card("Top artists"), artists);
+    const shows = ranked(days.filter(podcast).map((d) => str(d.fm.artist)), 5);
+    if (shows.length)
+      barList(listening.card("Top podcasts"), shows);
+    for (const s of [overview, moodSleep, patterns, food, reading, listening]) {
+      if (s.el.childElementCount < 2 || !s.el.querySelector(".dj-trends-tile, .dj-trends-card"))
+        s.el.remove();
+    }
   }
 };
+var MEALS = ["breakfast", "lunch", "dinner"];
+var BAD_DAY = 4;
+function badDays(el, bad, all) {
+  if (!bad.length) {
+    el.createDiv({ cls: "dj-trends-muted", text: "No bad days yet." });
+    return;
+  }
+  const avgOf = (ds, key) => {
+    const xs = ds.map((d) => num(d.fm[key])).filter((n) => n !== null);
+    return xs.length ? mean(xs) : null;
+  };
+  const share = (ds, key) => {
+    const known = ds.filter((d) => typeof d.fm[key] === "boolean");
+    return known.length ? Math.round(100 * known.filter((d) => d.fm[key]).length / known.length) : null;
+  };
+  const table = el.createDiv({ cls: "dj-trends-compare" });
+  for (const cell of ["", "Bad days", "Typical"])
+    table.createDiv({ cls: "dj-trends-compare-head", text: cell });
+  const line = (label, a, b) => {
+    if (a === null && b === null)
+      return;
+    table.createDiv({ text: label });
+    table.createDiv({ cls: "dj-trends-compare-value", text: a != null ? a : "\u2013" });
+    table.createDiv({ cls: "dj-trends-compare-value dj-trends-muted", text: b != null ? b : "\u2013" });
+  };
+  const hours = (n) => n === null ? null : `${one(n)} h`;
+  const pct = (n) => n === null ? null : `${n}%`;
+  line("Days", String(bad.length), String(all.length));
+  line("Sleep", hours(avgOf(bad, "sleep")), hours(avgOf(all, "sleep")));
+  line("Exercised", pct(share(bad, "exercise")), pct(share(all, "exercise")));
+  line("Worked", pct(share(bad, "worked")), pct(share(all, "worked")));
+  const weather = ranked(bad.map((d) => sky(d.fm)), 3);
+  if (weather.length) {
+    el.createDiv({ cls: "dj-trends-subhead", text: "Weather" });
+    barList(el, weather);
+  }
+  const meals = ranked(bad.flatMap((d) => MEALS.map((k) => str(d.fm[k]))), 3);
+  if (meals.length) {
+    el.createDiv({ cls: "dj-trends-subhead", text: "Meals" });
+    barList(el, meals);
+  }
+}
 function sky(fm) {
   return str(fm.weather).split("\xB7")[0].trim();
 }

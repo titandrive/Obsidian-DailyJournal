@@ -83,39 +83,47 @@ export class TrendsView extends BasesView {
 		const pages = days.reduce((sum, d) => sum + (num(d.fm.pages_read) ?? 0), 0);
 		const { current, longest } = streaks(days);
 
-		const tiles = root.createDiv({ cls: "dj-trends-tiles" });
-		const tile = (label: string, value: string, hint?: string) => {
-			const t = tiles.createDiv({ cls: "dj-trends-tile" });
-			t.createDiv({ cls: "dj-trends-tile-value", text: value });
-			t.createDiv({ cls: "dj-trends-tile-label", text: label });
-			if (hint) t.createDiv({ cls: "dj-trends-tile-hint", text: hint });
+		// Sections, each with a heading, a row of number tiles and/or a grid of cards. Empty ones are dropped.
+		const section = (title: string) => {
+			const el = root.createDiv({ cls: "dj-trends-section" });
+			el.createDiv({ cls: "dj-trends-section-title", text: title });
+			let tiles: HTMLElement | null = null, grid: HTMLElement | null = null;
+			return {
+				el,
+				tile(label: string, value: string, hint?: string) {
+					tiles ??= el.createDiv({ cls: "dj-trends-tiles" });
+					const t = tiles.createDiv({ cls: "dj-trends-tile" });
+					t.createDiv({ cls: "dj-trends-tile-value", text: value });
+					t.createDiv({ cls: "dj-trends-tile-label", text: label });
+					if (hint) t.createDiv({ cls: "dj-trends-tile-hint", text: hint });
+				},
+				card(title: string, note?: string) {
+					grid ??= el.createDiv({ cls: "dj-trends-grid" });
+					const c = grid.createDiv({ cls: "dj-trends-card" });
+					const head = c.createDiv({ cls: "dj-trends-card-head" });
+					head.createDiv({ cls: "dj-trends-card-title", text: title });
+					if (note) head.createDiv({ cls: "dj-trends-card-note", text: note });
+					return c;
+				},
+			};
 		};
-		tile("Entries", String(days.length), `${days[0].date.format("MMM D, YYYY")} – ${days[days.length - 1].date.format("MMM D, YYYY")}`);
-		tile("Streak", `${current} day${current === 1 ? "" : "s"}`, `Longest ${longest}`);
-		if (ratings.length) tile("Avg. day rating", one(mean(ratings)), "out of 10");
-		if (sleeps.length) tile("Avg. sleep", `${one(mean(sleeps))} h`);
-		if (exercised.length) tile("Exercised", `${Math.round(100 * exercised.filter((d) => d.fm.exercise).length / exercised.length)}%`, "of days");
-		if (pages) tile("Pages read", pages.toLocaleString());
 
-		const grid = root.createDiv({ cls: "dj-trends-grid" });
-		const card = (title: string, note?: string) => {
-			const c = grid.createDiv({ cls: "dj-trends-card" });
-			const head = c.createDiv({ cls: "dj-trends-card-head" });
-			head.createDiv({ cls: "dj-trends-card-title", text: title });
-			if (note) head.createDiv({ cls: "dj-trends-card-note", text: note });
-			return c;
-		};
+		// Overview
+		const overview = section("Overview");
+		overview.tile("Entries", String(days.length), `${days[0].date.format("MMM D, YYYY")} – ${days[days.length - 1].date.format("MMM D, YYYY")}`);
+		overview.tile("Streak", `${current} day${current === 1 ? "" : "s"}`, `Longest ${longest}`);
+		if (ratings.length) overview.tile("Avg. day rating", one(mean(ratings)), "out of 10");
+		if (sleeps.length) overview.tile("Avg. sleep", `${one(mean(sleeps))} h`);
+		if (exercised.length) overview.tile("Exercised", `${Math.round(100 * exercised.filter((d) => d.fm.exercise).length / exercised.length)}%`, "of days");
 
+		// Mood and sleep over time
+		const moodSleep = section("Averages");
 		const recent = days.filter((d) => !d.date.isBefore(days[days.length - 1].date.clone().subtract(89, "days"), "day"));
-		lineChart(card("Day rating", "Last 90 days · line is the 7-day average"), recent, (d) => num(d.fm.day_rating), 10);
-		lineChart(card("Sleep", "Last 90 days · hours · line is the 7-day average"), recent, (d) => num(d.fm.sleep), 12);
+		lineChart(moodSleep.card("Day rating", "Last 90 days · line is the 7-day average"), recent, (d) => num(d.fm.day_rating), 10);
+		lineChart(moodSleep.card("Sleep", "Last 90 days · hours · line is the 7-day average"), recent, (d) => num(d.fm.sleep), 12);
 
-		const meals = ranked(days.flatMap((d) => ["breakfast", "lunch", "dinner"].map((k) => str(d.fm[k]))), 10);
-		if (meals.length) barList(card("Most eaten", "Breakfast, lunch and dinner"), meals);
-
-		const weekday = ratingBy(days, [1, 2, 3, 4, 5, 6, 0].map((w) => [days[0].date.clone().day(w).format("dddd"), (d: Day) => d.date.day() === w]));
-		if (weekday.length) barList(card("Day rating by weekday"), weekday, 10);
-
+		// What lines up with good and bad days
+		const patterns = section("Good and bad days");
 		const good: Row[] = [
 			...ratingBy(days, [["Exercised", (d) => d.fm.exercise === true], ["Didn't exercise", (d) => d.fm.exercise === false]]),
 			...ratingBy(days, [
@@ -126,12 +134,27 @@ export class TrendsView extends BasesView {
 				["Worked", (d) => d.fm.worked === true], ["Day off", (d) => d.fm.worked === false],
 			]),
 		];
-		if (good.length) barList(card("What goes with good days", "Average day rating"), good, 10);
-
+		if (good.length) barList(patterns.card("What goes with good days", "Average day rating"), good, 10);
+		const bad = days.filter((d) => { const r = num(d.fm.day_rating); return r !== null && r <= BAD_DAY; });
+		if (ratings.length) badDays(patterns.card("What goes with bad days", `Days rated ${BAD_DAY} or lower, next to your typical day`), bad, days);
 		const skies = [...new Set(days.map((d) => sky(d.fm)).filter(Boolean))];
 		const byWeather = ratingBy(days, skies.map((s) => [s, (d: Day) => sky(d.fm) === s])).sort((a, b) => b.value - a.value);
-		if (byWeather.length > 1) barList(card("Day rating by weather"), byWeather, 10);
+		if (byWeather.length > 1) barList(patterns.card("Day rating by weather"), byWeather, 10);
 
+		// Food
+		const food = section("Food");
+		const meals = ranked(days.flatMap((d) => MEALS.map((k) => str(d.fm[k]))), 5);
+		if (meals.length) barList(food.card("Favorite meals", "Breakfast, lunch and dinner"), meals);
+
+		// Reading
+		const reading = section("Reading");
+		const finished = days.flatMap((d) => finishedBooks(d.fm).map((title) => ({ title, date: d.date })));
+		if (pages) {
+			const readDays = days.filter((d) => (num(d.fm.pages_read) ?? 0) > 0).length;
+			reading.tile("Pages read", pages.toLocaleString());
+			reading.tile("Avg. pages per day", one(pages / days.length), `${one(pages / readDays)} on days you read`);
+			reading.tile("Books finished", String(finished.length));
+		}
 		const months = new Map<string, number>();
 		for (const d of days) {
 			const p = num(d.fm.pages_read);
@@ -140,22 +163,76 @@ export class TrendsView extends BasesView {
 		if (months.size) {
 			const rows = [...months].sort((a, b) => b[0].localeCompare(a[0])).slice(0, 12)
 				.map(([m, n]) => ({ label: window.moment(m, "YYYY-MM").format("MMMM YYYY"), value: n, text: n.toLocaleString() }));
-			const c = card("Pages read by month");
-			barList(c, rows);
-			const finished = days.flatMap((d) => finishedBooks(d.fm).map((title) => ({ title, date: d.date })));
-			if (finished.length) {
-				c.createDiv({ cls: "dj-trends-subhead", text: "Finished" });
-				const list = c.createDiv({ cls: "dj-trends-books" });
-				for (const b of finished.reverse()) {
-					const row = list.createDiv({ cls: "dj-trends-book" });
-					row.createSpan({ text: b.title });
-					row.createSpan({ cls: "dj-trends-muted", text: b.date.format("MMM D, YYYY") });
-				}
+			barList(reading.card("Pages read by month"), rows);
+		}
+		if (finished.length) {
+			const list = reading.card("Finished").createDiv({ cls: "dj-trends-books" });
+			for (const b of finished.reverse()) {
+				const row = list.createDiv({ cls: "dj-trends-book" });
+				row.createSpan({ text: b.title });
+				row.createSpan({ cls: "dj-trends-muted", text: b.date.format("MMM D, YYYY") });
 			}
 		}
 
-		const artists = ranked(days.map((d) => str(d.fm.artist)), 8);
-		if (artists.length) barList(card("Top artists", "Earworm of the day"), artists);
+		// Music and podcasts, from the Earworm of the day card
+		const listening = section("Listening");
+		const podcast = (d: Day) => d.fm.song_kind === "podcast";
+		const artists = ranked(days.filter((d) => !podcast(d)).map((d) => str(d.fm.artist)), 5);
+		if (artists.length) barList(listening.card("Top artists"), artists);
+		const shows = ranked(days.filter(podcast).map((d) => str(d.fm.artist)), 5);
+		if (shows.length) barList(listening.card("Top podcasts"), shows);
+
+		for (const s of [overview, moodSleep, patterns, food, reading, listening]) {
+			if (s.el.childElementCount < 2 || !s.el.querySelector(".dj-trends-tile, .dj-trends-card")) s.el.remove();
+		}
+	}
+}
+
+const MEALS = ["breakfast", "lunch", "dinner"];
+/** Highest day rating that counts as a bad day. */
+const BAD_DAY = 4;
+
+/**
+ * What bad days have in common: sleep, exercise and work next to all days, then their most common
+ * weather and meals.
+ */
+function badDays(el: HTMLElement, bad: Day[], all: Day[]): void {
+	if (!bad.length) {
+		el.createDiv({ cls: "dj-trends-muted", text: "No bad days yet." });
+		return;
+	}
+	const avgOf = (ds: Day[], key: string) => {
+		const xs = ds.map((d) => num(d.fm[key])).filter((n): n is number => n !== null);
+		return xs.length ? mean(xs) : null;
+	};
+	const share = (ds: Day[], key: string) => {
+		const known = ds.filter((d) => typeof d.fm[key] === "boolean");
+		return known.length ? Math.round((100 * known.filter((d) => d.fm[key]).length) / known.length) : null;
+	};
+	const table = el.createDiv({ cls: "dj-trends-compare" });
+	for (const cell of ["", "Bad days", "Typical"]) table.createDiv({ cls: "dj-trends-compare-head", text: cell });
+	const line = (label: string, a: string | null, b: string | null) => {
+		if (a === null && b === null) return;
+		table.createDiv({ text: label });
+		table.createDiv({ cls: "dj-trends-compare-value", text: a ?? "–" });
+		table.createDiv({ cls: "dj-trends-compare-value dj-trends-muted", text: b ?? "–" });
+	};
+	const hours = (n: number | null) => (n === null ? null : `${one(n)} h`);
+	const pct = (n: number | null) => (n === null ? null : `${n}%`);
+	line("Days", String(bad.length), String(all.length));
+	line("Sleep", hours(avgOf(bad, "sleep")), hours(avgOf(all, "sleep")));
+	line("Exercised", pct(share(bad, "exercise")), pct(share(all, "exercise")));
+	line("Worked", pct(share(bad, "worked")), pct(share(all, "worked")));
+
+	const weather = ranked(bad.map((d) => sky(d.fm)), 3);
+	if (weather.length) {
+		el.createDiv({ cls: "dj-trends-subhead", text: "Weather" });
+		barList(el, weather);
+	}
+	const meals = ranked(bad.flatMap((d) => MEALS.map((k) => str(d.fm[k]))), 3);
+	if (meals.length) {
+		el.createDiv({ cls: "dj-trends-subhead", text: "Meals" });
+		barList(el, meals);
 	}
 }
 
