@@ -45,7 +45,7 @@ export interface JournalSettings {
 	fillNewEntries: boolean;
 	useAsDailyTemplate: boolean;
 	journalBase: boolean;
-	/** Folder the plugin last wrote the Journal base to, so it can tidy up when the folder changes. */
+	/** Folder the plugin last wrote the Insights base to, so it can tidy up when the folder changes. */
 	baseFolder: string | null;
 	hideNoteChrome: boolean;
 }

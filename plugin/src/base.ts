@@ -1,11 +1,13 @@
 import { JournalSettings } from "./settings";
 
 /*
- * The Journal base: a table of every entry (and a By month view) built from the properties the
+ * The Insights base: a Trends view, a table of every entry and a By month view, built from the properties the
  * cards save. The plugin keeps it in the journal folder and rewrites it when settings change.
  */
 
-export const BASE_NAME = "Journal.base";
+export const BASE_NAME = "Insights.base";
+/** Earlier names of the base, moved to BASE_NAME (links follow) when found. */
+export const OLD_BASE_NAMES = ["Journal.base"];
 export const ICONS_FOLDER = "Weather Icons";
 
 /** Weather labels (as saved by the header) and their icon files, longest label first. */
@@ -78,11 +80,12 @@ export function journalBase(settings: JournalSettings): string {
 		// Plain names unquoted, the way Obsidian writes them when it saves the base.
 		...columns.flatMap(([k, name]) => [`  ${k}:`, `    displayName: ${/^[A-Za-z][\w ()%.-]*$/.test(name) ? name : q(name)}`]),
 		"views:",
-		"  - type: table", "    name: Journal", "    order:",
+		// Trends first, so it's what the base opens to.
+		`  - type: journal-trends`, "    name: Trends",
+		"  - type: table", "    name: Entries", "    order:",
 		...columns.map(([k]) => `      - ${k}`),
 		"    sort:", "      - property: formula.entry_date", "        direction: DESC",
 		...(summaries.length ? ["    summaries:", ...summaries.map((s) => "      " + s)] : []),
-		`  - type: journal-trends`, "    name: Trends",
 		"  - type: table", "    name: By month",
 		"    groupBy:", "      property: formula.month", "      direction: DESC",
 		"    order:", ...monthly.map((k) => `      - ${k}`),

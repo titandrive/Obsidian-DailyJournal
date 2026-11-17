@@ -1,5 +1,5 @@
 import { MarkdownRenderChild, MarkdownView, Notice, normalizePath, Plugin, TAbstractFile, TFile, TFolder, moment } from "obsidian";
-import { BASE_NAME, ICONS_FOLDER, journalBase, SKY_ICONS } from "./src/base";
+import { BASE_NAME, ICONS_FOLDER, journalBase, OLD_BASE_NAMES, SKY_ICONS } from "./src/base";
 import { METEOCONS } from "./src/meteocons";
 import { entryDate, entryPath, Moment } from "./src/dates";
 import { HardcoverDay, hardcoverDay, readingProperties } from "./src/hardcover";
@@ -70,7 +70,7 @@ export default class DailyJournal extends Plugin implements JournalHost {
 		await this.loadSettings();
 		this.addSettingTab(new JournalSettingTab(this.app, this));
 
-		// A Trends tab for the Journal base (Bases view types need Obsidian 1.10+).
+		// A Trends tab for the Insights base (Bases view types need Obsidian 1.10+).
 		this.registerBasesView?.(TRENDS_VIEW, {
 			name: "Trends", icon: "chart-line",
 			factory: (controller, containerEl) => new TrendsView(controller, containerEl, () => this.settings),
@@ -94,9 +94,18 @@ export default class DailyJournal extends Plugin implements JournalHost {
 		this.addCommand({
 			id: "create-choose",
 			name: "Create Journal (Choose Date)",
-			callback: () => new MonthPicker(this.app, null, (d) => this.hasEntry(d), (d) => this.openEntry(d),
-				{ title: "Create journal entry for…", allowTaken: true }).open(),
+			callback: () => this.pickEntryDate(),
 		});
+		this.addCommand({
+			id: "open-insights",
+			name: "Open Insights",
+			callback: () => void this.openInsights(),
+		});
+
+		// Sidebar buttons.
+		this.addRibbonIcon("chart-line", "Open Insights", () => void this.openInsights());
+		this.addRibbonIcon("calendar-minus", "Create Journal (Yesterday)", () => void this.openEntry(moment().subtract(1, "day")));
+		this.addRibbonIcon("calendar-search", "Create Journal (Choose Date)", () => this.pickEntryDate());
 		this.addCommand({
 			id: "change-date-yesterday",
 			name: "Change date (yesterday)",
@@ -237,7 +246,7 @@ export default class DailyJournal extends Plugin implements JournalHost {
 	}
 
 	/**
-	 * Keep the Journal base (and the weather icons it shows) in the journal folder while the setting
+	 * Keep the Insights base (and the weather icons it shows) in the journal folder while the setting
 	 * is on, matching the current settings; move them to the trash when it's turned off or the
 	 * journal folder moves. Only acts on an existing folder, so typing a folder name doesn't scatter
 	 * bases across half-typed paths.
@@ -264,6 +273,13 @@ export default class DailyJournal extends Plugin implements JournalHost {
 			}
 		};
 		const inFolder = (name: string) => normalizePath(folder === "/" ? name : `${folder}/${name}`);
+		// A base under an earlier name is renamed (so links to it follow), or trashed if the new one exists.
+		for (const old of OLD_BASE_NAMES) {
+			const file = this.app.vault.getAbstractFileByPath(inFolder(old));
+			if (!(file instanceof TFile)) continue;
+			if (this.app.vault.getAbstractFileByPath(inFolder(BASE_NAME))) await this.app.fileManager.trashFile(file);
+			else await this.app.fileManager.renameFile(file, inFolder(BASE_NAME));
+		}
 		await write(inFolder(BASE_NAME), journalBase(s));
 		if (s.showWeather) for (const icon of SKY_ICONS) await write(inFolder(`${ICONS_FOLDER}/${icon}.svg`), METEOCONS[icon]);
 		if (s.baseFolder !== target) { s.baseFolder = target; await this.saveData(s); }
@@ -271,7 +287,7 @@ export default class DailyJournal extends Plugin implements JournalHost {
 
 	private async removeJournalBase(folder: string): Promise<void> {
 		const inFolder = (name: string) => normalizePath(folder === "/" ? name : `${folder}/${name}`);
-		for (const path of [inFolder(BASE_NAME), inFolder(ICONS_FOLDER)]) {
+		for (const path of [inFolder(BASE_NAME), ...OLD_BASE_NAMES.map(inFolder), inFolder(ICONS_FOLDER)]) {
 			const item = this.app.vault.getAbstractFileByPath(path);
 			if (item) await this.app.fileManager.trashFile(item);
 		}
@@ -370,6 +386,22 @@ export default class DailyJournal extends Plugin implements JournalHost {
 			});
 		}
 		new Notice(`Updated ${files.length} entr${files.length === 1 ? "y" : "ies"}.`);
+	}
+
+	pickEntryDate(): void {
+		new MonthPicker(this.app, null, (d) => this.hasEntry(d), (d) => this.openEntry(d),
+			{ title: "Create journal entry for…", allowTaken: true }).open();
+	}
+
+	/** Open the Insights base, creating it first if it isn't there yet. */
+	async openInsights(): Promise<void> {
+		let file = this.app.vault.getAbstractFileByPath(this.basePath());
+		if (!(file instanceof TFile)) {
+			await this.syncJournalBase();
+			file = this.app.vault.getAbstractFileByPath(this.basePath());
+		}
+		if (file instanceof TFile) await this.app.workspace.getLeaf(false).openFile(file);
+		else new Notice(this.settings.journalBase ? `Couldn't find the journal folder "${this.settings.folder}".` : "Turn on Insights base in Daily Journal's settings first.");
 	}
 
 	async openEntry(date: Moment): Promise<void> {

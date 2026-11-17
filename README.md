@@ -4,7 +4,7 @@ A daily journal for Obsidian. Each entry gets a set of cards above your writing:
 
 - **Header**: the date, links to your previous and next entries, that day's weather, and the entry's location (defaults to your default location; change it per entry while traveling).
 - **Currently reading**: what you read that day, from your [Hardcover](https://hardcover.app) reading journal: each book's cover, progress and pages read, books started or finished (with your rating), and quotes you saved. On days with no reading it shows when you last read. Works for past entries too. Needs a Hardcover API token. Each entry asks Hardcover once and saves the result in its properties (`reading`, plus `books` and `pages_read` for Bases); after that it only updates when you run **Refresh reading**.
-- **Earworm of the day**: a song for the day from YouTube. Paste a YouTube or YouTube Music link (works out of the box), or add a free YouTube Data API key in settings to search by song, artist or both. The card shows the art, title and artist; the play button plays the whole song in the card, and the title opens it in YouTube Music. Saved as properties (`song`, `artist`, plus the video id, link and art), so the Journal base lists your songs. With Currently reading on too, the two cards sit side by side in one row (stacked again on narrow screens). The search dialog has a **Music | Podcasts** toggle: podcasts are searched in Apple's podcast directory (no key needed) and the whole episode plays in a small audio player in the card, straight from the show's own feed; the title opens the episode's web page. Episodes are saved like songs (episode and show), marked `song_kind: podcast`.
+- **Earworm of the day**: a song for the day from YouTube. Paste a YouTube or YouTube Music link (works out of the box), or add a free YouTube Data API key in settings to search by song, artist or both. The card shows the art, title and artist; the play button plays the whole song in the card, and the title opens it in YouTube Music. Saved as properties (`song`, `artist`, plus the video id, link and art), so the Insights base lists your songs. With Currently reading on too, the two cards sit side by side in one row (stacked again on narrow screens). The search dialog has a **Music | Podcasts** toggle: podcasts are searched in Apple's podcast directory (no key needed) and the whole episode plays in a small audio player in the card, straight from the show's own feed; the title opens the episode's web page. Episodes are saved like songs (episode and show), marked `song_kind: podcast`.
 - **Check-in**: day rating (1–10), sleep, whether you worked, exercise, food (breakfast, lunch, dinner) and tags, saved as note properties so you can chart or query them with Bases.
 - **On this day**: links to entries from the same date in earlier months and years.
 
@@ -14,20 +14,23 @@ Works on desktop and mobile; the cards adapt to narrow screens.
 
 - **Open today's entry**: creates today's entry from the journal layout if needed.
 - **Create Journal (Yesterday)** / **Create Journal (Choose Date)**: creates (or opens) the entry for yesterday or any date picked in a month calendar.
+- **Open Insights**: opens the Insights base.
 - **Change date (yesterday)** / **Change date (choose date)**: moves the open entry to another date (with a month picker) and fetches that date's weather. Also in the right-click menu for entries.
 - **Change location**: sets the open entry's location and refreshes its weather.
 
 Commands that act on an entry only appear while a journal entry is open.
 
+Open Insights, Create Journal (Yesterday) and Create Journal (Choose Date) also have their own buttons in the left sidebar.
+
 ## With Obsidian's Daily notes
 
 Daily Journal uses the same folder and date format as Daily notes (copied on first run, adjustable in settings). With **Use as Daily notes template** on (the default), it keeps the journal layout in a template file (`Daily Journal.md` in your Templates folder) and sets it as Daily notes' template, so Obsidian's own daily-note command uses it. Empty entries created any other way (calendars, dashboards) are filled with the layout too.
 
-With **Journal base** on (the default), it also keeps `Journal.base` in the journal folder: a table of every entry (location, weather, rating, sleep, work, exercise, food, book and pages read) and a By month view with averages and page totals. Its weather icons live in `Weather Icons/` beside it. The base follows your settings; turning it off moves both to the trash, and turning it back on recreates them.
+With **Insights base** on (the default), it also keeps `Insights.base` in the journal folder. It opens to **Trends**: averages, streaks, rating and sleep charts, what goes with good and bad days, favorite meals, reading and listening. **Entries** is a table of every entry (location, weather, rating, sleep, work, exercise, food, book and pages read), and **By month** groups them with averages and page totals. The base's filters and search narrow Trends too. Its weather icons live in `Weather Icons/` beside it. The base follows your settings; turning it off moves both to the trash, and turning it back on recreates them.
 
 ## Settings
 
-- **Entries**: journal folder and date format, using the layout as Daily notes' template, the Journal base, filling new entries, and writing prompts (edited in a dialog: drag to reorder, indent to make sub-headings).
+- **Entries**: journal folder and date format, using the layout as Daily notes' template, the Insights base, filling new entries, and writing prompts (edited in a dialog: drag to reorder, indent to make sub-headings).
 - **Cards**: each card with its own settings: Weather (on/off, default location, °F/°C), Reading (Hardcover API token), Song of the day (optional YouTube API key for search), Check-in (which fields to show), and On this day.
 - **Appearance**: hide the title and Properties box in entries.
 

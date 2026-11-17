@@ -30,7 +30,8 @@ module.exports = __toCommonJS(main_exports);
 var import_obsidian7 = require("obsidian");
 
 // src/base.ts
-var BASE_NAME = "Journal.base";
+var BASE_NAME = "Insights.base";
+var OLD_BASE_NAMES = ["Journal.base"];
 var ICONS_FOLDER = "Weather Icons";
 var SKY = [
   ["Partly cloudy", "partly-cloudy"],
@@ -115,16 +116,17 @@ function journalBase(settings) {
     // Plain names unquoted, the way Obsidian writes them when it saves the base.
     ...columns.flatMap(([k, name]) => [`  ${k}:`, `    displayName: ${/^[A-Za-z][\w ()%.-]*$/.test(name) ? name : q(name)}`]),
     "views:",
+    // Trends first, so it's what the base opens to.
+    `  - type: journal-trends`,
+    "    name: Trends",
     "  - type: table",
-    "    name: Journal",
+    "    name: Entries",
     "    order:",
     ...columns.map(([k]) => `      - ${k}`),
     "    sort:",
     "      - property: formula.entry_date",
     "        direction: DESC",
     ...summaries.length ? ["    summaries:", ...summaries.map((s) => "      " + s)] : [],
-    `  - type: journal-trends`,
-    "    name: Trends",
     "  - type: table",
     "    name: By month",
     "    groupBy:",
@@ -2116,7 +2118,7 @@ var JournalSettingTab = class extends import_obsidian5.PluginSettingTab {
       s.useAsDailyTemplate = v;
       await save();
     }));
-    new import_obsidian5.Setting(containerEl).setName("Journal base").setDesc(`Keeps a base of all entries (rating, sleep, weather, pages read and more, plus a By month view) at ${this.plugin.basePath()}, updated to match these settings. Turning it off moves the base and its weather icons to the trash.`).addToggle((t) => t.setValue(s.journalBase).onChange(async (v) => {
+    new import_obsidian5.Setting(containerEl).setName("Insights base").setDesc(`Keeps a base with trends across your entries, a table of all entries and a By month view at ${this.plugin.basePath()}, updated to match these settings. Turning it off moves the base and its weather icons to the trash.`).addToggle((t) => t.setValue(s.journalBase).onChange(async (v) => {
       s.journalBase = v;
       await save();
     }));
@@ -2681,14 +2683,16 @@ var DailyJournal = class extends import_obsidian7.Plugin {
     this.addCommand({
       id: "create-choose",
       name: "Create Journal (Choose Date)",
-      callback: () => new MonthPicker(
-        this.app,
-        null,
-        (d) => this.hasEntry(d),
-        (d) => this.openEntry(d),
-        { title: "Create journal entry for\u2026", allowTaken: true }
-      ).open()
+      callback: () => this.pickEntryDate()
     });
+    this.addCommand({
+      id: "open-insights",
+      name: "Open Insights",
+      callback: () => void this.openInsights()
+    });
+    this.addRibbonIcon("chart-line", "Open Insights", () => void this.openInsights());
+    this.addRibbonIcon("calendar-minus", "Create Journal (Yesterday)", () => void this.openEntry((0, import_obsidian7.moment)().subtract(1, "day")));
+    this.addRibbonIcon("calendar-search", "Create Journal (Choose Date)", () => this.pickEntryDate());
     this.addCommand({
       id: "change-date-yesterday",
       name: "Change date (yesterday)",
@@ -2821,7 +2825,7 @@ var DailyJournal = class extends import_obsidian7.Plugin {
     return (0, import_obsidian7.normalizePath)(`${this.settings.folder}/${BASE_NAME}`);
   }
   /**
-   * Keep the Journal base (and the weather icons it shows) in the journal folder while the setting
+   * Keep the Insights base (and the weather icons it shows) in the journal folder while the setting
    * is on, matching the current settings; move them to the trash when it's turned off or the
    * journal folder moves. Only acts on an existing folder, so typing a folder name doesn't scatter
    * bases across half-typed paths.
@@ -2849,6 +2853,15 @@ var DailyJournal = class extends import_obsidian7.Plugin {
       }
     };
     const inFolder = (name) => (0, import_obsidian7.normalizePath)(folder === "/" ? name : `${folder}/${name}`);
+    for (const old of OLD_BASE_NAMES) {
+      const file = this.app.vault.getAbstractFileByPath(inFolder(old));
+      if (!(file instanceof import_obsidian7.TFile))
+        continue;
+      if (this.app.vault.getAbstractFileByPath(inFolder(BASE_NAME)))
+        await this.app.fileManager.trashFile(file);
+      else
+        await this.app.fileManager.renameFile(file, inFolder(BASE_NAME));
+    }
     await write(inFolder(BASE_NAME), journalBase(s));
     if (s.showWeather)
       for (const icon of SKY_ICONS)
@@ -2860,7 +2873,7 @@ var DailyJournal = class extends import_obsidian7.Plugin {
   }
   async removeJournalBase(folder) {
     const inFolder = (name) => (0, import_obsidian7.normalizePath)(folder === "/" ? name : `${folder}/${name}`);
-    for (const path of [inFolder(BASE_NAME), inFolder(ICONS_FOLDER)]) {
+    for (const path of [inFolder(BASE_NAME), ...OLD_BASE_NAMES.map(inFolder), inFolder(ICONS_FOLDER)]) {
       const item = this.app.vault.getAbstractFileByPath(path);
       if (item)
         await this.app.fileManager.trashFile(item);
@@ -2948,6 +2961,27 @@ var DailyJournal = class extends import_obsidian7.Plugin {
       });
     }
     new import_obsidian7.Notice(`Updated ${files.length} entr${files.length === 1 ? "y" : "ies"}.`);
+  }
+  pickEntryDate() {
+    new MonthPicker(
+      this.app,
+      null,
+      (d) => this.hasEntry(d),
+      (d) => this.openEntry(d),
+      { title: "Create journal entry for\u2026", allowTaken: true }
+    ).open();
+  }
+  /** Open the Insights base, creating it first if it isn't there yet. */
+  async openInsights() {
+    let file = this.app.vault.getAbstractFileByPath(this.basePath());
+    if (!(file instanceof import_obsidian7.TFile)) {
+      await this.syncJournalBase();
+      file = this.app.vault.getAbstractFileByPath(this.basePath());
+    }
+    if (file instanceof import_obsidian7.TFile)
+      await this.app.workspace.getLeaf(false).openFile(file);
+    else
+      new import_obsidian7.Notice(this.settings.journalBase ? `Couldn't find the journal folder "${this.settings.folder}".` : "Turn on Insights base in Daily Journal's settings first.");
   }
   async openEntry(date) {
     const path = entryPath(this.settings, date);
