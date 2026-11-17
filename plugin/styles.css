@@ -292,11 +292,30 @@ a.dj-otd-tile:hover { border-color: var(--interactive-accent); }
 .dj-suggest-item.is-active { background: var(--interactive-accent); color: var(--text-on-accent); }
 
 /* ---- Dialogs (date picker, city search) ------------------------------- */
+/* Recent locations in the location dialog. */
+.dj-place-recent-head { display: flex; justify-content: space-between; align-items: baseline; margin: .6em .2em .25em; font-size: .75em; font-weight: 650; letter-spacing: .07em; text-transform: uppercase; color: var(--text-faint); }
+.dj-place-clear { font-size: 1em; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--text-muted); text-decoration: none; }
+.dj-place-clear:hover { color: var(--text-accent); }
 
 .dj-modal { width: min(380px, 92vw); }
 .dj-picker-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: .75em; }
 .dj-picker-head button { width: 2.2em; height: 2.2em; padding: 0; border-radius: 50%; font-size: 1.1em; }
-.dj-picker-month { font-weight: 700; font-size: 1.05em; }
+.dj-picker-title { display: flex; align-items: center; gap: .15em; }
+.dj-modal .dj-picker-head button.dj-picker-label {
+	width: auto; height: auto; padding: .25em .55em; border-radius: 8px; font-size: 1.05em; font-weight: 700;
+	background: transparent; box-shadow: none; color: var(--text-normal); cursor: pointer;
+}
+.dj-modal .dj-picker-head button.dj-picker-label:hover, .dj-modal .dj-picker-head button.dj-picker-label.is-active { background: var(--background-modifier-hover); color: var(--text-accent); }
+.dj-picker-range { font-weight: 700; font-size: 1.05em; padding: .25em .55em; }
+/* Month and year views: a 3 × 4 grid filling the same space as the six-week calendar. */
+.dj-picker-cells { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(4, 1fr); gap: .45em; height: 100%; }
+.dj-picker-cell {
+	height: 100%; min-height: 2.6em; border-radius: 10px; border: none; box-shadow: none; cursor: pointer;
+	background: var(--background-secondary); color: var(--text-normal); font-size: .95em;
+}
+.dj-picker-cell:hover { background: var(--interactive-accent); color: var(--text-on-accent); }
+.dj-picker-cell.is-today { outline: 1px solid var(--interactive-accent); outline-offset: -1px; }
+.dj-picker-cell.is-current { background: var(--interactive-accent); color: var(--text-on-accent); font-weight: 700; }
 .dj-picker-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: .3em; }
 .dj-picker-dow { text-align: center; font-size: .7em; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); padding-bottom: .3em; }
 .dj-picker-day {
@@ -304,6 +323,7 @@ a.dj-otd-tile:hover { border-color: var(--interactive-accent); }
 	background: var(--background-secondary); color: var(--text-normal); font-size: .9em; cursor: pointer;
 }
 .dj-picker-day:hover:not(:disabled) { background: var(--interactive-accent); color: var(--text-on-accent); }
+.dj-picker-day.is-other-month { opacity: .4; }
 .dj-picker-day.is-today { outline: 1px solid var(--interactive-accent); outline-offset: -1px; }
 .dj-picker-day.is-current { background: var(--interactive-accent); color: var(--text-on-accent); font-weight: 700; cursor: default; }
 .dj-picker-day.has-entry { color: var(--text-faint); cursor: not-allowed; }

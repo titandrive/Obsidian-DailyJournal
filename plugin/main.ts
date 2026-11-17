@@ -3,7 +3,7 @@ import { BASE_NAME, ICONS_FOLDER, journalBase, SKY_ICONS } from "./src/base";
 import { METEOCONS } from "./src/meteocons";
 import { entryDate, entryPath, Moment } from "./src/dates";
 import { HardcoverDay, hardcoverDay, readingProperties } from "./src/hardcover";
-import { MonthPicker, PlaceModal } from "./src/modals";
+import { MonthPicker, PlaceHistory, PlaceModal } from "./src/modals";
 import { drawReading, JournalHost, renderSection } from "./src/render";
 import { DEFAULT_SETTINGS, JournalSettings, Place, Prompt } from "./src/settings";
 import { JournalSettingTab } from "./src/settings-tab";
@@ -302,11 +302,25 @@ export default class DailyJournal extends Plugin implements JournalHost {
 		return !!this.app.vault.getAbstractFileByPath(entryPath(this.settings, date));
 	}
 
+	/** Recently picked locations (newest first, at most 8), kept in the plugin's settings. */
+	readonly placeHistory: PlaceHistory = {
+		get: () => this.settings.recentPlaces ?? [],
+		add: (place) => {
+			const same = (p: Place) => p.name === place.name && Math.abs(p.lat - place.lat) < 1e-3 && Math.abs(p.lon - place.lon) < 1e-3;
+			this.settings.recentPlaces = [place, ...(this.settings.recentPlaces ?? []).filter((p) => !same(p))].slice(0, 8);
+			void this.saveData(this.settings);
+		},
+		clear: () => {
+			this.settings.recentPlaces = [];
+			void this.saveData(this.settings);
+		},
+	};
+
 	private pickPlace(file: TFile): void {
 		const current = entryPlace(this.app.metadataCache.getFileCache(file)?.frontmatter, this.settings.home);
 		new PlaceModal(this.app, current.name !== this.settings.home.name ? this.settings.home : null, async (place) => {
 			await this.setEntryPlace(file, place, await this.entryShowsWeather(file));
-		}).open();
+		}, undefined, this.placeHistory).open();
 	}
 
 	/** Whether an entry's header shows weather (set when the entry was created). */

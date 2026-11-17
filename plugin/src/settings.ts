@@ -28,6 +28,8 @@ export interface JournalSettings {
 	home: Place;
 	showWeather: boolean;
 	units: "f" | "c";
+	/** Locations picked in the location dialog, most recent first. */
+	recentPlaces: Place[];
 	showReading: boolean;
 	hardcoverToken: string;
 	showSong: boolean;
@@ -50,6 +52,7 @@ export const DEFAULT_SETTINGS: JournalSettings = {
 	home: { name: "Los Angeles", lat: 34.05223, lon: -118.24368, tz: "America/Los_Angeles" },
 	showWeather: true,
 	units: "f",
+	recentPlaces: [],
 	showReading: true,
 	hardcoverToken: "",
 	showSong: true,

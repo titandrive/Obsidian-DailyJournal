@@ -381,6 +381,7 @@ var DEFAULT_SETTINGS = {
   home: { name: "Los Angeles", lat: 34.05223, lon: -118.24368, tz: "America/Los_Angeles" },
   showWeather: true,
   units: "f",
+  recentPlaces: [],
   showReading: true,
   hardcoverToken: "",
   showSong: true,
@@ -653,12 +654,18 @@ var SONG_KEYS = ["song", "artist", "song_cover", "song_id", "song_url", "song_ki
 
 // src/modals.ts
 var MonthPicker = class extends import_obsidian3.Modal {
+  // the days view's height, kept for the other views so nothing moves
   constructor(app, current, isTaken, onPick, options = {}) {
     super(app);
     this.current = current;
     this.isTaken = isTaken;
     this.onPick = onPick;
     this.options = options;
+    /** Days, the 12 months of a year, or a page of 12 years (clicking the month or year in the header). */
+    this.view = "days";
+    this.yearPage = 0;
+    // first year shown in the years view
+    this.bodyHeight = 0;
     this.month = (current != null ? current : (0, import_obsidian3.moment)()).clone().startOf("month");
   }
   onOpen() {
@@ -671,24 +678,62 @@ var MonthPicker = class extends import_obsidian3.Modal {
     const { contentEl } = this;
     contentEl.empty();
     const head = contentEl.createDiv({ cls: "dj-picker-head" });
-    head.createEl("button", { text: "\u2039", attr: { "aria-label": "Previous month" } }).onclick = () => {
-      this.month.subtract(1, "month");
+    const step = (dir) => {
+      if (this.view === "days")
+        this.month.add(dir, "month");
+      else if (this.view === "months")
+        this.month.add(dir, "year");
+      else
+        this.yearPage += dir * 12;
       this.render();
     };
-    head.createDiv({ cls: "dj-picker-month", text: this.month.format("MMMM YYYY") });
-    head.createEl("button", { text: "\u203A", attr: { "aria-label": "Next month" } }).onclick = () => {
-      this.month.add(1, "month");
-      this.render();
-    };
-    const grid = contentEl.createDiv({ cls: "dj-picker-grid" });
+    head.createEl("button", { text: "\u2039", attr: { "aria-label": "Previous" } }).onclick = () => step(-1);
+    const title = head.createDiv({ cls: "dj-picker-title" });
+    if (this.view === "years") {
+      title.createSpan({ cls: "dj-picker-range", text: `${this.yearPage} \u2013 ${this.yearPage + 11}` });
+    } else {
+      const monthBtn = title.createEl("button", { cls: "dj-picker-label", text: this.month.format("MMMM"), attr: { "aria-label": "Choose month" } });
+      monthBtn.toggleClass("is-active", this.view === "months");
+      monthBtn.onclick = () => {
+        this.view = this.view === "months" ? "days" : "months";
+        this.render();
+      };
+      const yearBtn = title.createEl("button", { cls: "dj-picker-label", text: this.month.format("YYYY"), attr: { "aria-label": "Choose year" } });
+      yearBtn.onclick = () => {
+        this.view = "years";
+        this.yearPage = this.month.year() - 5;
+        this.render();
+      };
+    }
+    head.createEl("button", { text: "\u203A", attr: { "aria-label": "Next" } }).onclick = () => step(1);
+    const body = contentEl.createDiv({ cls: "dj-picker-body" });
+    if (this.bodyHeight)
+      body.style.height = `${this.bodyHeight}px`;
+    if (this.view === "days")
+      this.renderDays(body);
+    else if (this.view === "months")
+      this.renderMonths(body);
+    else
+      this.renderYears(body);
+    if (this.view === "days" && !this.bodyHeight) {
+      window.requestAnimationFrame(() => {
+        if (body.offsetHeight)
+          this.bodyHeight = body.offsetHeight;
+      });
+    }
+  }
+  /** Always six weeks (42 days), so the dialog's height never changes between months. */
+  renderDays(body) {
+    const grid = body.createDiv({ cls: "dj-picker-grid" });
     for (const d of import_obsidian3.moment.weekdaysMin())
       grid.createDiv({ cls: "dj-picker-dow", text: d });
-    for (let i = 0; i < this.month.day(); i++)
-      grid.createDiv();
     const today = (0, import_obsidian3.moment)();
-    for (const day = this.month.clone(); day.isSame(this.month, "month"); day.add(1, "day")) {
-      const date = day.clone();
+    const first = this.month.clone().subtract(this.month.day(), "days");
+    for (let i = 0; i < 42; i++) {
+      const date = first.clone().add(i, "days");
       const btn = grid.createEl("button", { cls: "dj-picker-day", text: String(date.date()) });
+      if (!date.isSame(this.month, "month"))
+        btn.addClass("is-other-month");
       if (date.isSame(today, "day"))
         btn.addClass("is-today");
       if (this.current && date.isSame(this.current, "day")) {
@@ -710,18 +755,58 @@ var MonthPicker = class extends import_obsidian3.Modal {
       };
     }
   }
+  renderMonths(body) {
+    const grid = body.createDiv({ cls: "dj-picker-cells" });
+    const now = (0, import_obsidian3.moment)();
+    for (let m = 0; m < 12; m++) {
+      const btn = grid.createEl("button", { cls: "dj-picker-cell", text: (0, import_obsidian3.moment)().month(m).format("MMM") });
+      if (m === this.month.month())
+        btn.addClass("is-current");
+      if (m === now.month() && this.month.year() === now.year())
+        btn.addClass("is-today");
+      btn.onclick = () => {
+        this.month.month(m);
+        this.view = "days";
+        this.render();
+      };
+    }
+  }
+  renderYears(body) {
+    const grid = body.createDiv({ cls: "dj-picker-cells" });
+    const now = (0, import_obsidian3.moment)().year();
+    for (let y = this.yearPage; y < this.yearPage + 12; y++) {
+      const btn = grid.createEl("button", { cls: "dj-picker-cell", text: String(y) });
+      if (y === this.month.year())
+        btn.addClass("is-current");
+      if (y === now)
+        btn.addClass("is-today");
+      btn.onclick = () => {
+        this.month.year(y);
+        this.view = "months";
+        this.render();
+      };
+    }
+  }
   onClose() {
     this.contentEl.empty();
   }
 };
 var PlaceModal = class extends import_obsidian3.Modal {
-  constructor(app, home, onChoose, title = "Change location") {
+  constructor(app, home, onChoose, title = "Change location", history) {
     super(app);
     this.home = home;
     this.onChoose = onChoose;
     this.title = title;
+    this.history = history;
     this.timer = 0;
     this.latest = "";
+  }
+  /** Pick a place: remember it in the history, close, and hand it back. */
+  pick(place) {
+    var _a;
+    (_a = this.history) == null ? void 0 : _a.add(place);
+    this.close();
+    this.onChoose(place);
   }
   onOpen() {
     this.modalEl.addClass("dj-modal");
@@ -738,6 +823,30 @@ var PlaceModal = class extends import_obsidian3.Modal {
         this.onChoose(null);
       };
     };
+    const showStart = () => {
+      var _a, _b;
+      showHome();
+      const recent = ((_b = (_a = this.history) == null ? void 0 : _a.get()) != null ? _b : []).filter((p) => {
+        var _a2;
+        return p.name !== ((_a2 = this.home) == null ? void 0 : _a2.name);
+      });
+      if (!recent.length)
+        return;
+      const head = results.createDiv({ cls: "dj-place-recent-head" });
+      head.createSpan({ text: "Recent" });
+      const clear = head.createEl("a", { cls: "dj-place-clear", text: "Clear", href: "#" });
+      clear.onclick = (e) => {
+        var _a2;
+        e.preventDefault();
+        (_a2 = this.history) == null ? void 0 : _a2.clear();
+        showStart();
+      };
+      for (const place of recent) {
+        const opt = results.createEl("button", { cls: "dj-place-option" });
+        opt.createSpan({ text: place.name });
+        opt.onclick = () => this.pick(place);
+      }
+    };
     const show = (places) => {
       showHome();
       if (!places.length)
@@ -746,18 +855,15 @@ var PlaceModal = class extends import_obsidian3.Modal {
         const opt = results.createEl("button", { cls: "dj-place-option" });
         opt.createSpan({ text: place.name });
         opt.createSpan({ cls: "dj-place-detail", text: place.detail });
-        opt.onclick = () => {
-          this.close();
-          this.onChoose({ name: place.name, lat: place.lat, lon: place.lon, tz: place.tz });
-        };
+        opt.onclick = () => this.pick({ name: place.name, lat: place.lat, lon: place.lon, tz: place.tz });
       }
     };
-    showHome();
+    showStart();
     input.addEventListener("input", () => {
       window.clearTimeout(this.timer);
       const q2 = input.value.trim();
       if (q2.length < 2) {
-        showHome();
+        showStart();
         return;
       }
       this.timer = window.setTimeout(async () => {
@@ -1316,7 +1422,7 @@ async function renderHeader(host, el, file, date, fm, weatherOn) {
       placeName.setText((chosen != null ? chosen : settings.home).name);
       const weather = await host.setEntryPlace(file, chosen, weatherOn);
       showWeather(weatherOn ? weather : null);
-    }).open();
+    }, void 0, host.placeHistory).open();
   };
   if (weatherOn && !fm.weather && !host.weatherTried.has(file.path) && !date.isAfter((0, import_obsidian4.moment)(), "day")) {
     host.weatherTried.add(file.path);
@@ -2025,7 +2131,7 @@ var JournalSettingTab = class extends import_obsidian5.PluginSettingTab {
         s.home = place;
         await save();
         this.display();
-      }, "Default location").open();
+      }, "Default location", this.plugin.placeHistory).open();
     }));
     sub(new import_obsidian5.Setting(group).setName("Temperature"), s.showWeather).addDropdown((d) => d.addOption("f", "Fahrenheit (\xB0F)").addOption("c", "Celsius (\xB0C)").setValue(s.units).onChange(async (v) => {
       s.units = v === "c" ? "c" : "f";
@@ -2188,6 +2294,23 @@ var DailyJournal = class extends import_obsidian6.Plugin {
     this.readingRetries = /* @__PURE__ */ new Map();
     this.weatherRetried = /* @__PURE__ */ new Set();
     this.blocks = /* @__PURE__ */ new Set();
+    /** Recently picked locations (newest first, at most 8), kept in the plugin's settings. */
+    this.placeHistory = {
+      get: () => {
+        var _a;
+        return (_a = this.settings.recentPlaces) != null ? _a : [];
+      },
+      add: (place) => {
+        var _a;
+        const same = (p) => p.name === place.name && Math.abs(p.lat - place.lat) < 1e-3 && Math.abs(p.lon - place.lon) < 1e-3;
+        this.settings.recentPlaces = [place, ...((_a = this.settings.recentPlaces) != null ? _a : []).filter((p) => !same(p))].slice(0, 8);
+        void this.saveData(this.settings);
+      },
+      clear: () => {
+        this.settings.recentPlaces = [];
+        void this.saveData(this.settings);
+      }
+    };
   }
   async onload() {
     await this.loadSettings();
@@ -2428,7 +2551,7 @@ var DailyJournal = class extends import_obsidian6.Plugin {
     const current = entryPlace((_a = this.app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter, this.settings.home);
     new PlaceModal(this.app, current.name !== this.settings.home.name ? this.settings.home : null, async (place) => {
       await this.setEntryPlace(file, place, await this.entryShowsWeather(file));
-    }).open();
+    }, void 0, this.placeHistory).open();
   }
   /** Whether an entry's header shows weather (set when the entry was created). */
   async entryShowsWeather(file) {

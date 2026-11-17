@@ -72,7 +72,7 @@ export class JournalSettingTab extends PluginSettingTab {
 				s.home = place;
 				await save();
 				this.display();
-			}, "Default location").open();
+			}, "Default location", this.plugin.placeHistory).open();
 		}));
 		sub(new Setting(group).setName("Temperature"), s.showWeather)
 			.addDropdown((d) => d.addOption("f", "Fahrenheit (°F)").addOption("c", "Celsius (°C)").setValue(s.units)

@@ -7,6 +7,10 @@ import { searchEpisodes, searchShows, searchSongs, showEpisodes, Song, SongKind,
 /** Month calendar for choosing a date. Days that already have an entry are marked (and can't be picked unless allowTaken). */
 export class MonthPicker extends Modal {
 	private month: Moment;
+	/** Days, the 12 months of a year, or a page of 12 years (clicking the month or year in the header). */
+	private view: "days" | "months" | "years" = "days";
+	private yearPage = 0; // first year shown in the years view
+	private bodyHeight = 0; // the days view's height, kept for the other views so nothing moves
 
 	constructor(
 		app: App,
@@ -29,19 +33,47 @@ export class MonthPicker extends Modal {
 		const { contentEl } = this;
 		contentEl.empty();
 
+		// Header: ‹  [Month] [Year]  ›. The arrows step by month, year or 12 years depending on the view.
 		const head = contentEl.createDiv({ cls: "dj-picker-head" });
-		head.createEl("button", { text: "‹", attr: { "aria-label": "Previous month" } }).onclick = () => { this.month.subtract(1, "month"); this.render(); };
-		head.createDiv({ cls: "dj-picker-month", text: this.month.format("MMMM YYYY") });
-		head.createEl("button", { text: "›", attr: { "aria-label": "Next month" } }).onclick = () => { this.month.add(1, "month"); this.render(); };
+		const step = (dir: 1 | -1) => {
+			if (this.view === "days") this.month.add(dir, "month");
+			else if (this.view === "months") this.month.add(dir, "year");
+			else this.yearPage += dir * 12;
+			this.render();
+		};
+		head.createEl("button", { text: "‹", attr: { "aria-label": "Previous" } }).onclick = () => step(-1);
+		const title = head.createDiv({ cls: "dj-picker-title" });
+		if (this.view === "years") {
+			title.createSpan({ cls: "dj-picker-range", text: `${this.yearPage} – ${this.yearPage + 11}` });
+		} else {
+			const monthBtn = title.createEl("button", { cls: "dj-picker-label", text: this.month.format("MMMM"), attr: { "aria-label": "Choose month" } });
+			monthBtn.toggleClass("is-active", this.view === "months");
+			monthBtn.onclick = () => { this.view = this.view === "months" ? "days" : "months"; this.render(); };
+			const yearBtn = title.createEl("button", { cls: "dj-picker-label", text: this.month.format("YYYY"), attr: { "aria-label": "Choose year" } });
+			yearBtn.onclick = () => { this.view = "years"; this.yearPage = this.month.year() - 5; this.render(); };
+		}
+		head.createEl("button", { text: "›", attr: { "aria-label": "Next" } }).onclick = () => step(1);
 
-		const grid = contentEl.createDiv({ cls: "dj-picker-grid" });
+		const body = contentEl.createDiv({ cls: "dj-picker-body" });
+		if (this.bodyHeight) body.style.height = `${this.bodyHeight}px`;
+		if (this.view === "days") this.renderDays(body);
+		else if (this.view === "months") this.renderMonths(body);
+		else this.renderYears(body);
+		if (this.view === "days" && !this.bodyHeight) {
+			window.requestAnimationFrame(() => { if (body.offsetHeight) this.bodyHeight = body.offsetHeight; });
+		}
+	}
+
+	/** Always six weeks (42 days), so the dialog's height never changes between months. */
+	private renderDays(body: HTMLElement): void {
+		const grid = body.createDiv({ cls: "dj-picker-grid" });
 		for (const d of moment.weekdaysMin()) grid.createDiv({ cls: "dj-picker-dow", text: d });
-		for (let i = 0; i < this.month.day(); i++) grid.createDiv();
-
 		const today = moment();
-		for (const day = this.month.clone(); day.isSame(this.month, "month"); day.add(1, "day")) {
-			const date = day.clone();
+		const first = this.month.clone().subtract(this.month.day(), "days");
+		for (let i = 0; i < 42; i++) {
+			const date = first.clone().add(i, "days");
 			const btn = grid.createEl("button", { cls: "dj-picker-day", text: String(date.date()) });
+			if (!date.isSame(this.month, "month")) btn.addClass("is-other-month");
 			if (date.isSame(today, "day")) btn.addClass("is-today");
 			if (this.current && date.isSame(this.current, "day")) {
 				btn.addClass("is-current");
@@ -60,18 +92,54 @@ export class MonthPicker extends Modal {
 		}
 	}
 
+	private renderMonths(body: HTMLElement): void {
+		const grid = body.createDiv({ cls: "dj-picker-cells" });
+		const now = moment();
+		for (let m = 0; m < 12; m++) {
+			const btn = grid.createEl("button", { cls: "dj-picker-cell", text: moment().month(m).format("MMM") });
+			if (m === this.month.month()) btn.addClass("is-current");
+			if (m === now.month() && this.month.year() === now.year()) btn.addClass("is-today");
+			btn.onclick = () => { this.month.month(m); this.view = "days"; this.render(); };
+		}
+	}
+
+	private renderYears(body: HTMLElement): void {
+		const grid = body.createDiv({ cls: "dj-picker-cells" });
+		const now = moment().year();
+		for (let y = this.yearPage; y < this.yearPage + 12; y++) {
+			const btn = grid.createEl("button", { cls: "dj-picker-cell", text: String(y) });
+			if (y === this.month.year()) btn.addClass("is-current");
+			if (y === now) btn.addClass("is-today");
+			btn.onclick = () => { this.month.year(y); this.view = "months"; this.render(); };
+		}
+	}
+
 	onClose(): void {
 		this.contentEl.empty();
 	}
 }
 
 /** City search. Calls onChoose with a place, or with null for "back to home" (when offered). */
+/** Recently picked locations, kept by the plugin. */
+export interface PlaceHistory {
+	get(): Place[];
+	add(place: Place): void;
+	clear(): void;
+}
+
 export class PlaceModal extends Modal {
 	private timer = 0;
 	private latest = "";
 
-	constructor(app: App, private home: Place | null, private onChoose: (place: Place | null) => void, private title = "Change location") {
+	constructor(app: App, private home: Place | null, private onChoose: (place: Place | null) => void, private title = "Change location", private history?: PlaceHistory) {
 		super(app);
+	}
+
+	/** Pick a place: remember it in the history, close, and hand it back. */
+	private pick(place: Place): void {
+		this.history?.add(place);
+		this.close();
+		this.onChoose(place);
 	}
 
 	onOpen(): void {
@@ -86,6 +154,21 @@ export class PlaceModal extends Modal {
 			const back = results.createEl("button", { cls: "dj-place-option", text: `↺ Back to ${this.home.name}` });
 			back.onclick = () => { this.close(); this.onChoose(null); };
 		};
+		// With an empty search box: "Back to …" and the recently picked locations, with a Clear link.
+		const showStart = () => {
+			showHome();
+			const recent = (this.history?.get() ?? []).filter((p) => p.name !== this.home?.name);
+			if (!recent.length) return;
+			const head = results.createDiv({ cls: "dj-place-recent-head" });
+			head.createSpan({ text: "Recent" });
+			const clear = head.createEl("a", { cls: "dj-place-clear", text: "Clear", href: "#" });
+			clear.onclick = (e) => { e.preventDefault(); this.history?.clear(); showStart(); };
+			for (const place of recent) {
+				const opt = results.createEl("button", { cls: "dj-place-option" });
+				opt.createSpan({ text: place.name });
+				opt.onclick = () => this.pick(place);
+			}
+		};
 		const show = (places: PlaceResult[]) => {
 			showHome();
 			if (!places.length) results.createDiv({ cls: "dj-place-empty", text: "No matching places" });
@@ -93,18 +176,15 @@ export class PlaceModal extends Modal {
 				const opt = results.createEl("button", { cls: "dj-place-option" });
 				opt.createSpan({ text: place.name });
 				opt.createSpan({ cls: "dj-place-detail", text: place.detail });
-				opt.onclick = () => {
-					this.close();
-					this.onChoose({ name: place.name, lat: place.lat, lon: place.lon, tz: place.tz });
-				};
+				opt.onclick = () => this.pick({ name: place.name, lat: place.lat, lon: place.lon, tz: place.tz });
 			}
 		};
 
-		showHome();
+		showStart();
 		input.addEventListener("input", () => {
 			window.clearTimeout(this.timer);
 			const q = input.value.trim();
-			if (q.length < 2) { showHome(); return; }
+			if (q.length < 2) { showStart(); return; }
 			this.timer = window.setTimeout(async () => {
 				this.latest = q;
 				let places: PlaceResult[] = [];

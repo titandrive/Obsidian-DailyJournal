@@ -1,6 +1,6 @@
 import { App, moment, setIcon, TFile } from "obsidian";
 import { entryDate, Moment } from "./dates";
-import { PlaceModal, SongPickerModal } from "./modals";
+import { PlaceHistory, PlaceModal, SongPickerModal } from "./modals";
 import { CheckInFields, JournalSettings, Place } from "./settings";
 import { HardcoverDay, savedReading } from "./hardcover";
 import { meteoconSvg } from "./meteocons";
@@ -14,6 +14,7 @@ export interface JournalHost {
 	app: App;
 	settings: JournalSettings;
 	weatherTried: Set<string>;
+	placeHistory: PlaceHistory;
 	setEntryPlace(file: TFile, place: Place | null, withWeather: boolean): Promise<string | null>;
 	/** Fetch the entry's reading from Hardcover and save it in the entry. */
 	refreshReading(file: TFile, date: Moment): Promise<void>;
@@ -113,7 +114,7 @@ async function renderHeader(host: JournalHost, el: HTMLElement, file: TFile, dat
 			placeName.setText((chosen ?? settings.home).name);
 			const weather = await host.setEntryPlace(file, chosen, weatherOn);
 			showWeather(weatherOn ? weather : null);
-		}).open();
+		}, undefined, host.placeHistory).open();
 	};
 
 	// First time an entry is opened, look up that day's weather and save it.
