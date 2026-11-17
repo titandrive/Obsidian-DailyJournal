@@ -97,7 +97,7 @@ export class TrendsView extends BasesView {
 					const v = t.createDiv({ cls: "dj-trends-tile-value", text: value });
 					if (unit) v.createSpan({ cls: "dj-trends-tile-unit", text: unit });
 					t.createDiv({ cls: "dj-trends-tile-label", text: label });
-					if (hint) t.createDiv({ cls: "dj-trends-tile-hint", text: hint });
+					if (hint) fitOneLine(t.createDiv({ cls: "dj-trends-tile-hint", text: hint }));
 				},
 				card(title: string, note?: string) {
 					grid ??= el.createDiv({ cls: "dj-trends-grid" });
@@ -112,7 +112,7 @@ export class TrendsView extends BasesView {
 
 		// Overview
 		const overview = section("Overview");
-		overview.tile("Entries", String(days.length), `${days[0].date.format("MMM D, YYYY")} – ${days[days.length - 1].date.format("MMM D, YYYY")}`);
+		overview.tile("Entries", String(days.length), dateRange(days[0].date, days[days.length - 1].date));
 		overview.tile("Streak", `${current} day${current === 1 ? "" : "s"}`, `Longest ${longest}`);
 		if (ratings.length) overview.tile("Avg. day rating", one(mean(ratings)), "out of 10");
 		if (sleeps.length) overview.tile("Avg. sleep", `${one(mean(sleeps))} h`);
@@ -284,6 +284,29 @@ function goodVsBad(el: HTMLElement, good: Day[], bad: Day[], all: Day[]): void {
 	row("Worked", (ds) => share(ds, "worked"));
 	row("Most common weather", (ds) => top(ds.map((d) => sky(d.fm))));
 	row("Most common meal", (ds) => top(ds.flatMap((d) => MEALS.map((k) => str(d.fm[k])))));
+}
+
+/** "11/3/26–11/17/26": the full range, compact enough for a tile. */
+function dateRange(from: Moment, to: Moment): string {
+	return `${from.format("M/D/YY")}–${to.format("M/D/YY")}`;
+}
+
+/**
+ * Keep a line of text on one line at its full length: when it's wider than its box, step the font
+ * down until it fits. Rechecks whenever the box changes size.
+ */
+function fitOneLine(el: HTMLElement): void {
+	const fit = () => {
+		el.style.fontSize = "";
+		let size = parseFloat(getComputedStyle(el).fontSize);
+		while (el.scrollWidth > el.clientWidth + 0.5 && size > 8) {
+			size -= 0.5;
+			el.style.fontSize = `${size}px`;
+		}
+	};
+	// Removing the tile counts as a size change, which is when the observer lets go.
+	const watch = new ResizeObserver(() => (el.isConnected ? fit() : watch.disconnect()));
+	watch.observe(el);
 }
 
 /** "Clear · H 68° / L 47°" → "Clear" */

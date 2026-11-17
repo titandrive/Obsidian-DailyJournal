@@ -399,7 +399,7 @@ button.dj-prompt-add { display: flex; align-items: center; gap: .4em; margin-top
 .dj-trends-tile { padding: var(--size-4-3) var(--size-4-4); }
 .dj-trends-tile-value { font-size: 1.6em; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; }
 .dj-trends-tile-label { color: var(--text-muted); font-size: var(--font-ui-small); }
-.dj-trends-tile-hint { color: var(--text-faint); font-size: var(--font-ui-smaller); }
+.dj-trends-tile-hint { color: var(--text-faint); font-size: var(--font-ui-smaller); white-space: nowrap; overflow: hidden; }
 .dj-trends-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--size-4-3); align-items: stretch; }
 .dj-trends-card { padding: var(--size-4-3) var(--size-4-4) var(--size-4-4); min-width: 0; }
 .dj-trends-card-head { margin-bottom: var(--size-4-3); }

@@ -2354,7 +2354,7 @@ var TrendsView = class extends import_obsidian6.BasesView {
             v.createSpan({ cls: "dj-trends-tile-unit", text: unit });
           t.createDiv({ cls: "dj-trends-tile-label", text: label });
           if (hint)
-            t.createDiv({ cls: "dj-trends-tile-hint", text: hint });
+            fitOneLine(t.createDiv({ cls: "dj-trends-tile-hint", text: hint }));
         },
         card(title2, note) {
           grid != null ? grid : grid = el2.createDiv({ cls: "dj-trends-grid" });
@@ -2368,7 +2368,7 @@ var TrendsView = class extends import_obsidian6.BasesView {
       };
     };
     const overview = section("Overview");
-    overview.tile("Entries", String(days.length), `${days[0].date.format("MMM D, YYYY")} \u2013 ${days[days.length - 1].date.format("MMM D, YYYY")}`);
+    overview.tile("Entries", String(days.length), dateRange(days[0].date, days[days.length - 1].date));
     overview.tile("Streak", `${current} day${current === 1 ? "" : "s"}`, `Longest ${longest}`);
     if (ratings.length)
       overview.tile("Avg. day rating", one(mean(ratings)), "out of 10");
@@ -2542,6 +2542,21 @@ function goodVsBad(el, good, bad, all) {
   row("Worked", (ds) => share(ds, "worked"));
   row("Most common weather", (ds) => top(ds.map((d) => sky(d.fm))));
   row("Most common meal", (ds) => top(ds.flatMap((d) => MEALS.map((k) => str(d.fm[k])))));
+}
+function dateRange(from, to) {
+  return `${from.format("M/D/YY")}\u2013${to.format("M/D/YY")}`;
+}
+function fitOneLine(el) {
+  const fit = () => {
+    el.style.fontSize = "";
+    let size = parseFloat(getComputedStyle(el).fontSize);
+    while (el.scrollWidth > el.clientWidth + 0.5 && size > 8) {
+      size -= 0.5;
+      el.style.fontSize = `${size}px`;
+    }
+  };
+  const watch = new ResizeObserver(() => el.isConnected ? fit() : watch.disconnect());
+  watch.observe(el);
 }
 function sky(fm) {
   return str(fm.weather).split("\xB7")[0].trim();
