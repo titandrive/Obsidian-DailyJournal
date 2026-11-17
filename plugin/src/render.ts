@@ -292,14 +292,12 @@ export function drawReading(el: HTMLElement, day: HardcoverDay, date: Moment): v
 		target = createDiv({ cls: "dj-card dj-row-quotes" });
 		row.querySelector(":scope > .dj-row-cards")?.after(target);
 	}
-	// One book: say so in the title and skip repeating it under each quote.
-	const books = new Set(day.quotes.map((q) => q.book));
-	const oneBook = books.size === 1 ? [...books][0] : null;
-	// One line: a long book name shrinks the label (from its usual .84em), then ends in "…".
 	if (row) shrinkToOneLine(target.createDiv({ cls: "dj-label dj-one-line", text: "Today's Highlights" }), ["0.76em", "0.68em"]);
 	for (const q of day.quotes) {
 		const bq = target.createEl("blockquote", { cls: "dj-quote", text: q.text });
-		if (!(row && oneBook)) bq.createDiv({ cls: "dj-quote-source", text: "— " + q.book });
+		// Book title and page under every quote: "— All The Pretty Horses · p. 46".
+		const page = Number(q.page) > 0 ? ` · p. ${Number(q.page)}` : "";
+		bq.createDiv({ cls: "dj-quote-source", text: `— ${q.book}${page}` });
 	}
 }
 

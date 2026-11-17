@@ -240,7 +240,7 @@ async function hardcoverUser(token) {
 }
 var userIds = /* @__PURE__ */ new Map();
 async function hardcoverDay(token, date) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r;
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s;
   let userId = userIds.get(token);
   if (userId === void 0) {
     userId = (await hardcoverUser(token)).id;
@@ -261,13 +261,15 @@ async function hardcoverDay(token, date) {
     if (!(b == null ? void 0 : b.title))
       continue;
     if (row.event === "quote" && row.entry) {
-      quotes.push({ text: String(row.entry), book: b.title });
+      const pos = (_b = row.metadata) == null ? void 0 : _b.position;
+      const page = (pos == null ? void 0 : pos.type) === "pages" && Number(pos.value) > 0 ? Number(pos.value) : null;
+      quotes.push({ text: String(row.entry), book: b.title, page });
       continue;
     }
-    const book = (_k = books.get(b.title)) != null ? _k : {
+    const book = (_l = books.get(b.title)) != null ? _l : {
       title: b.title,
-      author: (_e = (_d = (_c = (_b = b.contributions) == null ? void 0 : _b[0]) == null ? void 0 : _c.author) == null ? void 0 : _d.name) != null ? _e : null,
-      cover: (_g = (_f = b.cached_image) == null ? void 0 : _f.url) != null ? _g : null,
+      author: (_f = (_e = (_d = (_c = b.contributions) == null ? void 0 : _c[0]) == null ? void 0 : _d.author) == null ? void 0 : _e.name) != null ? _f : null,
+      cover: (_h = (_g = b.cached_image) == null ? void 0 : _g.url) != null ? _h : null,
       url: b.slug ? `https://hardcover.app/books/${b.slug}` : null,
       from: null,
       to: null,
@@ -275,7 +277,7 @@ async function hardcoverDay(token, date) {
       page: null,
       started: false,
       finished: false,
-      rating: (_j = (_i = (_h = b.user_books) == null ? void 0 : _h[0]) == null ? void 0 : _i.rating) != null ? _j : null,
+      rating: (_k = (_j = (_i = b.user_books) == null ? void 0 : _i[0]) == null ? void 0 : _j.rating) != null ? _k : null,
       bookPages: Number(b.pages) || void 0,
       bookId: Number(b.id) || void 0,
       lastPage: null
@@ -284,12 +286,12 @@ async function hardcoverDay(token, date) {
       book.started = true;
     if (row.event === "user_book_read_finished") {
       book.finished = true;
-      const startedAt = (_l = row.metadata) == null ? void 0 : _l.started_at;
+      const startedAt = (_m = row.metadata) == null ? void 0 : _m.started_at;
       if (startedAt && startedAt !== date.format("YYYY-MM-DD"))
         book.realStart = startedAt;
     }
     if (row.event === "progress_updated") {
-      const m = (_m = row.metadata) != null ? _m : {};
+      const m = (_n = row.metadata) != null ? _n : {};
       const was = Number(m.progress_was), now = Number(m.progress);
       const page = Number(m.progress_pages) > 0 ? Number(m.progress_pages) : null;
       if (m.source === "completion") {
@@ -302,7 +304,7 @@ async function hardcoverDay(token, date) {
         book.finishPage = page;
       } else {
         if (!isNaN(was) && !isNaN(now)) {
-          book.from = (_n = book.from) != null ? _n : was;
+          book.from = (_o = book.from) != null ? _o : was;
           book.to = now;
         }
         if (Number(m.pages_delta) > 0)
@@ -323,7 +325,7 @@ async function hardcoverDay(token, date) {
 					distinct_on: book_id, order_by: [{ book_id: asc }, { created_at: desc }]) { book_id metadata }
 			}`, { user: userId, books: needBase.map((b) => b.bookId), before: utc(date.clone().startOf("day")) });
     for (const book of needBase) {
-      const m = (_p = ((_o = prior.reading_journals) != null ? _o : []).find((r) => r.book_id === book.bookId)) == null ? void 0 : _p.metadata;
+      const m = (_q = ((_p = prior.reading_journals) != null ? _p : []).find((r) => r.book_id === book.bookId)) == null ? void 0 : _q.metadata;
       const basePct = Number(m == null ? void 0 : m.progress), basePage = Number(m == null ? void 0 : m.progress_pages);
       if (m && !isNaN(basePct))
         book.from = basePct;
@@ -360,11 +362,11 @@ async function hardcoverDay(token, date) {
 				reading_journals(where: { user_id: { _eq: $user }, event: { _eq: "progress_updated" }, created_at: { _lt: $before } },
 					order_by: { created_at: desc }, limit: 50) { created_at metadata book { title } }
 			}`, { user: userId, before: utc(date.clone().startOf("day")) });
-    const hit = ((_q = before.reading_journals) != null ? _q : []).find((r) => {
+    const hit = ((_r = before.reading_journals) != null ? _r : []).find((r) => {
       var _a2, _b2;
       return Number((_a2 = r.metadata) == null ? void 0 : _a2.progress) > Number((_b2 = r.metadata) == null ? void 0 : _b2.progress_was);
     });
-    if ((_r = hit == null ? void 0 : hit.book) == null ? void 0 : _r.title)
+    if ((_s = hit == null ? void 0 : hit.book) == null ? void 0 : _s.title)
       day.lastRead = { title: hit.book.title, date: window.moment.utc(hit.created_at).local().format("YYYY-MM-DD") };
   }
   return day;
@@ -1295,6 +1297,10 @@ function entryTemplate(settings) {
     const line = lines[section];
     if (!line)
       continue;
+    if (section === "onthisday") {
+      parts[parts.length - 1] += block(line);
+      continue;
+    }
     if (section === "reading" && lines.song) {
       parts.push(block(ROW_LINE));
       continue;
@@ -1339,7 +1345,7 @@ function applyLayout(text, settings) {
   }
   out = out.replace(new RegExp("\\n*" + BLOCK("onthisday").source), "\n");
   if (lines.onthisday)
-    out = out.replace(BLOCK("header"), (m) => m + "\n" + block(lines.onthisday));
+    out = out.replace(BLOCK("header"), (m) => m + block(lines.onthisday));
   return out;
 }
 
@@ -1622,14 +1628,12 @@ function drawReading(el, day, date) {
     target = createDiv({ cls: "dj-card dj-row-quotes" });
     (_b = row.querySelector(":scope > .dj-row-cards")) == null ? void 0 : _b.after(target);
   }
-  const books = new Set(day.quotes.map((q2) => q2.book));
-  const oneBook = books.size === 1 ? [...books][0] : null;
   if (row)
     shrinkToOneLine(target.createDiv({ cls: "dj-label dj-one-line", text: "Today's Highlights" }), ["0.76em", "0.68em"]);
   for (const q2 of day.quotes) {
     const bq = target.createEl("blockquote", { cls: "dj-quote", text: q2.text });
-    if (!(row && oneBook))
-      bq.createDiv({ cls: "dj-quote-source", text: "\u2014 " + q2.book });
+    const page = Number(q2.page) > 0 ? ` \xB7 p. ${Number(q2.page)}` : "";
+    bq.createDiv({ cls: "dj-quote-source", text: `\u2014 ${q2.book}${page}` });
   }
 }
 function renderCheckIn(host, el, file, fm, fields) {

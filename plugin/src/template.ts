@@ -61,6 +61,8 @@ export function entryTemplate(settings: JournalSettings): string {
 	for (const section of ["header", "onthisday", "reading", "song", "checkin"] as Section[]) {
 		const line = lines[section];
 		if (!line) continue;
+		// On this day hugs the header (no blank line), so when it has nothing to show it takes no space.
+		if (section === "onthisday") { parts[parts.length - 1] += block(line); continue; }
 		// Reading and Song share one row, side by side, when both are on.
 		if (section === "reading" && lines.song) { parts.push(block(ROW_LINE)); continue; }
 		if (section === "song" && lines.reading) continue;
@@ -119,6 +121,6 @@ export function applyLayout(text: string, settings: JournalSettings): string {
 
 	// On this day sits right after the header (it used to be at the end of the entry).
 	out = out.replace(new RegExp("\\n*" + BLOCK("onthisday").source), "\n");
-	if (lines.onthisday) out = out.replace(BLOCK("header"), (m) => m + "\n" + block(lines.onthisday as string));
+	if (lines.onthisday) out = out.replace(BLOCK("header"), (m) => m + block(lines.onthisday as string));
 	return out;
 }

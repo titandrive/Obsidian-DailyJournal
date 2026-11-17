@@ -25,7 +25,8 @@ export interface HardcoverBookDay {
 
 export interface HardcoverDay {
 	books: HardcoverBookDay[];
-	quotes: Array<{ text: string; book: string }>;
+	/** page: where the quote is, as reported by the reader app (its own page numbering). */
+	quotes: Array<{ text: string; book: string; page?: number | null }>;
 	pages: number; // total pages read that day
 	lastRead: { title: string; date: string } | null; // most recent reading before this day (YYYY-MM-DD), when none on it
 }
@@ -108,7 +109,12 @@ export async function hardcoverDay(token: string, date: Moment): Promise<Hardcov
 	for (const row of data.reading_journals ?? []) {
 		const b = row.book;
 		if (!b?.title) continue;
-		if (row.event === "quote" && row.entry) { quotes.push({ text: String(row.entry), book: b.title }); continue; }
+		if (row.event === "quote" && row.entry) {
+			const pos = row.metadata?.position;
+			const page = pos?.type === "pages" && Number(pos.value) > 0 ? Number(pos.value) : null;
+			quotes.push({ text: String(row.entry), book: b.title, page });
+			continue;
+		}
 		const book: HardcoverBookDay = books.get(b.title) ?? {
 			title: b.title,
 			author: b.contributions?.[0]?.author?.name ?? null,

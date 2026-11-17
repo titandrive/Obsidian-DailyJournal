@@ -255,6 +255,9 @@ a.dj-book-title:hover { color: var(--text-accent); }
 	.dj-date { font-size: 1.55em; }
 }
 
+/* On this day sits right under the header block with no blank line, so it brings its own gap
+   (one line, like the blank line between other cards); with nothing to show it takes no space. */
+.dj-block > .dj-card:has(> .dj-otd) { margin-top: calc(var(--line-height-normal, 1.5) * 1em); }
 /* On this day: a tile per past entry. Header line on top; two lines of writing with the day's
    book and song art beside them, so there's no empty band at the bottom. */
 .dj-otd { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: .8em; }
