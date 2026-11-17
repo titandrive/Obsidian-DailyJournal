@@ -82,6 +82,7 @@ export function journalBase(settings: JournalSettings): string {
 		...columns.map(([k]) => `      - ${k}`),
 		"    sort:", "      - property: formula.entry_date", "        direction: DESC",
 		...(summaries.length ? ["    summaries:", ...summaries.map((s) => "      " + s)] : []),
+		`  - type: journal-trends`, "    name: Trends",
 		"  - type: table", "    name: By month",
 		"    groupBy:", "      property: formula.month", "      direction: DESC",
 		"    order:", ...monthly.map((k) => `      - ${k}`),

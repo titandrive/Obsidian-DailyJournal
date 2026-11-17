@@ -389,3 +389,35 @@ button.dj-prompt-add { display: flex; align-items: center; gap: .4em; margin-top
 	padding-left: 1.4em !important;
 	border-top: 1px solid color-mix(in srgb, var(--background-modifier-border) 60%, transparent) !important;
 }
+
+/* Trends view (a Bases view in the Journal base) */
+.dj-trends-host { overflow-y: auto; }
+.dj-trends { padding: var(--size-4-4); display: flex; flex-direction: column; gap: var(--size-4-4); max-width: 1100px; }
+.dj-trends-empty { color: var(--text-muted); padding: var(--size-4-6) 0; }
+.dj-trends-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--size-4-3); }
+.dj-trends-tile, .dj-trends-card { background: var(--background-secondary); border: 1px solid var(--background-modifier-border); border-radius: var(--radius-l); }
+.dj-trends-tile { padding: var(--size-4-3) var(--size-4-4); }
+.dj-trends-tile-value { font-size: 1.6em; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.dj-trends-tile-label { color: var(--text-muted); font-size: var(--font-ui-small); }
+.dj-trends-tile-hint { color: var(--text-faint); font-size: var(--font-ui-smaller); }
+.dj-trends-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--size-4-3); align-items: start; }
+.dj-trends-card { padding: var(--size-4-3) var(--size-4-4) var(--size-4-4); min-width: 0; }
+.dj-trends-card-head { margin-bottom: var(--size-4-3); }
+.dj-trends-card-title { font-weight: 600; }
+.dj-trends-card-note, .dj-trends-muted { color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.dj-trends-subhead { margin: var(--size-4-4) 0 var(--size-4-2); font-weight: 600; font-size: var(--font-ui-small); }
+.dj-trends-bars { display: grid; grid-template-columns: minmax(0, max-content) minmax(60px, 1fr) auto; gap: 6px 10px; align-items: center; font-size: var(--font-ui-small); }
+.dj-trends-bar-row { display: contents; }
+.dj-trends-bar-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 16em; }
+.dj-trends-bar-track { height: 10px; }
+.dj-trends-bar-fill { height: 100%; background: var(--interactive-accent); border-radius: 0 4px 4px 0; }
+.dj-trends-bar-value { color: var(--text-muted); font-variant-numeric: tabular-nums; text-align: right; }
+.dj-trends-books { display: flex; flex-direction: column; gap: 4px; font-size: var(--font-ui-small); }
+.dj-trends-book { display: flex; justify-content: space-between; gap: 1em; }
+.dj-trends-chart { width: 100%; height: auto; display: block; overflow: visible; }
+.dj-trends-grid-line { stroke: var(--background-modifier-border); stroke-width: 1; }
+.dj-trends-axis { fill: var(--text-faint); font-size: 11px; }
+.dj-trends-line { fill: none; stroke: var(--interactive-accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.dj-trends-dot circle:not(.dj-trends-hit) { fill: color-mix(in srgb, var(--interactive-accent) 45%, var(--background-secondary)); }
+.dj-trends-dot .dj-trends-hit { fill: transparent; }
+.dj-trends-dot:hover circle:not(.dj-trends-hit) { fill: var(--interactive-accent); r: 5; }

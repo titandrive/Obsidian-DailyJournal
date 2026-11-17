@@ -9,6 +9,7 @@ import { DEFAULT_SETTINGS, JournalSettings, Place, Prompt } from "./src/settings
 import { JournalSettingTab } from "./src/settings-tab";
 import { applyLayout, blockShowsWeather, entryTemplate, parseBlock, SHOW_CHROME } from "./src/template";
 import { entryPlace, fetchWeather } from "./src/weather";
+import { TRENDS_VIEW, TrendsView } from "./src/trends";
 
 /** One rendered `journal` block. Redraws when its entry's properties change (e.g. weather arrives). */
 class JournalBlock extends MarkdownRenderChild {
@@ -68,6 +69,12 @@ export default class DailyJournal extends Plugin implements JournalHost {
 	async onload(): Promise<void> {
 		await this.loadSettings();
 		this.addSettingTab(new JournalSettingTab(this.app, this));
+
+		// A Trends tab for the Journal base (Bases view types need Obsidian 1.10+).
+		this.registerBasesView?.(TRENDS_VIEW, {
+			name: "Trends", icon: "chart-line",
+			factory: (controller, containerEl) => new TrendsView(controller, containerEl, () => this.settings),
+		});
 
 		this.registerMarkdownCodeBlockProcessor("journal", (source, el, ctx) => {
 			const file = this.app.vault.getAbstractFileByPath(ctx.sourcePath);

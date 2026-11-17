@@ -27,7 +27,7 @@ __export(main_exports, {
   default: () => DailyJournal
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian6 = require("obsidian");
+var import_obsidian7 = require("obsidian");
 
 // src/base.ts
 var BASE_NAME = "Journal.base";
@@ -95,9 +95,9 @@ function journalBase(settings) {
     f.sleep ? "sleep: Average" : "",
     settings.showReading ? "pages_read: Sum" : ""
   ].filter(Boolean);
-  let sky = q("");
+  let sky2 = q("");
   for (const [label, icon] of [...SKY].reverse())
-    sky = `if(weather.startsWith(${q(label)}), image(${q(`${icons}/${icon}.svg`)}), ${sky})`;
+    sky2 = `if(weather.startsWith(${q(label)}), image(${q(`${icons}/${icon}.svg`)}), ${sky2})`;
   const lines = [
     "filters:",
     "  and:",
@@ -107,7 +107,7 @@ function journalBase(settings) {
     `  entry_date: ${dateFormula(settings.dateFormat)}`,
     `  day: file.asLink(formula.entry_date.format("ddd, MMM D"))`,
     `  place: if(location, location, ${q(settings.home.name)})`,
-    ...settings.showWeather ? [`  sky: if(weather, ${sky}, "")`] : [],
+    ...settings.showWeather ? [`  sky: if(weather, ${sky2}, "")`] : [],
     `  month: formula.entry_date.format("YYYY \xB7 MMMM")`,
     "properties:",
     "  formula.month:",
@@ -123,6 +123,8 @@ function journalBase(settings) {
     "      - property: formula.entry_date",
     "        direction: DESC",
     ...summaries.length ? ["    summaries:", ...summaries.map((s) => "      " + s)] : [],
+    `  - type: journal-trends`,
+    "    name: Trends",
     "  - type: table",
     "    name: By month",
     "    groupBy:",
@@ -2054,8 +2056,8 @@ async function renderOnThisDay(host, el, date, show) {
     when.createDiv({ cls: "dj-otd-date", text: then.format(then.year() === date.year() ? "ddd, MMM D" : "ddd, MMM D, YYYY") });
     const meta = head.createDiv({ cls: "dj-otd-meta" });
     if (fm.weather) {
-      const sky = meta.createSpan({ cls: "dj-otd-sky", attr: { "aria-label": weatherText(String(fm.weather)) } });
-      sky.innerHTML = meteoconSvg(weatherIcon(String(fm.weather)));
+      const sky2 = meta.createSpan({ cls: "dj-otd-sky", attr: { "aria-label": weatherText(String(fm.weather)) } });
+      sky2.innerHTML = meteoconSvg(weatherIcon(String(fm.weather)));
     }
     if (Number(fm.day_rating))
       meta.createSpan({ cls: "dj-otd-rating", text: `${Number(fm.day_rating)}/10` });
@@ -2265,8 +2267,249 @@ var JournalSettingTab = class extends import_obsidian5.PluginSettingTab {
   }
 };
 
+// src/trends.ts
+var import_obsidian6 = require("obsidian");
+var TRENDS_VIEW = "journal-trends";
+var num = (v) => {
+  const n = typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : NaN;
+  return Number.isFinite(n) ? n : null;
+};
+var str = (v) => typeof v === "string" ? v.trim() : "";
+var mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
+var one = (n) => (Math.round(n * 10) / 10).toString();
+var times = (n) => `${n}\xD7`;
+function ranked(values, limit) {
+  var _a, _b;
+  const counts = /* @__PURE__ */ new Map();
+  for (const text of values) {
+    if (!text)
+      continue;
+    const c = (_a = counts.get(text.toLowerCase())) != null ? _a : { n: 0, spellings: /* @__PURE__ */ new Map() };
+    c.n++;
+    c.spellings.set(text, ((_b = c.spellings.get(text)) != null ? _b : 0) + 1);
+    counts.set(text.toLowerCase(), c);
+  }
+  return [...counts.values()].map((c) => ({ n: c.n, label: [...c.spellings].sort((a, b) => b[1] - a[1])[0][0] })).sort((a, b) => b.n - a.n || a.label.localeCompare(b.label)).slice(0, limit).map((c) => ({ label: c.label, value: c.n, text: times(c.n) }));
+}
+function ratingBy(days, groups) {
+  const rows = [];
+  for (const [label, test] of groups) {
+    const r = days.filter(test).map((d) => num(d.fm.day_rating)).filter((n) => n !== null);
+    if (r.length)
+      rows.push({ label, value: mean(r), text: one(mean(r)), hint: `${r.length} day${r.length === 1 ? "" : "s"}` });
+  }
+  return rows;
+}
+var TrendsView = class extends import_obsidian6.BasesView {
+  constructor(controller, el, settings) {
+    super(controller);
+    this.el = el;
+    this.settings = settings;
+    this.type = TRENDS_VIEW;
+    el.addClass("dj-trends-host");
+  }
+  onDataUpdated() {
+    var _a, _b;
+    const days = [];
+    for (const entry of this.data.data) {
+      const date = entryDate(this.settings(), entry.file);
+      if (!date)
+        continue;
+      days.push({ file: entry.file, date, fm: (_b = (_a = this.app.metadataCache.getFileCache(entry.file)) == null ? void 0 : _a.frontmatter) != null ? _b : {} });
+    }
+    days.sort((a, b) => a.date.valueOf() - b.date.valueOf());
+    this.render(days);
+  }
+  render(days) {
+    var _a;
+    const el = this.el;
+    el.empty();
+    const root = el.createDiv({ cls: "dj-trends" });
+    if (!days.length) {
+      root.createDiv({ cls: "dj-trends-empty", text: "No journal entries match this base's filters." });
+      return;
+    }
+    const ratings = days.map((d) => num(d.fm.day_rating)).filter((n) => n !== null);
+    const sleeps = days.map((d) => num(d.fm.sleep)).filter((n) => n !== null);
+    const exercised = days.filter((d) => typeof d.fm.exercise === "boolean");
+    const pages = days.reduce((sum, d) => {
+      var _a2;
+      return sum + ((_a2 = num(d.fm.pages_read)) != null ? _a2 : 0);
+    }, 0);
+    const { current, longest } = streaks(days);
+    const tiles = root.createDiv({ cls: "dj-trends-tiles" });
+    const tile = (label, value, hint) => {
+      const t = tiles.createDiv({ cls: "dj-trends-tile" });
+      t.createDiv({ cls: "dj-trends-tile-value", text: value });
+      t.createDiv({ cls: "dj-trends-tile-label", text: label });
+      if (hint)
+        t.createDiv({ cls: "dj-trends-tile-hint", text: hint });
+    };
+    tile("Entries", String(days.length), `${days[0].date.format("MMM D, YYYY")} \u2013 ${days[days.length - 1].date.format("MMM D, YYYY")}`);
+    tile("Streak", `${current} day${current === 1 ? "" : "s"}`, `Longest ${longest}`);
+    if (ratings.length)
+      tile("Avg. day rating", one(mean(ratings)), "out of 10");
+    if (sleeps.length)
+      tile("Avg. sleep", `${one(mean(sleeps))} h`);
+    if (exercised.length)
+      tile("Exercised", `${Math.round(100 * exercised.filter((d) => d.fm.exercise).length / exercised.length)}%`, "of days");
+    if (pages)
+      tile("Pages read", pages.toLocaleString());
+    const grid = root.createDiv({ cls: "dj-trends-grid" });
+    const card2 = (title, note) => {
+      const c = grid.createDiv({ cls: "dj-trends-card" });
+      const head = c.createDiv({ cls: "dj-trends-card-head" });
+      head.createDiv({ cls: "dj-trends-card-title", text: title });
+      if (note)
+        head.createDiv({ cls: "dj-trends-card-note", text: note });
+      return c;
+    };
+    const recent = days.filter((d) => !d.date.isBefore(days[days.length - 1].date.clone().subtract(89, "days"), "day"));
+    lineChart(card2("Day rating", "Last 90 days \xB7 line is the 7-day average"), recent, (d) => num(d.fm.day_rating), 10);
+    lineChart(card2("Sleep", "Last 90 days \xB7 hours \xB7 line is the 7-day average"), recent, (d) => num(d.fm.sleep), 12);
+    const meals = ranked(days.flatMap((d) => ["breakfast", "lunch", "dinner"].map((k) => str(d.fm[k]))), 10);
+    if (meals.length)
+      barList(card2("Most eaten", "Breakfast, lunch and dinner"), meals);
+    const weekday = ratingBy(days, [1, 2, 3, 4, 5, 6, 0].map((w) => [days[0].date.clone().day(w).format("dddd"), (d) => d.date.day() === w]));
+    if (weekday.length)
+      barList(card2("Day rating by weekday"), weekday, 10);
+    const good = [
+      ...ratingBy(days, [["Exercised", (d) => d.fm.exercise === true], ["Didn't exercise", (d) => d.fm.exercise === false]]),
+      ...ratingBy(days, [
+        ["Under 6 h sleep", (d) => {
+          var _a2;
+          return ((_a2 = num(d.fm.sleep)) != null ? _a2 : 99) < 6;
+        }],
+        ["6\u20137 h sleep", (d) => {
+          const s = num(d.fm.sleep);
+          return s !== null && s >= 6 && s < 7;
+        }],
+        ["7\u20138 h sleep", (d) => {
+          const s = num(d.fm.sleep);
+          return s !== null && s >= 7 && s < 8;
+        }],
+        ["8 h+ sleep", (d) => {
+          var _a2;
+          return ((_a2 = num(d.fm.sleep)) != null ? _a2 : -1) >= 8;
+        }],
+        ["Worked", (d) => d.fm.worked === true],
+        ["Day off", (d) => d.fm.worked === false]
+      ])
+    ];
+    if (good.length)
+      barList(card2("What goes with good days", "Average day rating"), good, 10);
+    const skies = [...new Set(days.map((d) => sky(d.fm)).filter(Boolean))];
+    const byWeather = ratingBy(days, skies.map((s) => [s, (d) => sky(d.fm) === s])).sort((a, b) => b.value - a.value);
+    if (byWeather.length > 1)
+      barList(card2("Day rating by weather"), byWeather, 10);
+    const months = /* @__PURE__ */ new Map();
+    for (const d of days) {
+      const p = num(d.fm.pages_read);
+      if (p)
+        months.set(d.date.format("YYYY-MM"), ((_a = months.get(d.date.format("YYYY-MM"))) != null ? _a : 0) + p);
+    }
+    if (months.size) {
+      const rows = [...months].sort((a, b) => b[0].localeCompare(a[0])).slice(0, 12).map(([m, n]) => ({ label: window.moment(m, "YYYY-MM").format("MMMM YYYY"), value: n, text: n.toLocaleString() }));
+      const c = card2("Pages read by month");
+      barList(c, rows);
+      const finished = days.flatMap((d) => finishedBooks(d.fm).map((title) => ({ title, date: d.date })));
+      if (finished.length) {
+        c.createDiv({ cls: "dj-trends-subhead", text: "Finished" });
+        const list = c.createDiv({ cls: "dj-trends-books" });
+        for (const b of finished.reverse()) {
+          const row = list.createDiv({ cls: "dj-trends-book" });
+          row.createSpan({ text: b.title });
+          row.createSpan({ cls: "dj-trends-muted", text: b.date.format("MMM D, YYYY") });
+        }
+      }
+    }
+    const artists = ranked(days.map((d) => str(d.fm.artist)), 8);
+    if (artists.length)
+      barList(card2("Top artists", "Earworm of the day"), artists);
+  }
+};
+function sky(fm) {
+  return str(fm.weather).split("\xB7")[0].trim();
+}
+function finishedBooks(fm) {
+  var _a;
+  const books = (_a = fm.reading) == null ? void 0 : _a.books;
+  if (!Array.isArray(books))
+    return [];
+  return books.filter((b) => b && b.finished === true && str(b.title)).map((b) => str(b.title));
+}
+function streaks(days) {
+  const keys = new Set(days.map((d) => d.date.format("YYYY-MM-DD")));
+  let longest = 0, run = 0, prev = null;
+  for (const d of days) {
+    run = prev && d.date.diff(prev, "days") === 1 ? run + 1 : prev && d.date.isSame(prev, "day") ? run : 1;
+    longest = Math.max(longest, run);
+    prev = d.date;
+  }
+  const day = window.moment().startOf("day");
+  if (!keys.has(day.format("YYYY-MM-DD")))
+    day.subtract(1, "day");
+  let current = 0;
+  while (keys.has(day.format("YYYY-MM-DD"))) {
+    current++;
+    day.subtract(1, "day");
+  }
+  return { current, longest };
+}
+function barList(el, rows, max) {
+  const top = max != null ? max : Math.max(...rows.map((r) => r.value));
+  const list = el.createDiv({ cls: "dj-trends-bars" });
+  for (const r of rows) {
+    const row = list.createDiv({ cls: "dj-trends-bar-row", attr: r.hint ? { "aria-label": r.hint } : {} });
+    row.createDiv({ cls: "dj-trends-bar-label", text: r.label });
+    row.createDiv({ cls: "dj-trends-bar-track" }).createDiv({ cls: "dj-trends-bar-fill" }).style.width = `${Math.max(2, 100 * r.value / (top || 1))}%`;
+    row.createDiv({ cls: "dj-trends-bar-value", text: r.text });
+  }
+}
+function lineChart(el, days, value, yMax) {
+  const pts = days.map((d) => ({ d, v: value(d) })).filter((p) => p.v !== null);
+  if (pts.length < 2) {
+    el.remove();
+    return;
+  }
+  const W = 600, H = 160, L = 26, R = 8, T = 8, B = 22;
+  const start = pts[0].d.date, span = Math.max(1, pts[pts.length - 1].d.date.diff(start, "days"));
+  const top = Math.max(yMax, ...pts.map((p) => p.v));
+  const x = (m) => L + (W - L - R) * m.diff(start, "days") / span;
+  const y = (v) => T + (H - T - B) * (1 - v / top);
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("class", "dj-trends-chart");
+  const add = (tag, attrs, parent = svg) => {
+    const node = document.createElementNS(ns, tag);
+    for (const [k, v] of Object.entries(attrs))
+      node.setAttribute(k, String(v));
+    parent.appendChild(node);
+    return node;
+  };
+  for (const v of [0, top / 2, top]) {
+    add("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), class: "dj-trends-grid-line" });
+    add("text", { x: L - 6, y: y(v) + 4, class: "dj-trends-axis", "text-anchor": "end" }).textContent = one(v);
+  }
+  add("text", { x: L, y: H - 4, class: "dj-trends-axis" }).textContent = start.format("MMM D");
+  add("text", { x: W - R, y: H - 4, class: "dj-trends-axis", "text-anchor": "end" }).textContent = pts[pts.length - 1].d.date.format("MMM D");
+  const avg = pts.map((p) => {
+    const win = pts.filter((q2) => !q2.d.date.isAfter(p.d.date, "day") && p.d.date.diff(q2.d.date, "days") < 7);
+    return `${x(p.d.date).toFixed(1)},${y(mean(win.map((q2) => q2.v))).toFixed(1)}`;
+  });
+  add("polyline", { points: avg.join(" "), class: "dj-trends-line" });
+  for (const p of pts) {
+    const g = add("g", { class: "dj-trends-dot" });
+    add("circle", { cx: x(p.d.date), cy: y(p.v), r: 9, class: "dj-trends-hit" }, g);
+    add("circle", { cx: x(p.d.date), cy: y(p.v), r: 3 }, g);
+    add("title", {}, g).textContent = `${p.d.date.format("ddd, MMM D")}: ${one(p.v)}`;
+  }
+  el.appendChild(svg);
+}
+
 // main.ts
-var JournalBlock = class extends import_obsidian6.MarkdownRenderChild {
+var JournalBlock = class extends import_obsidian7.MarkdownRenderChild {
   constructor(plugin, containerEl, section, file) {
     super(containerEl);
     this.plugin = plugin;
@@ -2313,7 +2556,7 @@ var JournalBlock = class extends import_obsidian6.MarkdownRenderChild {
     void renderSection(this.plugin, this.section, this.containerEl, this.file);
   }
 };
-var DailyJournal = class extends import_obsidian6.Plugin {
+var DailyJournal = class extends import_obsidian7.Plugin {
   constructor() {
     super(...arguments);
     this.weatherTried = /* @__PURE__ */ new Set();
@@ -2340,22 +2583,28 @@ var DailyJournal = class extends import_obsidian6.Plugin {
     };
   }
   async onload() {
+    var _a;
     await this.loadSettings();
     this.addSettingTab(new JournalSettingTab(this.app, this));
+    (_a = this.registerBasesView) == null ? void 0 : _a.call(this, TRENDS_VIEW, {
+      name: "Trends",
+      icon: "chart-line",
+      factory: (controller, containerEl) => new TrendsView(controller, containerEl, () => this.settings)
+    });
     this.registerMarkdownCodeBlockProcessor("journal", (source, el, ctx) => {
       const file = this.app.vault.getAbstractFileByPath(ctx.sourcePath);
-      if (file instanceof import_obsidian6.TFile)
+      if (file instanceof import_obsidian7.TFile)
         ctx.addChild(new JournalBlock(this, el, source.trim(), file));
     });
     this.addCommand({
       id: "open-today",
       name: "Open today's entry",
-      callback: () => this.openEntry((0, import_obsidian6.moment)())
+      callback: () => this.openEntry((0, import_obsidian7.moment)())
     });
     this.addCommand({
       id: "create-yesterday",
       name: "Create Journal (Yesterday)",
-      callback: () => this.openEntry((0, import_obsidian6.moment)().subtract(1, "day"))
+      callback: () => this.openEntry((0, import_obsidian7.moment)().subtract(1, "day"))
     });
     this.addCommand({
       id: "create-choose",
@@ -2383,14 +2632,14 @@ var DailyJournal = class extends import_obsidian6.Plugin {
       name: "Refresh reading",
       checkCallback: (checking) => this.withActiveEntry(checking, async (file, date) => {
         if (!this.settings.hardcoverToken) {
-          new import_obsidian6.Notice("Add your Hardcover API token in Daily Journal's settings first.");
+          new import_obsidian7.Notice("Add your Hardcover API token in Daily Journal's settings first.");
           return;
         }
         try {
           await this.refreshReading(file, date);
-          new import_obsidian6.Notice("Reading updated from Hardcover.");
+          new import_obsidian7.Notice("Reading updated from Hardcover.");
         } catch (e) {
-          new import_obsidian6.Notice(`Couldn't load from Hardcover: ${e instanceof Error ? e.message : String(e)}`);
+          new import_obsidian7.Notice(`Couldn't load from Hardcover: ${e instanceof Error ? e.message : String(e)}`);
         }
       })
     });
@@ -2401,7 +2650,7 @@ var DailyJournal = class extends import_obsidian6.Plugin {
     });
     this.registerEvent(this.app.workspace.on("file-menu", (menu, file) => {
       const date = entryDate(this.settings, file);
-      if (!date || !(file instanceof import_obsidian6.TFile))
+      if (!date || !(file instanceof import_obsidian7.TFile))
         return;
       menu.addItem((item) => item.setTitle("Change date (yesterday)").setIcon("calendar-minus").setSection("action").onClick(() => this.moveEntry(file, date.clone().subtract(1, "day"))));
       menu.addItem((item) => item.setTitle("Change date (choose date)").setIcon("calendar-days").setSection("action").onClick(() => this.pickDate(file, date)));
@@ -2420,7 +2669,7 @@ var DailyJournal = class extends import_obsidian6.Plugin {
   }
   onunload() {
     this.app.workspace.iterateAllLeaves((leaf) => {
-      if (leaf.view instanceof import_obsidian6.MarkdownView)
+      if (leaf.view instanceof import_obsidian7.MarkdownView)
         leaf.view.contentEl.removeClass("dj-chrome-hidden");
     });
   }
@@ -2429,7 +2678,7 @@ var DailyJournal = class extends import_obsidian6.Plugin {
     this.app.workspace.iterateAllLeaves((leaf) => {
       var _a;
       const view = leaf.view;
-      if (!(view instanceof import_obsidian6.MarkdownView))
+      if (!(view instanceof import_obsidian7.MarkdownView))
         return;
       const fm = view.file ? (_a = this.app.metadataCache.getFileCache(view.file)) == null ? void 0 : _a.frontmatter : void 0;
       const classes = Array.isArray(fm == null ? void 0 : fm.cssclasses) ? fm.cssclasses : [fm == null ? void 0 : fm.cssclasses];
@@ -2444,7 +2693,7 @@ var DailyJournal = class extends import_obsidian6.Plugin {
     if (!saved) {
       const daily = (_e = (_d = (_c = (_b = this.app.internalPlugins) == null ? void 0 : _b.getPluginById) == null ? void 0 : _c.call(_b, "daily-notes")) == null ? void 0 : _d.instance) == null ? void 0 : _e.options;
       if (daily == null ? void 0 : daily.folder)
-        this.settings.folder = (0, import_obsidian6.normalizePath)(daily.folder);
+        this.settings.folder = (0, import_obsidian7.normalizePath)(daily.folder);
       if (daily == null ? void 0 : daily.format)
         this.settings.dateFormat = daily.format;
     }
@@ -2463,7 +2712,7 @@ var DailyJournal = class extends import_obsidian6.Plugin {
   templatePath() {
     var _a, _b;
     const folder = (_b = (_a = this.corePlugin("templates")) == null ? void 0 : _a.options) == null ? void 0 : _b.folder;
-    return (0, import_obsidian6.normalizePath)(`${folder ? folder + "/" : ""}Daily Journal.md`);
+    return (0, import_obsidian7.normalizePath)(`${folder ? folder + "/" : ""}Daily Journal.md`);
   }
   /**
    * With "Use as Daily notes template" on, keep the template file in step with the settings and
@@ -2484,7 +2733,7 @@ var DailyJournal = class extends import_obsidian6.Plugin {
     if (this.settings.useAsDailyTemplate) {
       const text = entryTemplate(this.settings);
       const existing = this.app.vault.getAbstractFileByPath(path);
-      if (existing instanceof import_obsidian6.TFile) {
+      if (existing instanceof import_obsidian7.TFile) {
         if (await this.app.vault.read(existing) !== text)
           await this.app.vault.modify(existing, text);
       } else {
@@ -2492,12 +2741,12 @@ var DailyJournal = class extends import_obsidian6.Plugin {
         await this.app.vault.create(path, text);
       }
       await setDailyTemplate(name);
-    } else if ((0, import_obsidian6.normalizePath)((_b = (_a = daily == null ? void 0 : daily.options) == null ? void 0 : _a.template) != null ? _b : "") === name) {
+    } else if ((0, import_obsidian7.normalizePath)((_b = (_a = daily == null ? void 0 : daily.options) == null ? void 0 : _a.template) != null ? _b : "") === name) {
       await setDailyTemplate("");
     }
   }
   basePath() {
-    return (0, import_obsidian6.normalizePath)(`${this.settings.folder}/${BASE_NAME}`);
+    return (0, import_obsidian7.normalizePath)(`${this.settings.folder}/${BASE_NAME}`);
   }
   /**
    * Keep the Journal base (and the weather icons it shows) in the journal folder while the setting
@@ -2507,8 +2756,8 @@ var DailyJournal = class extends import_obsidian6.Plugin {
    */
   async syncJournalBase() {
     const s = this.settings;
-    const folder = (0, import_obsidian6.normalizePath)(s.folder || "/");
-    const exists = folder === "/" || this.app.vault.getAbstractFileByPath(folder) instanceof import_obsidian6.TFolder;
+    const folder = (0, import_obsidian7.normalizePath)(s.folder || "/");
+    const exists = folder === "/" || this.app.vault.getAbstractFileByPath(folder) instanceof import_obsidian7.TFolder;
     const target = s.journalBase && exists ? folder : null;
     if (s.baseFolder !== null && s.baseFolder !== target && (target !== null || !s.journalBase)) {
       await this.removeJournalBase(s.baseFolder);
@@ -2519,7 +2768,7 @@ var DailyJournal = class extends import_obsidian6.Plugin {
       return;
     const write = async (path, text) => {
       const file = this.app.vault.getAbstractFileByPath(path);
-      if (file instanceof import_obsidian6.TFile) {
+      if (file instanceof import_obsidian7.TFile) {
         if (await this.app.vault.read(file) !== text)
           await this.app.vault.modify(file, text);
       } else {
@@ -2527,7 +2776,7 @@ var DailyJournal = class extends import_obsidian6.Plugin {
         await this.app.vault.create(path, text);
       }
     };
-    const inFolder = (name) => (0, import_obsidian6.normalizePath)(folder === "/" ? name : `${folder}/${name}`);
+    const inFolder = (name) => (0, import_obsidian7.normalizePath)(folder === "/" ? name : `${folder}/${name}`);
     await write(inFolder(BASE_NAME), journalBase(s));
     if (s.showWeather)
       for (const icon of SKY_ICONS)
@@ -2538,7 +2787,7 @@ var DailyJournal = class extends import_obsidian6.Plugin {
     }
   }
   async removeJournalBase(folder) {
-    const inFolder = (name) => (0, import_obsidian6.normalizePath)(folder === "/" ? name : `${folder}/${name}`);
+    const inFolder = (name) => (0, import_obsidian7.normalizePath)(folder === "/" ? name : `${folder}/${name}`);
     for (const path of [inFolder(BASE_NAME), inFolder(ICONS_FOLDER)]) {
       const item = this.app.vault.getAbstractFileByPath(path);
       if (item)
@@ -2626,12 +2875,12 @@ var DailyJournal = class extends import_obsidian6.Plugin {
         fm.cssclasses = classes;
       });
     }
-    new import_obsidian6.Notice(`Updated ${files.length} entr${files.length === 1 ? "y" : "ies"}.`);
+    new import_obsidian7.Notice(`Updated ${files.length} entr${files.length === 1 ? "y" : "ies"}.`);
   }
   async openEntry(date) {
     const path = entryPath(this.settings, date);
     let file = this.app.vault.getAbstractFileByPath(path);
-    if (!(file instanceof import_obsidian6.TFile)) {
+    if (!(file instanceof import_obsidian7.TFile)) {
       await this.ensureFolder(path);
       file = await this.app.vault.create(path, entryTemplate(this.settings));
     }
@@ -2643,7 +2892,7 @@ var DailyJournal = class extends import_obsidian6.Plugin {
       await this.app.vault.createFolder(folder);
   }
   fillIfEmpty(file) {
-    if (!this.settings.fillNewEntries || !entryDate(this.settings, file) || !(file instanceof import_obsidian6.TFile))
+    if (!this.settings.fillNewEntries || !entryDate(this.settings, file) || !(file instanceof import_obsidian7.TFile))
       return;
     window.setTimeout(async () => {
       if ((await this.app.vault.read(file)).trim() === "")
@@ -2657,30 +2906,30 @@ var DailyJournal = class extends import_obsidian6.Plugin {
     if (target === file.path)
       return;
     if (this.app.vault.getAbstractFileByPath(target)) {
-      new import_obsidian6.Notice(`There's already a journal entry for ${date.format("MMM D, YYYY")}.`);
+      new import_obsidian7.Notice(`There's already a journal entry for ${date.format("MMM D, YYYY")}.`);
       return;
     }
     await this.ensureFolder(target);
     await this.app.fileManager.renameFile(file, target);
     const place = entryPlace((_a = this.app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter, this.settings.home);
     if (!await this.entryShowsWeather(file)) {
-      new import_obsidian6.Notice(`Moved entry to ${date.format("dddd, MMM D, YYYY")}.`);
+      new import_obsidian7.Notice(`Moved entry to ${date.format("dddd, MMM D, YYYY")}.`);
       return;
     }
-    const weather = date.isAfter((0, import_obsidian6.moment)(), "day") ? null : await fetchWeather(place, date, this.settings.units);
+    const weather = date.isAfter((0, import_obsidian7.moment)(), "day") ? null : await fetchWeather(place, date, this.settings.units);
     await this.app.fileManager.processFrontMatter(file, (fm) => {
       if (weather)
         fm.weather = weather;
       else
         delete fm.weather;
     });
-    new import_obsidian6.Notice(`Moved entry to ${date.format("dddd, MMM D, YYYY")}${weather ? "" : " (weather unavailable)"}.`);
+    new import_obsidian7.Notice(`Moved entry to ${date.format("dddd, MMM D, YYYY")}${weather ? "" : " (weather unavailable)"}.`);
   }
   /** Sets an entry's location (null = the default location) and refreshes its weather. Returns the new weather. */
   async setEntryPlace(file, place, withWeather) {
     const chosen = place != null ? place : this.settings.home;
     const date = entryDate(this.settings, file);
-    const weather = withWeather && date && !date.isAfter((0, import_obsidian6.moment)(), "day") ? await fetchWeather(chosen, date, this.settings.units) : null;
+    const weather = withWeather && date && !date.isAfter((0, import_obsidian7.moment)(), "day") ? await fetchWeather(chosen, date, this.settings.units) : null;
     await this.app.fileManager.processFrontMatter(file, (fm) => {
       Object.assign(fm, { location: chosen.name, latitude: chosen.lat, longitude: chosen.lon, timezone: chosen.tz });
       if (!withWeather)
