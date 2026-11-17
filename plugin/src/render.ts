@@ -192,14 +192,31 @@ function lineCount(el: HTMLElement): number {
 /** Shared by the book and song/podcast cards, so neither grows taller than the other beside it. */
 const TITLE_SIZES = ["0.92em", "0.82em", "0.74em"];
 
-function shrinkToTwoLines(el: HTMLElement, sizes = TITLE_SIZES, clamp = true, tries = 0): void {
-	// Always wait for the next frame first: in a side-by-side row the other card is drawn just after
-	// this one, and until it is, this card briefly has the whole row's width.
-	if (tries === 0 || !el.isConnected || !el.offsetWidth) {
-		if (tries < 30) window.requestAnimationFrame(() => shrinkToTwoLines(el, sizes, clamp, tries + 1));
-		return;
-	}
-	for (const size of sizes) {
+/**
+ * Run `measure` once the element is laid out: after the next frame (in a side-by-side row the other
+ * card is drawn just after this one), and if it isn't on screen yet (the editor only lays out cards
+ * scrolled into view), when it first becomes visible. Runs once, then stops watching.
+ */
+function whenLaidOut(el: HTMLElement, measure: () => void): void {
+	// Check again a little later too: fonts (e.g. a custom font plugin) can swap in after the first
+	// check and widen the text. Fitting only ever shrinks, so extra checks are harmless.
+	for (const ms of [500, 2000]) window.setTimeout(() => { if (el.isConnected && el.offsetWidth) measure(); }, ms);
+	window.requestAnimationFrame(() => {
+		if (el.isConnected && el.offsetWidth) { measure(); return; }
+		const io = new IntersectionObserver((entries) => {
+			if (!entries.some((e) => e.isIntersecting) || !el.offsetWidth) return;
+			io.disconnect();
+			window.requestAnimationFrame(measure);
+		});
+		io.observe(el);
+		// Never keep watching a card that's gone.
+		window.setTimeout(() => io.disconnect(), 10 * 60 * 1000);
+	});
+}
+
+function shrinkToTwoLines(el: HTMLElement, sizes = TITLE_SIZES, clamp = true, ready = false): void {
+	if (!ready) { whenLaidOut(el, () => shrinkToTwoLines(el, sizes, clamp, true)); return; }
+	for (const size of sizes.slice(Math.max(0, sizes.indexOf(el.style.fontSize) + 1))) {
 		if (lineCount(el) <= 2) return;
 		el.style.fontSize = size;
 	}
@@ -208,12 +225,9 @@ function shrinkToTwoLines(el: HTMLElement, sizes = TITLE_SIZES, clamp = true, tr
 }
 
 /** A one-line text that's too wide steps down in size (same steps as titles), then ends in "…". */
-function shrinkToOneLine(el: HTMLElement, sizes = TITLE_SIZES, tries = 0): void {
-	if (tries === 0 || !el.isConnected || !el.offsetWidth) {
-		if (tries < 30) window.requestAnimationFrame(() => shrinkToOneLine(el, sizes, tries + 1));
-		return;
-	}
-	for (const size of sizes) {
+function shrinkToOneLine(el: HTMLElement, sizes = TITLE_SIZES, ready = false): void {
+	if (!ready) { whenLaidOut(el, () => shrinkToOneLine(el, sizes, true)); return; }
+	for (const size of sizes.slice(Math.max(0, sizes.indexOf(el.style.fontSize) + 1))) {
 		if (el.scrollWidth <= el.clientWidth) return;
 		el.style.fontSize = size;
 	}
@@ -267,9 +281,24 @@ export function drawReading(el: HTMLElement, day: HardcoverDay, date: Moment): v
 			if (b.pages) line.createSpan({ text: `+${b.pages} pages` });
 		}
 	}
+	if (!day.quotes.length) return;
+	// In a side-by-side row the card is half width: quotes go in their own full-width card under the
+	// row (like the song player), so both cards in the row stay compact.
+	const row = el.closest(".dj-row-wrap") as HTMLElement | null;
+	let target = c;
+	if (row) {
+		row.querySelectorAll(":scope > .dj-row-quotes").forEach((q) => q.remove());
+		target = createDiv({ cls: "dj-card dj-row-quotes" });
+		row.querySelector(":scope > .dj-row-cards")?.after(target);
+	}
+	// One book: say so in the title and skip repeating it under each quote.
+	const books = new Set(day.quotes.map((q) => q.book));
+	const oneBook = books.size === 1 ? [...books][0] : null;
+	// One line: a long book name shrinks the label (from its usual .84em), then ends in "…".
+	if (row) shrinkToOneLine(target.createDiv({ cls: "dj-label dj-one-line", text: oneBook ? `Quotes from ${oneBook}` : "Quotes" }), ["0.76em", "0.68em"]);
 	for (const q of day.quotes) {
-		const bq = c.createEl("blockquote", { cls: "dj-quote", text: q.text });
-		bq.createDiv({ cls: "dj-quote-source", text: "— " + q.book });
+		const bq = target.createEl("blockquote", { cls: "dj-quote", text: q.text });
+		if (!(row && oneBook)) bq.createDiv({ cls: "dj-quote-source", text: "— " + q.book });
 	}
 }
 

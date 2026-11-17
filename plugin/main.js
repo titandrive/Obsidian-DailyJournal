@@ -1382,14 +1382,34 @@ function lineCount(el) {
   return new Set(Array.from(range.getClientRects()).filter((r) => r.width > 0).map((r) => Math.round(r.top))).size;
 }
 var TITLE_SIZES = ["0.92em", "0.82em", "0.74em"];
-function shrinkToTwoLines(el, sizes = TITLE_SIZES, clamp = true, tries = 0) {
+function whenLaidOut(el, measure) {
+  for (const ms of [500, 2e3])
+    window.setTimeout(() => {
+      if (el.isConnected && el.offsetWidth)
+        measure();
+    }, ms);
+  window.requestAnimationFrame(() => {
+    if (el.isConnected && el.offsetWidth) {
+      measure();
+      return;
+    }
+    const io = new IntersectionObserver((entries) => {
+      if (!entries.some((e) => e.isIntersecting) || !el.offsetWidth)
+        return;
+      io.disconnect();
+      window.requestAnimationFrame(measure);
+    });
+    io.observe(el);
+    window.setTimeout(() => io.disconnect(), 10 * 60 * 1e3);
+  });
+}
+function shrinkToTwoLines(el, sizes = TITLE_SIZES, clamp = true, ready = false) {
   var _a;
-  if (tries === 0 || !el.isConnected || !el.offsetWidth) {
-    if (tries < 30)
-      window.requestAnimationFrame(() => shrinkToTwoLines(el, sizes, clamp, tries + 1));
+  if (!ready) {
+    whenLaidOut(el, () => shrinkToTwoLines(el, sizes, clamp, true));
     return;
   }
-  for (const size of sizes) {
+  for (const size of sizes.slice(Math.max(0, sizes.indexOf(el.style.fontSize) + 1))) {
     if (lineCount(el) <= 2)
       return;
     el.style.fontSize = size;
@@ -1399,14 +1419,13 @@ function shrinkToTwoLines(el, sizes = TITLE_SIZES, clamp = true, tries = 0) {
     el.setAttr("title", (_a = el.textContent) != null ? _a : "");
   }
 }
-function shrinkToOneLine(el, sizes = TITLE_SIZES, tries = 0) {
+function shrinkToOneLine(el, sizes = TITLE_SIZES, ready = false) {
   var _a;
-  if (tries === 0 || !el.isConnected || !el.offsetWidth) {
-    if (tries < 30)
-      window.requestAnimationFrame(() => shrinkToOneLine(el, sizes, tries + 1));
+  if (!ready) {
+    whenLaidOut(el, () => shrinkToOneLine(el, sizes, true));
     return;
   }
-  for (const size of sizes) {
+  for (const size of sizes.slice(Math.max(0, sizes.indexOf(el.style.fontSize) + 1))) {
     if (el.scrollWidth <= el.clientWidth)
       return;
     el.style.fontSize = size;
@@ -1415,7 +1434,7 @@ function shrinkToOneLine(el, sizes = TITLE_SIZES, tries = 0) {
     el.setAttr("title", (_a = el.textContent) != null ? _a : "");
 }
 function drawReading(el, day, date) {
-  var _a;
+  var _a, _b;
   const c = card(el, "Currently reading");
   if (!day.books.length && !day.quotes.length) {
     const last = day.lastRead ? (0, import_obsidian4.moment)(day.lastRead.date, "YYYY-MM-DD") : null;
@@ -1427,7 +1446,7 @@ function drawReading(el, day, date) {
   if (day.pages && day.books.length > 1)
     c.createDiv({ cls: "dj-day-total", text: `${day.pages} pages` });
   for (const b of day.books) {
-    const row = c.createDiv({ cls: "dj-book" });
+    const row2 = c.createDiv({ cls: "dj-book" });
     const initials = b.title.split(/[\s:]+/).filter((w) => /^[A-Za-z0-9]/.test(w)).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
     const openBook = (e) => {
       e.preventDefault();
@@ -1444,14 +1463,14 @@ function drawReading(el, day, date) {
     };
     const fallback = () => {
       img == null ? void 0 : img.remove();
-      row.prepend(linkable(createDiv({ cls: "dj-cover dj-cover-fallback", text: initials })));
+      row2.prepend(linkable(createDiv({ cls: "dj-cover dj-cover-fallback", text: initials })));
     };
-    const img = b.cover ? linkable(row.createEl("img", { cls: "dj-cover", attr: { src: b.cover, alt: b.title } })) : null;
+    const img = b.cover ? linkable(row2.createEl("img", { cls: "dj-cover", attr: { src: b.cover, alt: b.title } })) : null;
     if (img)
       img.onerror = fallback;
     else
       fallback();
-    const info = row.createDiv({ cls: "dj-book-info" });
+    const info = row2.createDiv({ cls: "dj-book-info" });
     const title = info.createEl("a", { cls: "dj-book-title", text: b.title, href: (_a = b.url) != null ? _a : "#" });
     if (b.url)
       title.addEventListener("click", openBook);
@@ -1473,9 +1492,23 @@ function drawReading(el, day, date) {
         line.createSpan({ text: `+${b.pages} pages` });
     }
   }
+  if (!day.quotes.length)
+    return;
+  const row = el.closest(".dj-row-wrap");
+  let target = c;
+  if (row) {
+    row.querySelectorAll(":scope > .dj-row-quotes").forEach((q2) => q2.remove());
+    target = createDiv({ cls: "dj-card dj-row-quotes" });
+    (_b = row.querySelector(":scope > .dj-row-cards")) == null ? void 0 : _b.after(target);
+  }
+  const books = new Set(day.quotes.map((q2) => q2.book));
+  const oneBook = books.size === 1 ? [...books][0] : null;
+  if (row)
+    shrinkToOneLine(target.createDiv({ cls: "dj-label dj-one-line", text: oneBook ? `Quotes from ${oneBook}` : "Quotes" }), ["0.76em", "0.68em"]);
   for (const q2 of day.quotes) {
-    const bq = c.createEl("blockquote", { cls: "dj-quote", text: q2.text });
-    bq.createDiv({ cls: "dj-quote-source", text: "\u2014 " + q2.book });
+    const bq = target.createEl("blockquote", { cls: "dj-quote", text: q2.text });
+    if (!(row && oneBook))
+      bq.createDiv({ cls: "dj-quote-source", text: "\u2014 " + q2.book });
   }
 }
 function renderCheckIn(host, el, file, fm, fields) {

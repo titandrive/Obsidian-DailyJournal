@@ -160,6 +160,9 @@ a.dj-book-title:hover { color: var(--text-accent); }
 .dj-song-player.dj-song-audio { aspect-ratio: auto; background: none; border-radius: 0; overflow: visible; }
 .dj-song-audio audio { width: 100%; height: 40px; display: block; }
 /* Under a side-by-side row: full width, but capped so a wide note doesn't get a giant video. */
+/* Quotes under a side-by-side row: full width, same gap as between cards. */
+.dj-one-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.dj-row-wrap > .dj-row-quotes { margin-top: calc(var(--line-height-normal, 1.5) * 1em); }
 .dj-row-wrap > .dj-song-player { margin-top: 1em; max-height: 360px; aspect-ratio: auto; height: min(360px, calc((100cqw) * 9 / 16)); }
 .dj-song-change { font-size: .85em; color: var(--text-muted); text-decoration: none; align-self: flex-start; }
 .dj-song-change:hover { color: var(--text-accent); }
