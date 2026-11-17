@@ -131,12 +131,13 @@ export class TrendsView extends BasesView {
 				["6–7 h sleep", (d) => { const s = num(d.fm.sleep); return s !== null && s >= 6 && s < 7; }],
 				["7–8 h sleep", (d) => { const s = num(d.fm.sleep); return s !== null && s >= 7 && s < 8; }],
 				["8 h+ sleep", (d) => (num(d.fm.sleep) ?? -1) >= 8],
-				["Worked", (d) => d.fm.worked === true], ["Day off", (d) => d.fm.worked === false],
 			]),
 		];
 		if (good.length) barList(patterns.card("What goes with good days", "Average day rating"), good, 10);
 		const bad = days.filter((d) => { const r = num(d.fm.day_rating); return r !== null && r <= BAD_DAY; });
 		if (ratings.length) badDays(patterns.card("What goes with bad days", `Days rated ${BAD_DAY} or lower, next to your typical day`), bad, days);
+		const byWork = ratingBy(days, [["Worked", (d) => d.fm.worked === true], ["Day off", (d) => d.fm.worked === false]]);
+		if (byWork.length) barList(patterns.card("Day rating by work", "Average day rating"), byWork, 10);
 		const skies = [...new Set(days.map((d) => sky(d.fm)).filter(Boolean))];
 		const byWeather = ratingBy(days, skies.map((s) => [s, (d: Day) => sky(d.fm) === s])).sort((a, b) => b.value - a.value);
 		if (byWeather.length > 1) barList(patterns.card("Day rating by weather"), byWeather, 10);

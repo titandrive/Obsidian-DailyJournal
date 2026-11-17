@@ -2396,9 +2396,7 @@ var TrendsView = class extends import_obsidian6.BasesView {
         ["8 h+ sleep", (d) => {
           var _a2;
           return ((_a2 = num(d.fm.sleep)) != null ? _a2 : -1) >= 8;
-        }],
-        ["Worked", (d) => d.fm.worked === true],
-        ["Day off", (d) => d.fm.worked === false]
+        }]
       ])
     ];
     if (good.length)
@@ -2409,6 +2407,9 @@ var TrendsView = class extends import_obsidian6.BasesView {
     });
     if (ratings.length)
       badDays(patterns.card("What goes with bad days", `Days rated ${BAD_DAY} or lower, next to your typical day`), bad, days);
+    const byWork = ratingBy(days, [["Worked", (d) => d.fm.worked === true], ["Day off", (d) => d.fm.worked === false]]);
+    if (byWork.length)
+      barList(patterns.card("Day rating by work", "Average day rating"), byWork, 10);
     const skies = [...new Set(days.map((d) => sky(d.fm)).filter(Boolean))];
     const byWeather = ratingBy(days, skies.map((s) => [s, (d) => sky(d.fm) === s])).sort((a, b) => b.value - a.value);
     if (byWeather.length > 1)
