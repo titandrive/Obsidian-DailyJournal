@@ -1504,7 +1504,7 @@ function drawReading(el, day, date) {
   const books = new Set(day.quotes.map((q2) => q2.book));
   const oneBook = books.size === 1 ? [...books][0] : null;
   if (row)
-    shrinkToOneLine(target.createDiv({ cls: "dj-label dj-one-line", text: oneBook ? `Quotes from ${oneBook}` : "Quotes" }), ["0.76em", "0.68em"]);
+    shrinkToOneLine(target.createDiv({ cls: "dj-label dj-one-line", text: "Today's Highlights" }), ["0.76em", "0.68em"]);
   for (const q2 of day.quotes) {
     const bq = target.createEl("blockquote", { cls: "dj-quote", text: q2.text });
     if (!(row && oneBook))

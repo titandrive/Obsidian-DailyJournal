@@ -295,7 +295,7 @@ export function drawReading(el: HTMLElement, day: HardcoverDay, date: Moment): v
 	const books = new Set(day.quotes.map((q) => q.book));
 	const oneBook = books.size === 1 ? [...books][0] : null;
 	// One line: a long book name shrinks the label (from its usual .84em), then ends in "…".
-	if (row) shrinkToOneLine(target.createDiv({ cls: "dj-label dj-one-line", text: oneBook ? `Quotes from ${oneBook}` : "Quotes" }), ["0.76em", "0.68em"]);
+	if (row) shrinkToOneLine(target.createDiv({ cls: "dj-label dj-one-line", text: "Today's Highlights" }), ["0.76em", "0.68em"]);
 	for (const q of day.quotes) {
 		const bq = target.createEl("blockquote", { cls: "dj-quote", text: q.text });
 		if (!(row && oneBook)) bq.createDiv({ cls: "dj-quote-source", text: "— " + q.book });
