@@ -255,6 +255,16 @@ a.dj-book-title:hover { color: var(--text-accent); }
 	.dj-date { font-size: 1.55em; }
 }
 
+/* Meal suggestions from past entries, shown under the box being typed in. */
+.dj-meal-box { position: relative; min-width: 0; }
+.dj-suggest {
+	position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 20; padding: 4px;
+	background: var(--background-primary); border: 1px solid var(--background-modifier-border); border-radius: 10px;
+	box-shadow: 0 8px 24px -8px rgba(0, 0, 0, .45);
+}
+.dj-suggest-item { padding: .35em .6em; border-radius: 7px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dj-suggest-item.is-active { background: var(--interactive-accent); color: var(--text-on-accent); }
+
 /* ---- Dialogs (date picker, city search) ------------------------------- */
 
 .dj-modal { width: min(380px, 92vw); }

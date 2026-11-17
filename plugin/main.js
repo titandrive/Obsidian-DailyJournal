@@ -1599,7 +1599,11 @@ function renderCheckIn(host, el, file, fm, fields) {
     const meal = (label, key, placeholder) => {
       const row = meals.createDiv({ cls: "dj-meal" });
       row.createSpan({ text: label });
-      textField(row, key, placeholder);
+      const box = row.createDiv({ cls: "dj-meal-box" });
+      const t = textField(box, key, placeholder);
+      mealSuggest(host, t, box, (value) => {
+        void save(key, value);
+      });
     };
     meal("Breakfast", "breakfast", "What did you have for breakfast?");
     meal("Lunch", "lunch", "What did you have for lunch?");
@@ -1799,6 +1803,85 @@ function renderSong(host, el, file, fm) {
     showSong(song);
   else
     showEmpty();
+}
+function pastMeals(host) {
+  var _a, _b, _c;
+  const counts = /* @__PURE__ */ new Map();
+  for (const { file } of host.journalEntries()) {
+    const fm = (_a = host.app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter;
+    for (const key of ["breakfast", "lunch", "dinner"]) {
+      const v = fm == null ? void 0 : fm[key];
+      if (typeof v !== "string" || !v.trim())
+        continue;
+      const text = v.trim(), k = text.toLowerCase();
+      const c = (_b = counts.get(k)) != null ? _b : { text, n: 0, spellings: /* @__PURE__ */ new Map() };
+      c.n++;
+      c.spellings.set(text, ((_c = c.spellings.get(text)) != null ? _c : 0) + 1);
+      counts.set(k, c);
+    }
+  }
+  return [...counts.values()].map((c) => ({ n: c.n, text: [...c.spellings].sort((a, b) => b[1] - a[1])[0][0] })).sort((a, b) => b.n - a.n || a.text.localeCompare(b.text)).map((c) => c.text);
+}
+function mealSuggest(host, input, box, commit) {
+  let all = [];
+  let list = null;
+  let items = [];
+  let active = -1;
+  const close = () => {
+    list == null ? void 0 : list.remove();
+    list = null;
+    items = [];
+    active = -1;
+  };
+  const paint = () => list == null ? void 0 : list.querySelectorAll(".dj-suggest-item").forEach((el, i) => el.toggleClass("is-active", i === active));
+  const accept = (value) => {
+    input.value = value;
+    close();
+    commit(value);
+  };
+  const update = () => {
+    const typed = input.value.trim().toLowerCase();
+    close();
+    if (!typed)
+      return;
+    const starts = all.filter((m) => m.toLowerCase().startsWith(typed));
+    const contains = all.filter((m) => !m.toLowerCase().startsWith(typed) && m.toLowerCase().includes(typed));
+    items = [...starts, ...contains].filter((m) => m.toLowerCase() !== typed).slice(0, 6);
+    if (!items.length)
+      return;
+    list = box.createDiv({ cls: "dj-suggest" });
+    items.forEach((m, i) => {
+      const el = list.createDiv({ cls: "dj-suggest-item", text: m });
+      el.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        accept(m);
+      });
+      el.addEventListener("mousemove", () => {
+        active = i;
+        paint();
+      });
+    });
+  };
+  input.addEventListener("focus", () => {
+    all = pastMeals(host);
+  });
+  input.addEventListener("input", update);
+  input.addEventListener("blur", () => window.setTimeout(close, 100));
+  input.addEventListener("keydown", (e) => {
+    if (!list || !items.length)
+      return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      active = e.key === "ArrowDown" ? (active + 1) % items.length : active <= 0 ? items.length - 1 : active - 1;
+      paint();
+    } else if ((e.key === "Enter" || e.key === "Tab") && active >= 0) {
+      e.preventDefault();
+      accept(items[active]);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      close();
+    }
+  });
 }
 function renderOnThisDay(host, el, date) {
   const monthAgo = date.clone().subtract(1, "month");

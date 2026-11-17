@@ -386,7 +386,9 @@ function renderCheckIn(host: JournalHost, el: HTMLElement, file: TFile, fm: Fron
 		const meal = (label: string, key: string, placeholder: string) => {
 			const row = meals.createDiv({ cls: "dj-meal" });
 			row.createSpan({ text: label });
-			textField(row, key, placeholder);
+			const box = row.createDiv({ cls: "dj-meal-box" });
+			const t = textField(box, key, placeholder);
+			mealSuggest(host, t, box, (value) => { void save(key, value); });
 		};
 		meal("Breakfast", "breakfast", "What did you have for breakfast?");
 		meal("Lunch", "lunch", "What did you have for lunch?");
@@ -548,6 +550,82 @@ function renderSong(host: JournalHost, el: HTMLElement, file: TFile, fm: Frontma
 
 	const song = savedSong(fm);
 	if (song) showSong(song); else showEmpty();
+}
+
+/**
+ * Every meal written in any entry (breakfast, lunch and dinner pooled), most frequent first, with
+ * the spelling used most often. Case-insensitive, so "Yogurt" and "yogurt" count as one meal.
+ */
+function pastMeals(host: JournalHost): string[] {
+	const counts = new Map<string, { text: string; n: number; spellings: Map<string, number> }>();
+	for (const { file } of host.journalEntries()) {
+		const fm = host.app.metadataCache.getFileCache(file)?.frontmatter;
+		for (const key of ["breakfast", "lunch", "dinner"]) {
+			const v = fm?.[key];
+			if (typeof v !== "string" || !v.trim()) continue;
+			const text = v.trim(), k = text.toLowerCase();
+			const c = counts.get(k) ?? { text, n: 0, spellings: new Map<string, number>() };
+			c.n++;
+			c.spellings.set(text, (c.spellings.get(text) ?? 0) + 1);
+			counts.set(k, c);
+		}
+	}
+	return [...counts.values()]
+		.map((c) => ({ n: c.n, text: [...c.spellings].sort((a, b) => b[1] - a[1])[0][0] }))
+		.sort((a, b) => b.n - a.n || a.text.localeCompare(b.text))
+		.map((c) => c.text);
+}
+
+/**
+ * Suggestions under a meal box from meals you've written before: prefix matches first, then
+ * matches anywhere, most frequent first. ↑↓ and Enter/Tab (or a click) fill in the exact saved
+ * text, so the same meal is always spelled the same way.
+ */
+function mealSuggest(host: JournalHost, input: HTMLTextAreaElement, box: HTMLElement, commit: (value: string) => void): void {
+	let all: string[] = [];
+	let list: HTMLElement | null = null;
+	let items: string[] = [];
+	let active = -1;
+	const close = () => { list?.remove(); list = null; items = []; active = -1; };
+	const paint = () => list?.querySelectorAll(".dj-suggest-item").forEach((el, i) => el.toggleClass("is-active", i === active));
+	const accept = (value: string) => {
+		input.value = value;
+		close();
+		commit(value);
+	};
+	const update = () => {
+		const typed = input.value.trim().toLowerCase();
+		close();
+		if (!typed) return;
+		const starts = all.filter((m) => m.toLowerCase().startsWith(typed));
+		const contains = all.filter((m) => !m.toLowerCase().startsWith(typed) && m.toLowerCase().includes(typed));
+		items = [...starts, ...contains].filter((m) => m.toLowerCase() !== typed).slice(0, 6);
+		if (!items.length) return;
+		list = box.createDiv({ cls: "dj-suggest" });
+		items.forEach((m, i) => {
+			const el = list!.createDiv({ cls: "dj-suggest-item", text: m });
+			// mousedown, not click: picking must happen before the box loses focus.
+			el.addEventListener("mousedown", (e) => { e.preventDefault(); accept(m); });
+			el.addEventListener("mousemove", () => { active = i; paint(); });
+		});
+	};
+	input.addEventListener("focus", () => { all = pastMeals(host); });
+	input.addEventListener("input", update);
+	input.addEventListener("blur", () => window.setTimeout(close, 100));
+	input.addEventListener("keydown", (e) => {
+		if (!list || !items.length) return;
+		if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+			e.preventDefault();
+			active = e.key === "ArrowDown" ? (active + 1) % items.length : (active <= 0 ? items.length - 1 : active - 1);
+			paint();
+		} else if ((e.key === "Enter" || e.key === "Tab") && active >= 0) {
+			e.preventDefault();
+			accept(items[active]);
+		} else if (e.key === "Escape") {
+			e.preventDefault();
+			close();
+		}
+	});
 }
 
 function renderOnThisDay(host: JournalHost, el: HTMLElement, date: Moment): void {
