@@ -36,6 +36,10 @@ export interface JournalSettings {
 	/** YouTube Data API key: optional, unlocks searching for songs. */
 	youtubeApiKey: string;
 	showOnThisDay: boolean;
+	/** Show the entry from one month ago in On this day. */
+	onThisDayMonth: boolean;
+	/** Show entries from the same date in earlier years in On this day. */
+	onThisDayYears: boolean;
 	fields: CheckInFields;
 	prompts: Prompt[];
 	fillNewEntries: boolean;
@@ -58,6 +62,8 @@ export const DEFAULT_SETTINGS: JournalSettings = {
 	showSong: true,
 	youtubeApiKey: "",
 	showOnThisDay: true,
+	onThisDayMonth: true,
+	onThisDayYears: true,
 	fields: { rating: true, sleep: true, work: true, exercise: true, food: true, tags: true },
 	prompts: [
 		{ text: "How was your day?", level: 0 },

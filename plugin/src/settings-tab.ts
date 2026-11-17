@@ -140,7 +140,11 @@ export class JournalSettingTab extends PluginSettingTab {
 		new Setting(card())
 			.setName("On this day")
 			.setDesc("Links to entries from the same date in earlier months and years.")
-			.addToggle((t) => t.setValue(s.showOnThisDay).onChange(async (v) => { s.showOnThisDay = v; await save(); }));
+			.addToggle((t) => t.setValue(s.showOnThisDay).onChange(async (v) => { s.showOnThisDay = v; await save(); this.display(); }));
+		sub(new Setting(group).setName("A month ago").setDesc("The entry from the same date last month."), s.showOnThisDay)
+			.addToggle((t) => t.setValue(s.onThisDayMonth).onChange(async (v) => { s.onThisDayMonth = v; await save(); }));
+		sub(new Setting(group).setName("Years ago").setDesc("Entries from the same date in earlier years."), s.showOnThisDay)
+			.addToggle((t) => t.setValue(s.onThisDayYears).onChange(async (v) => { s.onThisDayYears = v; await save(); }));
 
 		new Setting(containerEl).setName("Appearance").setHeading();
 		new Setting(containerEl)

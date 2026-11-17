@@ -389,6 +389,8 @@ var DEFAULT_SETTINGS = {
   showSong: true,
   youtubeApiKey: "",
   showOnThisDay: true,
+  onThisDayMonth: true,
+  onThisDayYears: true,
   fields: { rating: true, sleep: true, work: true, exercise: true, food: true, tags: true },
   prompts: [
     { text: "How was your day?", level: 0 },
@@ -1257,6 +1259,10 @@ function parseBlock(source) {
 function blockShowsWeather(options) {
   return !options.includes("no-weather");
 }
+function blockOnThisDay(options) {
+  const month = options.includes("month"), years = options.includes("years");
+  return month || years ? { month, years } : { month: true, years: true };
+}
 function blockFields(options) {
   const listed = options.filter((o) => FIELD_KEYS.includes(o));
   if (!listed.length)
@@ -1271,7 +1277,7 @@ function layoutLines(settings) {
     reading: settings.showReading ? "reading" : null,
     song: settings.showSong ? "song" : null,
     checkin: fields.length ? "checkin " + fields.join(" ") : null,
-    onthisday: settings.showOnThisDay ? "onthisday" : null
+    onthisday: settings.showOnThisDay && (settings.onThisDayMonth || settings.onThisDayYears) ? ["onthisday", settings.onThisDayMonth && "month", settings.onThisDayYears && "years"].filter(Boolean).join(" ") : null
   };
 }
 function entryTemplate(settings) {
@@ -1387,7 +1393,7 @@ async function renderSection(host, source, el, file) {
     case "song":
       return renderSong(host, el, file, fm);
     case "onthisday":
-      return renderOnThisDay(host, el, date);
+      return renderOnThisDay(host, el, date, blockOnThisDay(options));
     case "row": {
       const grid = el.createDiv({ cls: "dj-row-wrap" }).createDiv({ cls: "dj-row-cards" });
       const cells = options.filter((o) => o !== "row" && o !== "header").map((o) => [o, grid.createDiv({ cls: "dj-row-cell" })]);
@@ -2030,11 +2036,11 @@ function agoLabel(then, now) {
   const months = now.diff(then, "months");
   return months <= 1 ? "1 month ago" : `${months} months ago`;
 }
-async function renderOnThisDay(host, el, date) {
+async function renderOnThisDay(host, el, date, show) {
   var _a, _b, _c, _d;
   const { app } = host;
   const monthAgo = date.clone().subtract(1, "month");
-  const hits = host.journalEntries().filter((d) => d.date.isBefore(date, "day") && (d.date.isSame(monthAgo, "day") || d.date.month() === date.month() && d.date.date() === date.date())).reverse();
+  const hits = host.journalEntries().filter((d) => d.date.isBefore(date, "day") && (show.month && d.date.isSame(monthAgo, "day") || show.years && d.date.month() === date.month() && d.date.date() === date.date())).reverse();
   if (!hits.length)
     return;
   const grid = card(el, "On this day").createDiv({ cls: "dj-otd" });
@@ -2222,6 +2228,15 @@ var JournalSettingTab = class extends import_obsidian5.PluginSettingTab {
     }
     new import_obsidian5.Setting(card2()).setName("On this day").setDesc("Links to entries from the same date in earlier months and years.").addToggle((t) => t.setValue(s.showOnThisDay).onChange(async (v) => {
       s.showOnThisDay = v;
+      await save();
+      this.display();
+    }));
+    sub(new import_obsidian5.Setting(group).setName("A month ago").setDesc("The entry from the same date last month."), s.showOnThisDay).addToggle((t) => t.setValue(s.onThisDayMonth).onChange(async (v) => {
+      s.onThisDayMonth = v;
+      await save();
+    }));
+    sub(new import_obsidian5.Setting(group).setName("Years ago").setDesc("Entries from the same date in earlier years."), s.showOnThisDay).addToggle((t) => t.setValue(s.onThisDayYears).onChange(async (v) => {
+      s.onThisDayYears = v;
       await save();
     }));
     new import_obsidian5.Setting(containerEl).setName("Appearance").setHeading();

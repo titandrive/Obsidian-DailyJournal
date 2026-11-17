@@ -5,7 +5,7 @@ import { CheckInFields, JournalSettings, Place } from "./settings";
 import { HardcoverDay, savedReading } from "./hardcover";
 import { meteoconSvg } from "./meteocons";
 import { episodePage, playerUrl, Song, SONG_KEYS, songProperties, thumbnailUrl, youtubeMusicUrl } from "./music";
-import { blockFields, blockShowsWeather, parseBlock } from "./template";
+import { blockFields, blockOnThisDay, blockShowsWeather, parseBlock } from "./template";
 import { entryPlace, fetchWeather, PIN_ICON, weatherIcon, weatherText } from "./weather";
 import { RETRY_AFTER_MS } from "./net";
 
@@ -61,7 +61,7 @@ export async function renderSection(host: JournalHost, source: string, el: HTMLE
 			return renderReading(host, el, file, date, fm);
 		case "checkin": return renderCheckIn(host, el, file, fm, blockFields(options));
 		case "song": return renderSong(host, el, file, fm);
-		case "onthisday": return renderOnThisDay(host, el, date);
+		case "onthisday": return renderOnThisDay(host, el, date, blockOnThisDay(options));
 		case "row": {
 			// Several cards side by side in one block, e.g. "row reading song": compact versions of each,
 			// stacked again when the note is too narrow (see .dj-row-cards).
@@ -649,11 +649,12 @@ function agoLabel(then: Moment, now: Moment): string {
 	return months <= 1 ? "1 month ago" : `${months} months ago`;
 }
 
-async function renderOnThisDay(host: JournalHost, el: HTMLElement, date: Moment): Promise<void> {
+async function renderOnThisDay(host: JournalHost, el: HTMLElement, date: Moment, show: { month: boolean; years: boolean }): Promise<void> {
 	const { app } = host;
 	const monthAgo = date.clone().subtract(1, "month");
 	const hits = host.journalEntries().filter((d) => d.date.isBefore(date, "day") && (
-		d.date.isSame(monthAgo, "day") || (d.date.month() === date.month() && d.date.date() === date.date())
+		(show.month && d.date.isSame(monthAgo, "day")) ||
+		(show.years && d.date.month() === date.month() && d.date.date() === date.date())
 	)).reverse();
 	if (!hits.length) return;
 	const grid = card(el, "On this day").createDiv({ cls: "dj-otd" });

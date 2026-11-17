@@ -26,6 +26,12 @@ export function blockShowsWeather(options: string[]): boolean {
 	return !options.includes("no-weather");
 }
 
+/** Which earlier entries an On this day block shows. Entries from before these options existed show both. */
+export function blockOnThisDay(options: string[]): { month: boolean; years: boolean } {
+	const month = options.includes("month"), years = options.includes("years");
+	return month || years ? { month, years } : { month: true, years: true };
+}
+
 export function blockFields(options: string[]): CheckInFields {
 	const listed = options.filter((o): o is keyof CheckInFields => (FIELD_KEYS as string[]).includes(o));
 	// Entries from before field options existed had exactly these four.
@@ -42,7 +48,9 @@ function layoutLines(settings: JournalSettings): Record<Section, string | null> 
 		reading: settings.showReading ? "reading" : null,
 		song: settings.showSong ? "song" : null,
 		checkin: fields.length ? "checkin " + fields.join(" ") : null,
-		onthisday: settings.showOnThisDay ? "onthisday" : null,
+		onthisday: settings.showOnThisDay && (settings.onThisDayMonth || settings.onThisDayYears)
+			? ["onthisday", settings.onThisDayMonth && "month", settings.onThisDayYears && "years"].filter(Boolean).join(" ")
+			: null,
 	};
 }
 
