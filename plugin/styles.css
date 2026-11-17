@@ -422,9 +422,19 @@ button.dj-prompt-add { display: flex; align-items: center; gap: .4em; margin-top
 .dj-trends-dot circle:not(.dj-trends-hit) { fill: color-mix(in srgb, var(--interactive-accent) 45%, var(--background-secondary)); }
 .dj-trends-dot .dj-trends-hit { fill: transparent; }
 .dj-trends-dot:hover circle:not(.dj-trends-hit) { fill: var(--interactive-accent); r: 5; }
-.dj-trends-compare { display: grid; grid-template-columns: 1fr auto auto; gap: 6px 1.5em; font-size: var(--font-ui-small); }
+.dj-trends-compare { display: grid; grid-template-columns: 1fr repeat(3, auto); gap: 6px 1.5em; font-size: var(--font-ui-small); }
 .dj-trends-compare-head { color: var(--text-muted); font-size: var(--font-ui-smaller); text-align: right; }
 .dj-trends-compare-value { text-align: right; font-variant-numeric: tabular-nums; }
 .dj-trends { gap: var(--size-4-8); }
 .dj-trends-section { display: flex; flex-direction: column; gap: var(--size-4-3); }
 .dj-trends-section-title { font-size: var(--font-ui-medium); font-weight: 600; color: var(--text-normal); padding-bottom: var(--size-4-1); border-bottom: 1px solid var(--background-modifier-border); }
+.dj-trends-tile-unit { margin-inline-start: .35em; font-size: var(--font-ui-small); font-weight: 400; color: var(--text-muted); }
+.dj-trends-wide { grid-column: 1 / -1; }
+.dj-trends-diverge { display: grid; grid-template-columns: minmax(0, max-content) minmax(60px, 1fr) minmax(60px, 1fr) auto; gap: 6px 0; align-items: center; font-size: var(--font-ui-small); }
+.dj-trends-diverge .dj-trends-bar-label { padding-inline-end: 10px; }
+.dj-trends-diverge .dj-trends-bar-value { padding-inline-start: 10px; }
+.dj-trends-diverge-neg, .dj-trends-diverge-pos { height: 10px; display: flex; }
+.dj-trends-diverge-neg { justify-content: flex-end; border-right: 1px solid var(--background-modifier-border-hover); }
+.dj-trends-up { height: 100%; background: var(--color-green); border-radius: 0 4px 4px 0; }
+.dj-trends-down { height: 100%; background: var(--color-orange); border-radius: 4px 0 0 4px; }
+.dj-trends-foot { margin-top: var(--size-4-3); }

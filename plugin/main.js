@@ -2345,10 +2345,13 @@ var TrendsView = class extends import_obsidian6.BasesView {
       let tiles = null, grid = null;
       return {
         el: el2,
-        tile(label, value, hint) {
+        /** `unit`: small text on the same line as the value, e.g. "of days". */
+        tile(label, value, hint, unit) {
           tiles != null ? tiles : tiles = el2.createDiv({ cls: "dj-trends-tiles" });
           const t = tiles.createDiv({ cls: "dj-trends-tile" });
-          t.createDiv({ cls: "dj-trends-tile-value", text: value });
+          const v = t.createDiv({ cls: "dj-trends-tile-value", text: value });
+          if (unit)
+            v.createSpan({ cls: "dj-trends-tile-unit", text: unit });
           t.createDiv({ cls: "dj-trends-tile-label", text: label });
           if (hint)
             t.createDiv({ cls: "dj-trends-tile-hint", text: hint });
@@ -2372,48 +2375,79 @@ var TrendsView = class extends import_obsidian6.BasesView {
     if (sleeps.length)
       overview.tile("Avg. sleep", `${one(mean(sleeps))} h`);
     if (exercised.length)
-      overview.tile("Exercised", `${Math.round(100 * exercised.filter((d) => d.fm.exercise).length / exercised.length)}%`, "of days");
+      overview.tile("Exercised", `${Math.round(100 * exercised.filter((d) => d.fm.exercise).length / exercised.length)}%`, void 0, "of days");
     const moodSleep = section("Averages");
     const recent = days.filter((d) => !d.date.isBefore(days[days.length - 1].date.clone().subtract(89, "days"), "day"));
-    lineChart(moodSleep.card("Day rating", "Last 90 days \xB7 line is the 7-day average"), recent, (d) => num(d.fm.day_rating), 10);
-    lineChart(moodSleep.card("Sleep", "Last 90 days \xB7 hours \xB7 line is the 7-day average"), recent, (d) => num(d.fm.sleep), 12);
+    lineChart(moodSleep.card("Day rating", "7-day average"), recent, (d) => num(d.fm.day_rating), 10);
+    lineChart(moodSleep.card("Sleep", "7-day average"), recent, (d) => num(d.fm.sleep), 12);
     const patterns = section("Good and bad days");
-    const good = [
-      ...ratingBy(days, [["Exercised", (d) => d.fm.exercise === true], ["Didn't exercise", (d) => d.fm.exercise === false]]),
-      ...ratingBy(days, [
-        ["Under 6 h sleep", (d) => {
-          var _a2;
-          return ((_a2 = num(d.fm.sleep)) != null ? _a2 : 99) < 6;
-        }],
-        ["6\u20137 h sleep", (d) => {
-          const s = num(d.fm.sleep);
-          return s !== null && s >= 6 && s < 7;
-        }],
-        ["7\u20138 h sleep", (d) => {
-          const s = num(d.fm.sleep);
-          return s !== null && s >= 7 && s < 8;
-        }],
-        ["8 h+ sleep", (d) => {
-          var _a2;
-          return ((_a2 = num(d.fm.sleep)) != null ? _a2 : -1) >= 8;
-        }]
-      ])
+    const sleepIn = (lo, hi) => (d) => {
+      const s = num(d.fm.sleep);
+      return s !== null && s >= lo && s < hi;
+    };
+    const SLEEP = [
+      ["Under 6 h", sleepIn(0, 6)],
+      ["6\u20137 h", sleepIn(6, 7)],
+      ["7\u20138 h", sleepIn(7, 8)],
+      ["8 h+", sleepIn(8, 99)]
     ];
-    if (good.length)
-      barList(patterns.card("What goes with good days", "Average day rating"), good, 10);
-    const bad = days.filter((d) => {
-      const r = num(d.fm.day_rating);
-      return r !== null && r <= BAD_DAY;
-    });
-    if (ratings.length)
-      badDays(patterns.card("What goes with bad days", `Days rated ${BAD_DAY} or lower, next to your typical day`), bad, days);
+    const skies = [...new Set(days.map((d) => sky(d.fm)).filter(Boolean))];
+    const factors = [
+      ["Exercised", (d) => d.fm.exercise === true, (d) => d.fm.exercise === false],
+      ["Day off", (d) => d.fm.worked === false, (d) => d.fm.worked === true],
+      ["Read", (d) => {
+        var _a2;
+        return ((_a2 = num(d.fm.pages_read)) != null ? _a2 : 0) > 0;
+      }, (d) => {
+        var _a2;
+        return !(((_a2 = num(d.fm.pages_read)) != null ? _a2 : 0) > 0);
+      }],
+      ["Podcast day", (d) => d.fm.song_kind === "podcast", (d) => !!str(d.fm.song) && d.fm.song_kind !== "podcast"],
+      ...SLEEP.map(([label, test]) => [`Slept ${label.toLowerCase()}`, test, (d) => num(d.fm.sleep) !== null && !test(d)]),
+      ...skies.map((s) => [s, (d) => sky(d.fm) === s, (d) => !!sky(d.fm) && sky(d.fm) !== s]),
+      ...ranked(days.flatMap((d) => MEALS.map((k) => str(d.fm[k]))), 50).filter((m) => m.value >= MIN_DAYS).map((m) => {
+        const ate = (d) => MEALS.some((k) => str(d.fm[k]).toLowerCase() === m.label.toLowerCase());
+        return [m.label, ate, (d) => !ate(d)];
+      })
+    ];
+    const effects = factors.map(([label, withIt, withoutIt]) => {
+      const a = days.filter(withIt).map((d) => num(d.fm.day_rating)).filter((n) => n !== null);
+      const b = days.filter(withoutIt).map((d) => num(d.fm.day_rating)).filter((n) => n !== null);
+      return a.length >= MIN_DAYS && b.length >= MIN_DAYS ? { label, diff: mean(a) - mean(b), n: a.length } : null;
+    }).filter((x) => x !== null && Math.abs(x.diff) >= 0.1);
+    const ups = effects.filter((x) => x.diff > 0).sort((a, b) => b.diff - a.diff).slice(0, 4);
+    const downs = effects.filter((x) => x.diff < 0).sort((a, b) => b.diff - a.diff).slice(-4);
+    if (ratings.length) {
+      const c = patterns.card("What moves your rating", "How much higher or lower you rate days with each of these");
+      c.addClass("dj-trends-wide");
+      if (ups.length || downs.length) {
+        diverging(c, [...ups, ...downs]);
+        c.createDiv({ cls: "dj-trends-card-note dj-trends-foot", text: "Green means better days, orange means worse." });
+      } else {
+        c.createDiv({ cls: "dj-trends-muted", text: `Not enough rated days yet. Something shows up here once it has happened on at least ${MIN_DAYS} days and not happened on at least ${MIN_DAYS}.` });
+      }
+    }
+    const byExercise = ratingBy(days, [["Exercised", (d) => d.fm.exercise === true], ["Didn't exercise", (d) => d.fm.exercise === false]]);
+    if (byExercise.length)
+      barList(patterns.card("Day rating by exercise", "Average day rating"), byExercise, 10);
+    const bySleep = ratingBy(days, SLEEP);
+    if (bySleep.length)
+      barList(patterns.card("Day rating by sleep", "Average day rating"), bySleep, 10);
     const byWork = ratingBy(days, [["Worked", (d) => d.fm.worked === true], ["Day off", (d) => d.fm.worked === false]]);
     if (byWork.length)
       barList(patterns.card("Day rating by work", "Average day rating"), byWork, 10);
-    const skies = [...new Set(days.map((d) => sky(d.fm)).filter(Boolean))];
     const byWeather = ratingBy(days, skies.map((s) => [s, (d) => sky(d.fm) === s])).sort((a, b) => b.value - a.value);
     if (byWeather.length > 1)
-      barList(patterns.card("Day rating by weather"), byWeather, 10);
+      barList(patterns.card("Day rating by weather", "Average day rating"), byWeather, 10);
+    const rated = (test) => days.filter((d) => {
+      const r = num(d.fm.day_rating);
+      return r !== null && test(r);
+    });
+    if (ratings.length) {
+      const c = patterns.card("Good vs bad days", "Good is above 5, bad is below 5");
+      c.addClass("dj-trends-wide");
+      goodVsBad(c, rated((r) => r >= GOOD_DAY), rated((r) => r <= BAD_DAY), days);
+    }
     const food = section("Food");
     const meals = ranked(days.flatMap((d) => MEALS.map((k) => str(d.fm[k]))), 5);
     if (meals.length)
@@ -2426,7 +2460,7 @@ var TrendsView = class extends import_obsidian6.BasesView {
         return ((_a2 = num(d.fm.pages_read)) != null ? _a2 : 0) > 0;
       }).length;
       reading.tile("Pages read", pages.toLocaleString());
-      reading.tile("Avg. pages per day", one(pages / days.length), `${one(pages / readDays)} on days you read`);
+      reading.tile("Avg. pages per day", one(pages / readDays), "on days you read");
       reading.tile("Books finished", String(finished.length));
     }
     const months = /* @__PURE__ */ new Map();
@@ -2463,45 +2497,51 @@ var TrendsView = class extends import_obsidian6.BasesView {
 };
 var MEALS = ["breakfast", "lunch", "dinner"];
 var BAD_DAY = 4;
-function badDays(el, bad, all) {
-  if (!bad.length) {
-    el.createDiv({ cls: "dj-trends-muted", text: "No bad days yet." });
-    return;
+var MIN_DAYS = 3;
+function diverging(el, rows) {
+  const top = Math.max(...rows.map((r) => Math.abs(r.diff)));
+  const grid = el.createDiv({ cls: "dj-trends-diverge" });
+  for (const r of rows) {
+    const row = grid.createDiv({ cls: "dj-trends-bar-row", attr: { "aria-label": `${r.n} day${r.n === 1 ? "" : "s"}` } });
+    row.createDiv({ cls: "dj-trends-bar-label", text: r.label });
+    const neg = row.createDiv({ cls: "dj-trends-diverge-neg" });
+    const pos = row.createDiv({ cls: "dj-trends-diverge-pos" });
+    const bar = (r.diff > 0 ? pos : neg).createDiv({ cls: r.diff > 0 ? "dj-trends-up" : "dj-trends-down" });
+    bar.style.width = `${Math.max(4, 100 * Math.abs(r.diff) / top)}%`;
+    row.createDiv({ cls: "dj-trends-bar-value", text: `${r.diff > 0 ? "+" : "\u2212"}${one(Math.abs(r.diff))}` });
   }
+}
+var GOOD_DAY = 6;
+function goodVsBad(el, good, bad, all) {
   const avgOf = (ds, key) => {
     const xs = ds.map((d) => num(d.fm[key])).filter((n) => n !== null);
-    return xs.length ? mean(xs) : null;
+    return xs.length ? `${one(mean(xs))} h` : null;
   };
   const share = (ds, key) => {
     const known = ds.filter((d) => typeof d.fm[key] === "boolean");
-    return known.length ? Math.round(100 * known.filter((d) => d.fm[key]).length / known.length) : null;
+    return known.length ? `${Math.round(100 * known.filter((d) => d.fm[key]).length / known.length)}%` : null;
   };
+  const top = (values) => {
+    var _a, _b;
+    return (_b = (_a = ranked(values, 1)[0]) == null ? void 0 : _a.label) != null ? _b : null;
+  };
+  const groups = [good, bad, all];
   const table = el.createDiv({ cls: "dj-trends-compare" });
-  for (const cell of ["", "Bad days", "Typical"])
+  for (const cell of ["", "Good days", "Bad days", "All days"])
     table.createDiv({ cls: "dj-trends-compare-head", text: cell });
-  const line = (label, a, b) => {
-    if (a === null && b === null)
+  const row = (label, value) => {
+    const cells = groups.map((ds) => ds.length ? value(ds) : null);
+    if (cells.every((c) => c === null))
       return;
     table.createDiv({ text: label });
-    table.createDiv({ cls: "dj-trends-compare-value", text: a != null ? a : "\u2013" });
-    table.createDiv({ cls: "dj-trends-compare-value dj-trends-muted", text: b != null ? b : "\u2013" });
+    cells.forEach((c, i) => table.createDiv({ cls: "dj-trends-compare-value" + (i === 2 ? " dj-trends-muted" : ""), text: c != null ? c : "\u2013" }));
   };
-  const hours = (n) => n === null ? null : `${one(n)} h`;
-  const pct = (n) => n === null ? null : `${n}%`;
-  line("Days", String(bad.length), String(all.length));
-  line("Sleep", hours(avgOf(bad, "sleep")), hours(avgOf(all, "sleep")));
-  line("Exercised", pct(share(bad, "exercise")), pct(share(all, "exercise")));
-  line("Worked", pct(share(bad, "worked")), pct(share(all, "worked")));
-  const weather = ranked(bad.map((d) => sky(d.fm)), 3);
-  if (weather.length) {
-    el.createDiv({ cls: "dj-trends-subhead", text: "Weather" });
-    barList(el, weather);
-  }
-  const meals = ranked(bad.flatMap((d) => MEALS.map((k) => str(d.fm[k]))), 3);
-  if (meals.length) {
-    el.createDiv({ cls: "dj-trends-subhead", text: "Meals" });
-    barList(el, meals);
-  }
+  row("Days", (ds) => String(ds.length));
+  row("Sleep", (ds) => avgOf(ds, "sleep"));
+  row("Exercised", (ds) => share(ds, "exercise"));
+  row("Worked", (ds) => share(ds, "worked"));
+  row("Most common weather", (ds) => top(ds.map((d) => sky(d.fm))));
+  row("Most common meal", (ds) => top(ds.flatMap((d) => MEALS.map((k) => str(d.fm[k])))));
 }
 function sky(fm) {
   return str(fm.weather).split("\xB7")[0].trim();
