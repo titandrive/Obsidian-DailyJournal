@@ -743,9 +743,17 @@ var MonthPicker = class extends import_obsidian3.Modal {
       }
       if (this.isTaken(date)) {
         btn.addClass("has-entry");
-        btn.setAttr("aria-label", "Already has an entry");
+        btn.setAttr("aria-label", "Open existing entry");
         if (!this.options.allowTaken) {
-          btn.disabled = true;
+          const open = this.options.onOpenExisting;
+          if (!open) {
+            btn.disabled = true;
+            continue;
+          }
+          btn.onclick = () => {
+            this.close();
+            open(date);
+          };
           continue;
         }
       }
@@ -2541,7 +2549,13 @@ var DailyJournal = class extends import_obsidian6.Plugin {
     return true;
   }
   pickDate(file, date) {
-    new MonthPicker(this.app, date, (d) => this.hasEntry(d), (picked) => this.moveEntry(file, picked)).open();
+    new MonthPicker(
+      this.app,
+      date,
+      (d) => this.hasEntry(d),
+      (picked) => this.moveEntry(file, picked),
+      { onOpenExisting: (d) => void this.openEntry(d) }
+    ).open();
   }
   hasEntry(date) {
     return !!this.app.vault.getAbstractFileByPath(entryPath(this.settings, date));

@@ -326,11 +326,13 @@ a.dj-otd-tile:hover { border-color: var(--interactive-accent); }
 .dj-picker-day.is-other-month { opacity: .4; }
 .dj-picker-day.is-today { outline: 1px solid var(--interactive-accent); outline-offset: -1px; }
 .dj-picker-day.is-current { background: var(--interactive-accent); color: var(--text-on-accent); font-weight: 700; cursor: default; }
-.dj-picker-day.has-entry { color: var(--text-faint); cursor: not-allowed; }
+/* A day that already has an entry: normal text with an accent dot; clicking opens the entry. */
+.dj-picker-day.has-entry { font-weight: 650; }
 .dj-picker-day.has-entry::after {
-	content: ""; position: absolute; left: 50%; bottom: 18%; width: 4px; height: 4px; margin-left: -2px;
-	border-radius: 50%; background: var(--text-faint);
+	content: ""; position: absolute; left: 50%; bottom: 14%; width: 5px; height: 5px; margin-left: -2.5px;
+	border-radius: 50%; background: var(--interactive-accent);
 }
+.dj-picker-day.has-entry:hover:not(:disabled)::after { background: var(--text-on-accent); }
 
 .dj-modal input.dj-place-input {
 	width: 100%; box-sizing: border-box; height: 2.4em; padding: 0 .8em; border-radius: 9px;

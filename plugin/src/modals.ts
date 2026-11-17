@@ -17,7 +17,8 @@ export class MonthPicker extends Modal {
 		private current: Moment | null,
 		private isTaken: (date: Moment) => boolean,
 		private onPick: (date: Moment) => void,
-		private options: { title?: string; allowTaken?: boolean } = {},
+		/** onOpenExisting: what clicking a day that already has an entry does when picking it isn't allowed (e.g. open that entry). */
+		private options: { title?: string; allowTaken?: boolean; onOpenExisting?: (date: Moment) => void } = {},
 	) {
 		super(app);
 		this.month = (current ?? moment()).clone().startOf("month");
@@ -81,10 +82,13 @@ export class MonthPicker extends Modal {
 				continue;
 			}
 			if (this.isTaken(date)) {
+				// A day with an entry is marked with a dot; clicking it opens that entry.
 				btn.addClass("has-entry");
-				btn.setAttr("aria-label", "Already has an entry");
+				btn.setAttr("aria-label", "Open existing entry");
 				if (!this.options.allowTaken) {
-					btn.disabled = true;
+					const open = this.options.onOpenExisting;
+					if (!open) { btn.disabled = true; continue; }
+					btn.onclick = () => { this.close(); open(date); };
 					continue;
 				}
 			}

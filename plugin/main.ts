@@ -295,7 +295,8 @@ export default class DailyJournal extends Plugin implements JournalHost {
 	}
 
 	private pickDate(file: TFile, date: Moment): void {
-		new MonthPicker(this.app, date, (d) => this.hasEntry(d), (picked) => this.moveEntry(file, picked)).open();
+		new MonthPicker(this.app, date, (d) => this.hasEntry(d), (picked) => this.moveEntry(file, picked),
+			{ onOpenExisting: (d) => void this.openEntry(d) }).open();
 	}
 
 	private hasEntry(date: Moment): boolean {
