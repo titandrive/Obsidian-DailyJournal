@@ -432,15 +432,25 @@ function weatherIcon(saved) {
   return match ? match[1] : "overcast";
 }
 async function fetchWeather(place, date, units) {
-  var _a;
+  var _a, _b, _c, _d;
   try {
     const day = date.format("YYYY-MM-DD");
-    const res = await requestWithin("The weather service", {
-      url: `https://api.open-meteo.com/v1/forecast?latitude=${place.lat}&longitude=${place.lon}&daily=weather_code,temperature_2m_max,temperature_2m_min&temperature_unit=${units === "f" ? "fahrenheit" : "celsius"}&timezone=${encodeURIComponent(place.tz)}&start_date=${day}&end_date=${day}`
-    });
-    const w = res.json.daily;
+    const query2 = `/v1/forecast?latitude=${place.lat}&longitude=${place.lon}&daily=weather_code,temperature_2m_max,temperature_2m_min&temperature_unit=${units === "f" ? "fahrenheit" : "celsius"}&timezone=${encodeURIComponent(place.tz)}&start_date=${day}&end_date=${day}`;
+    let w;
+    for (const host of ["api.open-meteo.com", "historical-forecast-api.open-meteo.com"]) {
+      try {
+        const res = await requestWithin("The weather service", { url: `https://${host}${query2}`, throw: false });
+        if (res.status < 400 && ((_c = (_b = (_a = res.json) == null ? void 0 : _a.daily) == null ? void 0 : _b.weather_code) == null ? void 0 : _c[0]) != null) {
+          w = res.json.daily;
+          break;
+        }
+      } catch (e) {
+      }
+    }
+    if (!w)
+      return null;
     const code = w.weather_code[0];
-    const [, , label] = (_a = CONDITIONS.find(([max]) => code <= max)) != null ? _a : CONDITIONS[CONDITIONS.length - 1];
+    const [, , label] = (_d = CONDITIONS.find(([max]) => code <= max)) != null ? _d : CONDITIONS[CONDITIONS.length - 1];
     return `${label} \xB7 H ${Math.round(w.temperature_2m_max[0])}\xB0 / L ${Math.round(w.temperature_2m_min[0])}\xB0`;
   } catch (e) {
     return null;

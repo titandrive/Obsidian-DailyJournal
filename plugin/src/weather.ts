@@ -44,13 +44,20 @@ export function weatherIcon(saved: string): string {
 export async function fetchWeather(place: Place, date: Moment, units: "f" | "c"): Promise<string | null> {
 	try {
 		const day = date.format("YYYY-MM-DD");
-		const res = await requestWithin("The weather service", {
-			url: `https://api.open-meteo.com/v1/forecast?latitude=${place.lat}&longitude=${place.lon}` +
-				"&daily=weather_code,temperature_2m_max,temperature_2m_min" +
-				`&temperature_unit=${units === "f" ? "fahrenheit" : "celsius"}` +
-				`&timezone=${encodeURIComponent(place.tz)}&start_date=${day}&end_date=${day}`,
-		});
-		const w = res.json.daily;
+		const query = `/v1/forecast?latitude=${place.lat}&longitude=${place.lon}` +
+			"&daily=weather_code,temperature_2m_max,temperature_2m_min" +
+			`&temperature_unit=${units === "f" ? "fahrenheit" : "celsius"}` +
+			`&timezone=${encodeURIComponent(place.tz)}&start_date=${day}&end_date=${day}`;
+		// Open-Meteo serves the same days from two hosts. If the main one doesn't answer (it can block
+		// or be unreachable from some connections), ask the other.
+		let w: Record<string, any> | undefined;
+		for (const host of ["api.open-meteo.com", "historical-forecast-api.open-meteo.com"]) {
+			try {
+				const res = await requestWithin("The weather service", { url: `https://${host}${query}`, throw: false });
+				if (res.status < 400 && res.json?.daily?.weather_code?.[0] != null) { w = res.json.daily; break; }
+			} catch { /* try the next host */ }
+		}
+		if (!w) return null;
 		const code: number = w.weather_code[0];
 		const [, , label] = CONDITIONS.find(([max]) => code <= max) ?? CONDITIONS[CONDITIONS.length - 1];
 		return `${label} · H ${Math.round(w.temperature_2m_max[0])}° / L ${Math.round(w.temperature_2m_min[0])}°`;
