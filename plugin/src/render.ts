@@ -461,11 +461,14 @@ function renderCheckIn(host: JournalHost, el: HTMLElement, file: TFile, fm: Fron
 				chip.createSpan({ cls: "dj-mood-dot" });
 				chip.createSpan({ text: mood });
 				const x = chip.createEl("button", { cls: "dj-tag-remove", text: "×", attr: { "aria-label": `Remove ${mood}` } });
-				x.onclick = () => { moods = moods.filter((m) => m !== mood); paint(); void store(); };
+				x.onclick = () => { moods = moods.filter((m) => m !== mood); paint(); refocus(); void store(); };
 			}
 			const add = box.createEl("button", { cls: "dj-mood-add", text: moods.length ? "+ Add" : "How are you feeling?" });
-			add.onclick = () => new MoodPickerModal(app, moods, (picked) => { moods = picked; paint(); void store(); }).open();
+			add.onclick = () => new MoodPickerModal(app, moods, (picked) => { moods = picked; paint(); refocus(); void store(); }).open();
 		};
+		// Repainting replaces the buttons, so keyboard focus would be lost: put it back on the Mood button
+		// (after the finder has closed and handed focus back).
+		const refocus = () => window.setTimeout(() => box.querySelector<HTMLElement>(".dj-mood-add")?.focus({ preventScroll: true }), 50);
 		paint();
 	}
 

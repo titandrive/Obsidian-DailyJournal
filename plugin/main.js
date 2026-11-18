@@ -2205,6 +2205,7 @@ function renderCheckIn(host, el, file, fm, fields) {
         x.onclick = () => {
           moods = moods.filter((m) => m !== mood);
           paint();
+          refocus();
           void store();
         };
       }
@@ -2212,9 +2213,14 @@ function renderCheckIn(host, el, file, fm, fields) {
       add.onclick = () => new MoodPickerModal(app, moods, (picked) => {
         moods = picked;
         paint();
+        refocus();
         void store();
       }).open();
     };
+    const refocus = () => window.setTimeout(() => {
+      var _a;
+      return (_a = box.querySelector(".dj-mood-add")) == null ? void 0 : _a.focus({ preventScroll: true });
+    }, 50);
     paint();
   }
   if (fields.sleep) {
