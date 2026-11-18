@@ -10,6 +10,12 @@ import { JournalSettings } from "./settings";
 
 export const TRENDS_VIEW = "journal-trends";
 
+/** Open Insights views, so they can redraw when settings arrive from another device. */
+const openViews = new Set<TrendsView>();
+export function redrawInsights(): void {
+	openViews.forEach((v) => v.onDataUpdated());
+}
+
 type Frontmatter = Record<string, unknown>;
 interface Day { file: TFile; date: Moment; fm: Frontmatter }
 interface Row { label: string; value: number; text: string; hint?: string; /** Bar color (a CSS color); the accent if not given. */ color?: string }
@@ -65,9 +71,14 @@ function ratingBy(days: Day[], groups: Array<[string, (d: Day) => boolean]>): Ro
 export class TrendsView extends BasesView {
 	type = TRENDS_VIEW;
 
-	constructor(controller: QueryController, private el: HTMLElement, private settings: () => JournalSettings) {
+	constructor(controller: QueryController, private el: HTMLElement, private settings: () => JournalSettings, private saveFolds: (folded: string[]) => Promise<void>) {
 		super(controller);
 		el.addClass("dj-trends-host");
+		openViews.add(this);
+	}
+
+	onunload(): void {
+		openViews.delete(this);
 	}
 
 	onDataUpdated(): void {
@@ -97,9 +108,8 @@ export class TrendsView extends BasesView {
 		const { current, longest } = streaks(days);
 
 		// Sections, each with a heading, a row of number tiles and/or a grid of cards. Empty ones are dropped.
-		// Sections fold up from their heading; which ones are folded is remembered on this device.
-		const KEY = "daily-journal-insights-collapsed";
-		const folded = (): string[] => { try { const v = this.app.loadLocalStorage(KEY); return Array.isArray(v) ? v : []; } catch { return []; } };
+		// Sections fold up from their heading; which ones are folded is saved in settings, so it syncs.
+		const folded = (): string[] => this.settings().insightsFolded ?? [];
 		const section = (title: string) => {
 			const sectionEl = root.createDiv({ cls: "dj-trends-section" });
 			const head = sectionEl.createDiv({ cls: "dj-trends-section-title", attr: { role: "button", tabindex: "0", "aria-expanded": "true" } });
@@ -112,7 +122,7 @@ export class TrendsView extends BasesView {
 				const closed = !sectionEl.hasClass("is-collapsed");
 				apply(closed);
 				const rest = folded().filter((t) => t !== title);
-				this.app.saveLocalStorage(KEY, closed ? [...rest, title] : rest);
+				void this.saveFolds(closed ? [...rest, title] : rest);
 			};
 			head.onclick = toggle;
 			head.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });

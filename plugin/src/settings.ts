@@ -25,6 +25,8 @@ export interface CheckInFields {
 }
 
 export interface JournalSettings {
+	/** Insights sections folded shut (by heading), saved here so it syncs between devices. */
+	insightsFolded: string[];
 	folder: string;
 	dateFormat: string;
 	home: Place;
@@ -55,6 +57,7 @@ export interface JournalSettings {
 }
 
 export const DEFAULT_SETTINGS: JournalSettings = {
+	insightsFolded: [],
 	folder: "Daily Notes",
 	dateFormat: "YYYY/MMM/MM-DD-YY",
 	home: { name: "Los Angeles", lat: 34.05223, lon: -118.24368, tz: "America/Los_Angeles" },

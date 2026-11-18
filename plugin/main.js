@@ -390,6 +390,7 @@ var import_obsidian3 = require("obsidian");
 // src/settings.ts
 var MAX_PROMPT_LEVEL = 3;
 var DEFAULT_SETTINGS = {
+  insightsFolded: [],
   folder: "Daily Notes",
   dateFormat: "YYYY/MMM/MM-DD-YY",
   home: { name: "Los Angeles", lat: 34.05223, lon: -118.24368, tz: "America/Los_Angeles" },
@@ -2944,6 +2945,10 @@ var JournalSettingTab = class extends import_obsidian5.PluginSettingTab {
 // src/trends.ts
 var import_obsidian6 = require("obsidian");
 var TRENDS_VIEW = "journal-trends";
+var openViews = /* @__PURE__ */ new Set();
+function redrawInsights() {
+  openViews.forEach((v) => v.onDataUpdated());
+}
 var num = (v) => {
   const n = typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : NaN;
   return Number.isFinite(n) ? n : null;
@@ -2986,12 +2991,17 @@ function ratingBy(days, groups) {
   return rows;
 }
 var TrendsView = class extends import_obsidian6.BasesView {
-  constructor(controller, el, settings) {
+  constructor(controller, el, settings, saveFolds) {
     super(controller);
     this.el = el;
     this.settings = settings;
+    this.saveFolds = saveFolds;
     this.type = TRENDS_VIEW;
     el.addClass("dj-trends-host");
+    openViews.add(this);
+  }
+  onunload() {
+    openViews.delete(this);
   }
   onDataUpdated() {
     var _a, _b;
@@ -3022,14 +3032,9 @@ var TrendsView = class extends import_obsidian6.BasesView {
       return sum + ((_a2 = num(d.fm.pages_read)) != null ? _a2 : 0);
     }, 0);
     const { current, longest } = streaks(days);
-    const KEY = "daily-journal-insights-collapsed";
     const folded = () => {
-      try {
-        const v = this.app.loadLocalStorage(KEY);
-        return Array.isArray(v) ? v : [];
-      } catch (e) {
-        return [];
-      }
+      var _a2;
+      return (_a2 = this.settings().insightsFolded) != null ? _a2 : [];
     };
     const section = (title) => {
       const sectionEl = root.createDiv({ cls: "dj-trends-section" });
@@ -3046,7 +3051,7 @@ var TrendsView = class extends import_obsidian6.BasesView {
         const closed = !sectionEl.hasClass("is-collapsed");
         apply(closed);
         const rest = folded().filter((t) => t !== title);
-        this.app.saveLocalStorage(KEY, closed ? [...rest, title] : rest);
+        void this.saveFolds(closed ? [...rest, title] : rest);
       };
       head.onclick = toggle;
       head.addEventListener("keydown", (e) => {
@@ -3637,7 +3642,10 @@ var DailyJournal = class extends import_obsidian8.Plugin {
     (_a = this.registerBasesView) == null ? void 0 : _a.call(this, TRENDS_VIEW, {
       name: "Trends",
       icon: "chart-line",
-      factory: (controller, containerEl) => new TrendsView(controller, containerEl, () => this.settings)
+      factory: (controller, containerEl) => new TrendsView(controller, containerEl, () => this.settings, (folded) => {
+        this.settings.insightsFolded = folded;
+        return this.saveData(this.settings);
+      })
     });
     this.registerMarkdownCodeBlockProcessor("journal", (source, el, ctx) => {
       const file = this.app.vault.getAbstractFileByPath(ctx.sourcePath);
@@ -3762,6 +3770,11 @@ var DailyJournal = class extends import_obsidian8.Plugin {
       if (daily == null ? void 0 : daily.format)
         this.settings.dateFormat = daily.format;
     }
+  }
+  /** Settings changed on another device (synced): use them, and redraw Insights (e.g. folded sections). */
+  async onExternalSettingsChange() {
+    await this.loadSettings();
+    redrawInsights();
   }
   async saveSettings() {
     await this.saveData(this.settings);

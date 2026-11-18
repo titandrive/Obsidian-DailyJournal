@@ -8,7 +8,7 @@ import { DEFAULT_SETTINGS, JournalSettings, Place, Prompt } from "./src/settings
 import { JournalSettingTab } from "./src/settings-tab";
 import { applyLayout, blockShowsWeather, entryTemplate, parseBlock, SHOW_CHROME } from "./src/template";
 import { entryPlace, fetchWeather } from "./src/weather";
-import { TRENDS_VIEW, TrendsView } from "./src/trends";
+import { TRENDS_VIEW, redrawInsights, TrendsView } from "./src/trends";
 import { SONG_KEYS } from "./src/music";
 import { BaseTabs } from "./src/basetabs";
 
@@ -97,7 +97,10 @@ export default class DailyJournal extends Plugin implements JournalHost {
 		// A Trends tab for the Insights base (Bases view types need Obsidian 1.10+).
 		this.registerBasesView?.(TRENDS_VIEW, {
 			name: "Trends", icon: "chart-line",
-			factory: (controller, containerEl) => new TrendsView(controller, containerEl, () => this.settings),
+			factory: (controller, containerEl) => new TrendsView(controller, containerEl, () => this.settings, (folded) => {
+				this.settings.insightsFolded = folded;
+				return this.saveData(this.settings);
+			}),
 		});
 
 		this.registerMarkdownCodeBlockProcessor("journal", (source, el, ctx) => {
@@ -229,6 +232,12 @@ export default class DailyJournal extends Plugin implements JournalHost {
 			if (daily?.folder) this.settings.folder = normalizePath(daily.folder);
 			if (daily?.format) this.settings.dateFormat = daily.format;
 		}
+	}
+
+	/** Settings changed on another device (synced): use them, and redraw Insights (e.g. folded sections). */
+	async onExternalSettingsChange(): Promise<void> {
+		await this.loadSettings();
+		redrawInsights();
 	}
 
 	async saveSettings(): Promise<void> {
