@@ -150,7 +150,7 @@ export class TrendsView extends BasesView {
 				feelings.map(({ f, n }) => ({ label: f.name, value: n, text: times(n), color: f.color, hint: `${n} day${n === 1 ? "" : "s"}` })));
 			const words = ranked(moodDays.flatMap((d) => moodsOf(d.fm)), 5)
 				.map((r) => ({ ...r, color: familyOf(r.label)?.color }));
-			if (words.length) barList(mood.card("Top words", "Most picked"), words);
+			if (words.length) barList(mood.card("Top moods", "Your five most picked"), words);
 			const byFeeling = ratingBy(days, moodFamilies().map((f): [string, (d: Day) => boolean] => [f.name, (d) => feelingsOf(d.fm).includes(f.name)]))
 				.map((r) => ({ ...r, color: moodFamilies().find((f) => f.name === r.label)?.color }));
 			if (byFeeling.length) barList(mood.card("Day rating by feeling", "Average day rating"), byFeeling, 10);

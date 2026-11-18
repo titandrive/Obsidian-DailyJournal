@@ -3080,7 +3080,7 @@ var TrendsView = class extends import_obsidian6.BasesView {
         return { ...r, color: (_a2 = familyOf(r.label)) == null ? void 0 : _a2.color };
       });
       if (words2.length)
-        barList(mood.card("Top words", "Most picked"), words2);
+        barList(mood.card("Top moods", "Your five most picked"), words2);
       const byFeeling = ratingBy(days, moodFamilies().map((f) => [f.name, (d) => feelingsOf(d.fm).includes(f.name)])).map((r) => {
         var _a2;
         return { ...r, color: (_a2 = moodFamilies().find((f) => f.name === r.label)) == null ? void 0 : _a2.color };
