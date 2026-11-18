@@ -3022,12 +3022,42 @@ var TrendsView = class extends import_obsidian6.BasesView {
       return sum + ((_a2 = num(d.fm.pages_read)) != null ? _a2 : 0);
     }, 0);
     const { current, longest } = streaks(days);
+    const KEY = "daily-journal-insights-collapsed";
+    const folded = () => {
+      try {
+        const v = this.app.loadLocalStorage(KEY);
+        return Array.isArray(v) ? v : [];
+      } catch (e) {
+        return [];
+      }
+    };
     const section = (title) => {
-      const el2 = root.createDiv({ cls: "dj-trends-section" });
-      el2.createDiv({ cls: "dj-trends-section-title", text: title });
+      const sectionEl = root.createDiv({ cls: "dj-trends-section" });
+      const head = sectionEl.createDiv({ cls: "dj-trends-section-title", attr: { role: "button", tabindex: "0", "aria-expanded": "true" } });
+      (0, import_obsidian6.setIcon)(head.createSpan({ cls: "dj-trends-fold" }), "chevron-down");
+      head.createSpan({ text: title });
+      const el2 = sectionEl.createDiv({ cls: "dj-trends-section-body" });
+      const apply = (closed) => {
+        sectionEl.toggleClass("is-collapsed", closed);
+        head.setAttr("aria-expanded", String(!closed));
+      };
+      apply(folded().includes(title));
+      const toggle = () => {
+        const closed = !sectionEl.hasClass("is-collapsed");
+        apply(closed);
+        const rest = folded().filter((t) => t !== title);
+        this.app.saveLocalStorage(KEY, closed ? [...rest, title] : rest);
+      };
+      head.onclick = toggle;
+      head.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          toggle();
+        }
+      });
       let tiles = null, grid = null;
       return {
-        el: el2,
+        el: sectionEl,
         /** `unit`: small text on the same line as the value, e.g. "of days". */
         tile(label, value, hint, unit) {
           tiles != null ? tiles : tiles = el2.createDiv({ cls: "dj-trends-tiles" });
@@ -3042,10 +3072,10 @@ var TrendsView = class extends import_obsidian6.BasesView {
         card(title2, note) {
           grid != null ? grid : grid = el2.createDiv({ cls: "dj-trends-grid" });
           const c = grid.createDiv({ cls: "dj-trends-card" });
-          const head = c.createDiv({ cls: "dj-trends-card-head" });
-          head.createDiv({ cls: "dj-trends-card-title", text: title2 });
+          const head2 = c.createDiv({ cls: "dj-trends-card-head" });
+          head2.createDiv({ cls: "dj-trends-card-title", text: title2 });
           if (note)
-            head.createDiv({ cls: "dj-trends-card-note", text: note });
+            head2.createDiv({ cls: "dj-trends-card-note", text: note });
           return c;
         }
       };
@@ -3232,7 +3262,7 @@ var TrendsView = class extends import_obsidian6.BasesView {
     if (shows.length)
       barList(listening.card("Top podcasts"), shows);
     for (const s of [overview, moodSleep, mood, patterns, food, reading, listening]) {
-      if (s.el.childElementCount < 2 || !s.el.querySelector(".dj-trends-tile, .dj-trends-card"))
+      if (!s.el.querySelector(".dj-trends-tile, .dj-trends-card"))
         s.el.remove();
     }
   }

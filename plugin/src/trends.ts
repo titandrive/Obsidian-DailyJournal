@@ -1,4 +1,4 @@
-import { BasesView, QueryController, TFile } from "obsidian";
+import { BasesView, QueryController, setIcon, TFile } from "obsidian";
 import { entryDate, Moment } from "./dates";
 import { familyOf, moodFamilies } from "./moods";
 import { JournalSettings } from "./settings";
@@ -97,12 +97,28 @@ export class TrendsView extends BasesView {
 		const { current, longest } = streaks(days);
 
 		// Sections, each with a heading, a row of number tiles and/or a grid of cards. Empty ones are dropped.
+		// Sections fold up from their heading; which ones are folded is remembered on this device.
+		const KEY = "daily-journal-insights-collapsed";
+		const folded = (): string[] => { try { const v = this.app.loadLocalStorage(KEY); return Array.isArray(v) ? v : []; } catch { return []; } };
 		const section = (title: string) => {
-			const el = root.createDiv({ cls: "dj-trends-section" });
-			el.createDiv({ cls: "dj-trends-section-title", text: title });
+			const sectionEl = root.createDiv({ cls: "dj-trends-section" });
+			const head = sectionEl.createDiv({ cls: "dj-trends-section-title", attr: { role: "button", tabindex: "0", "aria-expanded": "true" } });
+			setIcon(head.createSpan({ cls: "dj-trends-fold" }), "chevron-down");
+			head.createSpan({ text: title });
+			const el = sectionEl.createDiv({ cls: "dj-trends-section-body" });
+			const apply = (closed: boolean) => { sectionEl.toggleClass("is-collapsed", closed); head.setAttr("aria-expanded", String(!closed)); };
+			apply(folded().includes(title));
+			const toggle = () => {
+				const closed = !sectionEl.hasClass("is-collapsed");
+				apply(closed);
+				const rest = folded().filter((t) => t !== title);
+				this.app.saveLocalStorage(KEY, closed ? [...rest, title] : rest);
+			};
+			head.onclick = toggle;
+			head.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
 			let tiles: HTMLElement | null = null, grid: HTMLElement | null = null;
 			return {
-				el,
+				el: sectionEl,
 				/** `unit`: small text on the same line as the value, e.g. "of days". */
 				tile(label: string, value: string, hint?: string, unit?: string) {
 					tiles ??= el.createDiv({ cls: "dj-trends-tiles" });
@@ -292,7 +308,7 @@ export class TrendsView extends BasesView {
 		if (shows.length) barList(listening.card("Top podcasts"), shows);
 
 		for (const s of [overview, moodSleep, mood, patterns, food, reading, listening]) {
-			if (s.el.childElementCount < 2 || !s.el.querySelector(".dj-trends-tile, .dj-trends-card")) s.el.remove();
+			if (!s.el.querySelector(".dj-trends-tile, .dj-trends-card")) s.el.remove();
 		}
 	}
 }
