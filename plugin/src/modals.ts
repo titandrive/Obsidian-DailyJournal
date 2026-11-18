@@ -3,6 +3,7 @@ import { Moment } from "./dates";
 import { MAX_PROMPT_LEVEL, Place, Prompt } from "./settings";
 import { PlaceResult, searchPlaces } from "./weather";
 import { searchEpisodes, searchShows, searchSongs, showEpisodes, Song, SongKind, songFromLink, videoIdFromUrl } from "./music";
+import { familyOf, MAX_MOODS, moodFamilies, MoodFamily } from "./moods";
 
 /** Month calendar for choosing a date. Days that already have an entry are marked (and can't be picked unless allowTaken). */
 export class MonthPicker extends Modal {
@@ -525,5 +526,136 @@ export class SongPickerModal extends SuggestModal<Song> {
 
 	onChooseSuggestion(song: Song): void {
 		this.onPick(song);
+	}
+}
+
+/**
+ * The mood finder: pick how you feel, in one to three words. Start from a core feeling on the
+ * Feelings Wheel (Angry, Sad, Happy...) and pick the word that fits best, or search every word. A word that
+ * isn't listed can be typed and added with Enter. Done saves; Escape leaves things as they were.
+ */
+export class MoodPickerModal extends Modal {
+	private picked: string[];
+	/** The core feeling opened, or null for the seven tiles. */
+	private family: MoodFamily | null = null;
+	private search!: HTMLInputElement;
+	private chosenEl!: HTMLElement;
+	private bodyEl!: HTMLElement;
+
+	constructor(app: App, current: string[], private onDone: (moods: string[]) => void) {
+		super(app);
+		this.picked = [...current];
+		this.modalEl.addClass("dj-mood-modal");
+	}
+
+	onOpen(): void {
+		this.titleEl.setText("How are you feeling?");
+		const { contentEl } = this;
+		this.search = contentEl.createEl("input", { cls: "dj-mood-search", attr: { type: "text", placeholder: "Search feelings, or type your own" } });
+		this.search.addEventListener("input", () => { this.family = null; this.draw(); });
+		this.search.addEventListener("keydown", (e) => {
+			if (e.key !== "Enter") return;
+			e.preventDefault();
+			const typed = this.search.value.trim().toLowerCase();
+			if (!typed) { this.finish(); return; }
+			// Enter adds the first match, or what was typed if nothing matches.
+			const match = this.matches(typed)[0];
+			this.toggle(match ?? typed);
+			this.search.value = "";
+			this.draw();
+		});
+		this.chosenEl = contentEl.createDiv({ cls: "dj-mood-chosen" });
+		this.bodyEl = contentEl.createDiv({ cls: "dj-mood-body" });
+		const foot = contentEl.createDiv({ cls: "modal-button-container" });
+		foot.createEl("button", { text: "Cancel" }).onclick = () => this.close();
+		const done = foot.createEl("button", { cls: "mod-cta", text: "Done" });
+		done.onclick = () => this.finish();
+		this.draw();
+		window.setTimeout(() => this.search.focus(), 0);
+	}
+
+	onClose(): void {
+		this.contentEl.empty();
+	}
+
+	private finish(): void {
+		this.onDone(this.picked);
+		this.close();
+	}
+
+	/** Words containing what's typed, from every family. */
+	private matches(term: string): string[] {
+		return [...new Set(moodFamilies().flatMap((f) => f.words))].filter((w) => w.includes(term));
+	}
+
+	private toggle(word: string): void {
+		if (this.picked.includes(word)) this.picked = this.picked.filter((w) => w !== word);
+		else if (this.picked.length < MAX_MOODS) this.picked = [...this.picked, word];
+	}
+
+	/** A word as a tappable chip, in its family's color, marked when picked. */
+	private wordChip(parent: HTMLElement, word: string, main = false): void {
+		const on = this.picked.includes(word);
+		const full = !on && this.picked.length >= MAX_MOODS;
+		const b = parent.createEl("button", { cls: "dj-mood-word" + (on ? " is-on" : "") + (main ? " is-main" : ""), text: word, attr: full ? { disabled: "" } : {} });
+		const family = familyOf(word);
+		if (family) b.style.setProperty("--dj-mood", family.color);
+		b.onclick = () => { this.toggle(word); this.draw(); };
+	}
+
+	private draw(): void {
+		// What's picked so far, at the top.
+		this.chosenEl.empty();
+		this.chosenEl.toggle(this.picked.length > 0);
+		for (const word of this.picked) {
+			const chip = this.chosenEl.createSpan({ cls: "dj-chip dj-mood" });
+			const family = familyOf(word);
+			if (family) chip.style.setProperty("--dj-mood", family.color);
+			chip.createSpan({ cls: "dj-mood-dot" });
+			chip.createSpan({ text: word });
+			const x = chip.createEl("button", { cls: "dj-tag-remove", text: "×", attr: { "aria-label": `Remove ${word}` } });
+			x.onclick = () => { this.toggle(word); this.draw(); };
+		}
+		this.chosenEl.createSpan({ cls: "dj-mood-count", text: `${this.picked.length} of ${MAX_MOODS}` });
+
+		this.bodyEl.empty();
+		const term = this.search.value.trim().toLowerCase();
+		if (term) {
+			// Searching: matching words from every family, or an offer to add what was typed.
+			const found = this.matches(term);
+			const words = this.bodyEl.createDiv({ cls: "dj-mood-words" });
+			for (const w of found) this.wordChip(words, w);
+			if (!found.includes(term)) {
+				const own = words.createEl("button", { cls: "dj-mood-word dj-mood-own", text: `Add "${term}"`, attr: this.picked.length >= MAX_MOODS ? { disabled: "" } : {} });
+				own.onclick = () => { this.toggle(term); this.search.value = ""; this.draw(); };
+			}
+			return;
+		}
+		if (this.family) {
+			// One core feeling: rows of three, the feeling (bold) then its two more specific ones.
+			const f = this.family;
+			const back = this.bodyEl.createEl("button", { cls: "dj-show-back dj-mood-back" });
+			setIcon(back.createSpan(), "arrow-left");
+			back.createSpan({ text: f.name });
+			back.onclick = () => { this.family = null; this.draw(); };
+			const rows = this.bodyEl.createDiv({ cls: "dj-mood-words dj-mood-rows" });
+			for (const r of f.rows) {
+				this.wordChip(rows, r.word, true);
+				for (const w of r.more) this.wordChip(rows, w);
+			}
+			return;
+		}
+		// The seven core feelings, unpleasant to pleasant.
+		const grid = this.bodyEl.createDiv({ cls: "dj-mood-families" });
+		for (const f of moodFamilies()) {
+			const tile = grid.createEl("button", { cls: "dj-mood-family" });
+			tile.style.setProperty("--dj-mood", f.color);
+			const head = tile.createDiv({ cls: "dj-mood-family-name" });
+			head.createSpan({ cls: "dj-mood-dot" });
+			head.createSpan({ text: f.name });
+			const count = this.picked.filter((w) => f.words.includes(w)).length;
+			tile.createDiv({ cls: "dj-mood-family-hint", text: count ? `${count} picked` : f.rows.slice(0, 3).map((r) => r.word).join(", ") + "…" });
+			tile.onclick = () => { this.family = f; this.draw(); };
+		}
 	}
 }

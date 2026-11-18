@@ -21,7 +21,7 @@ const CARD_PROPS: Record<string, string[]> = {
 	reading: ["reading", "books", "pages_read"],
 	hardcover: ["reading", "books", "pages_read"],
 	song: SONG_KEYS,
-	checkin: ["day_rating", "sleep", "worked", "exercise", "exercise_note", "breakfast", "lunch", "dinner", "ate", "skipped_meals", "tags"],
+	checkin: ["day_rating", "mood", "sleep", "worked", "exercise", "exercise_note", "breakfast", "lunch", "dinner", "ate", "skipped_meals", "tags"],
 	onthisday: [],
 };
 

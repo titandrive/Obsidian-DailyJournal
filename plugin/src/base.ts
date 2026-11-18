@@ -58,6 +58,7 @@ export function journalBase(settings: JournalSettings): string {
 	const columns: Array<[string, string]> = [["formula.day", "Day"], ["favorite", "Favorite"], ["formula.place", "Location"]];
 	if (settings.showWeather) columns.push(["formula.sky", " "], ["weather", "Weather"]);
 	if (f.rating) columns.push(["day_rating", "Rating"]);
+	if (f.mood) columns.push(["mood", "Mood"]);
 	if (f.sleep) columns.push(["sleep", "Sleep (h)"]);
 	if (f.work) columns.push(["worked", "Worked"]);
 	if (f.exercise) columns.push(["exercise", "Exercised"], ["exercise_note", "Exercise"]);

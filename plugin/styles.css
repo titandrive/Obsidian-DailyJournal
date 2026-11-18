@@ -486,3 +486,30 @@ button.dj-prompt-add { display: flex; align-items: center; gap: .4em; margin-top
 	.dj-trends-compare { display: none; }
 	.dj-trends-gvb { display: block; }
 }
+
+/* Mood: chips in the check-in, and the mood finder */
+.dj-moods { display: flex; flex-wrap: wrap; gap: .4em; align-items: center; }
+.dj-mood { gap: .35em; padding-right: .35em; }
+.dj-mood-dot { width: .6em; height: .6em; border-radius: 50%; background: var(--dj-mood, var(--text-faint)); flex-shrink: 0; }
+.dj-card button.dj-mood-add { height: auto; padding: .25em .7em; border-radius: 999px; background: transparent; box-shadow: none; border: 1px dashed var(--background-modifier-border-hover); color: var(--text-muted); font-size: .9em; cursor: pointer; }
+.dj-card button.dj-mood-add:hover { color: var(--text-normal); border-color: var(--interactive-accent); }
+.dj-mood-modal .dj-mood-search { width: 100%; margin-bottom: var(--size-4-3); }
+.dj-mood-chosen { display: flex; flex-wrap: wrap; gap: .4em; align-items: center; margin-bottom: var(--size-4-3); }
+.dj-mood-count { margin-inline-start: auto; font-size: var(--font-ui-smaller); color: var(--text-faint); }
+.dj-mood-families { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--size-4-2); }
+.dj-mood-modal button.dj-mood-family { display: flex; flex-direction: column; align-items: flex-start; gap: .2em; height: auto; padding: .6em .75em; text-align: left; white-space: normal;
+	background: color-mix(in srgb, var(--dj-mood) 10%, var(--background-secondary)); border: 1px solid color-mix(in srgb, var(--dj-mood) 35%, transparent); box-shadow: none; }
+.dj-mood-modal button.dj-mood-family:hover { background: color-mix(in srgb, var(--dj-mood) 20%, var(--background-secondary)); }
+.dj-mood-family-name { display: flex; align-items: center; gap: .45em; font-weight: 600; }
+.dj-mood-family-hint { font-size: var(--font-ui-smaller); color: var(--text-muted); }
+.dj-mood-modal button.dj-mood-word:disabled { opacity: .4; cursor: default; }
+.dj-mood-modal .dj-mood-back { margin-bottom: var(--size-4-2); }
+/* Words are tiles like the families: tinted in the family's color, brighter on hover, filled when picked. */
+.dj-mood-words { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: var(--size-4-2); }
+.dj-mood-words.dj-mood-rows { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.dj-mood-modal button.dj-mood-word { height: auto; min-height: 2.6em; padding: .55em .7em; justify-content: flex-start; text-align: left; white-space: normal; box-shadow: none; cursor: pointer;
+	background: color-mix(in srgb, var(--dj-mood, var(--text-faint)) 10%, var(--background-secondary)); border: 1px solid color-mix(in srgb, var(--dj-mood, var(--text-faint)) 35%, transparent); }
+.dj-mood-modal button.dj-mood-word:not(:disabled):hover { background: color-mix(in srgb, var(--dj-mood, var(--text-faint)) 22%, var(--background-secondary)); border-color: color-mix(in srgb, var(--dj-mood, var(--text-faint)) 60%, transparent); }
+.dj-mood-modal button.dj-mood-word.is-main { font-weight: 600; }
+.dj-mood-modal button.dj-mood-word.is-on, .dj-mood-modal button.dj-mood-word.is-on:hover { background: color-mix(in srgb, var(--dj-mood, var(--interactive-accent)) 38%, var(--background-secondary)); border-color: var(--dj-mood, var(--interactive-accent)); }
+.dj-mood-modal button.dj-mood-own { border-style: dashed; color: var(--text-muted); background: transparent; }

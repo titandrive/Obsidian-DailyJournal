@@ -1,6 +1,7 @@
 import { App, getAllTags, moment, setIcon, TFile } from "obsidian";
 import { entryDate, Moment } from "./dates";
-import { PlaceHistory, PlaceModal, SongPickerModal } from "./modals";
+import { MoodPickerModal, PlaceHistory, PlaceModal, SongPickerModal } from "./modals";
+import { familyOf } from "./moods";
 import { CheckInFields, JournalSettings, Place } from "./settings";
 import { HardcoverDay, savedReading } from "./hardcover";
 import { meteoconSvg } from "./meteocons";
@@ -405,6 +406,34 @@ function renderCheckIn(host: JournalHost, el: HTMLElement, file: TFile, fm: Fron
 			b.onclick = () => { rating = rating === i ? null : i; paint(); save("day_rating", rating); };
 			dots.push(b);
 		}
+		paint();
+	}
+
+	if (fields.mood) {
+		// Mood: chips for the feelings picked (each in its family's color), and a button that opens the
+		// mood finder. Saved as `mood: [word, ...]`.
+		const box = item("Mood");
+		box.addClass("dj-moods");
+		const read = (): string[] => {
+			const m = app.metadataCache.getFileCache(file)?.frontmatter?.mood ?? fm.mood;
+			return (Array.isArray(m) ? m : m ? [m] : []).map(String);
+		};
+		let moods = read();
+		const store = () => save("mood", moods.length ? moods : null);
+		const paint = () => {
+			box.empty();
+			for (const mood of moods) {
+				const chip = box.createSpan({ cls: "dj-chip dj-mood" });
+				const family = familyOf(mood);
+				if (family) chip.style.setProperty("--dj-mood", family.color);
+				chip.createSpan({ cls: "dj-mood-dot" });
+				chip.createSpan({ text: mood });
+				const x = chip.createEl("button", { cls: "dj-tag-remove", text: "×", attr: { "aria-label": `Remove ${mood}` } });
+				x.onclick = () => { moods = moods.filter((m) => m !== mood); paint(); void store(); };
+			}
+			const add = box.createEl("button", { cls: "dj-mood-add", text: moods.length ? "+ Add" : "How are you feeling?" });
+			add.onclick = () => new MoodPickerModal(app, moods, (picked) => { moods = picked; paint(); void store(); }).open();
+		};
 		paint();
 	}
 

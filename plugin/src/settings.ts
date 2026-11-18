@@ -20,6 +20,8 @@ export interface CheckInFields {
 	exercise: boolean;
 	food: boolean;
 	tags: boolean;
+	/** Mood: one to three feeling words, picked from families (see moods.ts). */
+	mood: boolean;
 }
 
 export interface JournalSettings {
@@ -66,7 +68,7 @@ export const DEFAULT_SETTINGS: JournalSettings = {
 	showOnThisDay: true,
 	onThisDayMonth: true,
 	onThisDayYears: true,
-	fields: { rating: true, sleep: true, work: true, exercise: true, food: true, tags: true },
+	fields: { rating: true, mood: true, sleep: true, work: true, exercise: true, food: true, tags: true },
 	prompts: [
 		{ text: "How was your day?", level: 0 },
 		{ text: "What was the best part of your day?", level: 0 },

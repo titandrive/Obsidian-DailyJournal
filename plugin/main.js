@@ -89,6 +89,8 @@ function journalBase(settings) {
     columns.push(["formula.sky", " "], ["weather", "Weather"]);
   if (f.rating)
     columns.push(["day_rating", "Rating"]);
+  if (f.mood)
+    columns.push(["mood", "Mood"]);
   if (f.sleep)
     columns.push(["sleep", "Sleep (h)"]);
   if (f.work)
@@ -401,7 +403,7 @@ var DEFAULT_SETTINGS = {
   showOnThisDay: true,
   onThisDayMonth: true,
   onThisDayYears: true,
-  fields: { rating: true, sleep: true, work: true, exercise: true, food: true, tags: true },
+  fields: { rating: true, mood: true, sleep: true, work: true, exercise: true, food: true, tags: true },
   prompts: [
     { text: "How was your day?", level: 0 },
     { text: "What was the best part of your day?", level: 0 },
@@ -666,6 +668,220 @@ function songProperties(song) {
   return props;
 }
 var SONG_KEYS = ["song", "artist", "song_cover", "song_id", "song_url", "song_kind", "song_audio", "song_album", "song_apple"];
+
+// src/moodlists/junto.json
+var junto_default = {
+  Angry: {
+    "Let down": [
+      "Betrayed",
+      "Resentful"
+    ],
+    Humiliated: [
+      "Disrespected",
+      "Ridiculed"
+    ],
+    Bitter: [
+      "Indignant",
+      "Violated"
+    ],
+    Mad: [
+      "Furious",
+      "Jealous"
+    ],
+    Aggressive: [
+      "Provoked",
+      "Hostile"
+    ],
+    Frustrated: [
+      "Infuriated",
+      "Annoyed"
+    ],
+    Distant: [
+      "Withdrawn",
+      "Numb"
+    ],
+    Critical: [
+      "Skeptical",
+      "Dismissive"
+    ]
+  },
+  Disgusted: {
+    Disapproving: [
+      "Judgmental",
+      "Embarrassed"
+    ],
+    Disappointed: [
+      "Appalled",
+      "Revolted"
+    ],
+    Awful: [
+      "Nauseated",
+      "Detestable"
+    ],
+    Repelled: [
+      "Horrified",
+      "Hesitant"
+    ]
+  },
+  Fearful: {
+    Scared: [
+      "Helpless",
+      "Frightened"
+    ],
+    Anxious: [
+      "Overwhelmed",
+      "Worried"
+    ],
+    Insecure: [
+      "Inadequate",
+      "Inferior"
+    ],
+    Weak: [
+      "Worthless",
+      "Insignificant"
+    ],
+    Rejected: [
+      "Excluded",
+      "Persecuted"
+    ],
+    Threatened: [
+      "Nervous",
+      "Exposed"
+    ]
+  },
+  Sad: {
+    Lonely: [
+      "Isolated",
+      "Abandoned"
+    ],
+    Vulnerable: [
+      "Victimized",
+      "Fragile"
+    ],
+    Despair: [
+      "Grief",
+      "Powerless"
+    ],
+    Guilty: [
+      "Ashamed",
+      "Remorseful"
+    ],
+    Depressed: [
+      "Inferior",
+      "Empty"
+    ],
+    Hurt: [
+      "Embarrassed",
+      "Disappointed"
+    ]
+  },
+  Bad: {
+    Bored: [
+      "Indifferent",
+      "Apathetic"
+    ],
+    Busy: [
+      "Pressured",
+      "Rushed"
+    ],
+    Stressed: [
+      "Overwhelmed",
+      "Out of control"
+    ],
+    Tired: [
+      "Sleepy",
+      "Unfocused"
+    ]
+  },
+  Surprised: {
+    Startled: [
+      "Shocked",
+      "Dismayed"
+    ],
+    Confused: [
+      "Disillusioned",
+      "Perplexed"
+    ],
+    Amazed: [
+      "Astonished",
+      "Awe"
+    ],
+    Excited: [
+      "Eager",
+      "Energetic"
+    ]
+  },
+  Happy: {
+    Playful: [
+      "Aroused",
+      "Cheeky"
+    ],
+    Content: [
+      "Free",
+      "Joyful"
+    ],
+    Interested: [
+      "Curious",
+      "Inquisitive"
+    ],
+    Proud: [
+      "Successful",
+      "Confident"
+    ],
+    Accepted: [
+      "Respected",
+      "Valued"
+    ],
+    Powerful: [
+      "Courageous",
+      "Creative"
+    ],
+    Peaceful: [
+      "Loving",
+      "Thankful"
+    ],
+    Trusting: [
+      "Sensitive",
+      "Intimate"
+    ],
+    Optimistic: [
+      "Hopeful",
+      "Inspired"
+    ]
+  }
+};
+
+// src/moods.ts
+var COLORS = {
+  angry: "var(--color-red)",
+  /** Muddy olive: green dulled with gray, so it reads as "off" rather than calm. */
+  disgusted: "color-mix(in srgb, var(--color-green) 45%, var(--color-base-50, gray))",
+  fearful: "var(--color-purple)",
+  sad: "var(--color-blue)",
+  bad: "var(--color-base-50, var(--text-muted))",
+  surprised: "var(--color-pink)",
+  happy: "var(--color-yellow)"
+};
+var low = (w) => w.trim().toLowerCase();
+var FAMILIES = Object.entries(junto_default).map(([name, inner]) => {
+  var _a;
+  const rows = Object.entries(inner).map(([word, more]) => ({ word: low(word), more: more.map(low) }));
+  return {
+    name,
+    color: (_a = COLORS[low(name)]) != null ? _a : "var(--color-cyan)",
+    rows,
+    words: [.../* @__PURE__ */ new Set([low(name), ...rows.flatMap((r) => [r.word, ...r.more])])]
+  };
+});
+function moodFamilies() {
+  return FAMILIES;
+}
+function familyOf(word) {
+  var _a;
+  const w = low(word);
+  return (_a = FAMILIES.find((f) => f.words.includes(w))) != null ? _a : null;
+}
+var MAX_MOODS = 3;
 
 // src/modals.ts
 var MonthPicker = class extends import_obsidian3.Modal {
@@ -1255,6 +1471,143 @@ var _SongPickerModal = class _SongPickerModal extends import_obsidian3.SuggestMo
 _SongPickerModal.kind = "music";
 _SongPickerModal.MORE = { id: "__more__", title: "Show more results", artist: "", cover: null, kind: "podcast" };
 var SongPickerModal = _SongPickerModal;
+var MoodPickerModal = class extends import_obsidian3.Modal {
+  constructor(app, current, onDone) {
+    super(app);
+    this.onDone = onDone;
+    /** The core feeling opened, or null for the seven tiles. */
+    this.family = null;
+    this.picked = [...current];
+    this.modalEl.addClass("dj-mood-modal");
+  }
+  onOpen() {
+    this.titleEl.setText("How are you feeling?");
+    const { contentEl } = this;
+    this.search = contentEl.createEl("input", { cls: "dj-mood-search", attr: { type: "text", placeholder: "Search feelings, or type your own" } });
+    this.search.addEventListener("input", () => {
+      this.family = null;
+      this.draw();
+    });
+    this.search.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter")
+        return;
+      e.preventDefault();
+      const typed = this.search.value.trim().toLowerCase();
+      if (!typed) {
+        this.finish();
+        return;
+      }
+      const match = this.matches(typed)[0];
+      this.toggle(match != null ? match : typed);
+      this.search.value = "";
+      this.draw();
+    });
+    this.chosenEl = contentEl.createDiv({ cls: "dj-mood-chosen" });
+    this.bodyEl = contentEl.createDiv({ cls: "dj-mood-body" });
+    const foot = contentEl.createDiv({ cls: "modal-button-container" });
+    foot.createEl("button", { text: "Cancel" }).onclick = () => this.close();
+    const done = foot.createEl("button", { cls: "mod-cta", text: "Done" });
+    done.onclick = () => this.finish();
+    this.draw();
+    window.setTimeout(() => this.search.focus(), 0);
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+  finish() {
+    this.onDone(this.picked);
+    this.close();
+  }
+  /** Words containing what's typed, from every family. */
+  matches(term) {
+    return [...new Set(moodFamilies().flatMap((f) => f.words))].filter((w) => w.includes(term));
+  }
+  toggle(word) {
+    if (this.picked.includes(word))
+      this.picked = this.picked.filter((w) => w !== word);
+    else if (this.picked.length < MAX_MOODS)
+      this.picked = [...this.picked, word];
+  }
+  /** A word as a tappable chip, in its family's color, marked when picked. */
+  wordChip(parent, word, main = false) {
+    const on = this.picked.includes(word);
+    const full = !on && this.picked.length >= MAX_MOODS;
+    const b = parent.createEl("button", { cls: "dj-mood-word" + (on ? " is-on" : "") + (main ? " is-main" : ""), text: word, attr: full ? { disabled: "" } : {} });
+    const family = familyOf(word);
+    if (family)
+      b.style.setProperty("--dj-mood", family.color);
+    b.onclick = () => {
+      this.toggle(word);
+      this.draw();
+    };
+  }
+  draw() {
+    this.chosenEl.empty();
+    this.chosenEl.toggle(this.picked.length > 0);
+    for (const word of this.picked) {
+      const chip = this.chosenEl.createSpan({ cls: "dj-chip dj-mood" });
+      const family = familyOf(word);
+      if (family)
+        chip.style.setProperty("--dj-mood", family.color);
+      chip.createSpan({ cls: "dj-mood-dot" });
+      chip.createSpan({ text: word });
+      const x = chip.createEl("button", { cls: "dj-tag-remove", text: "\xD7", attr: { "aria-label": `Remove ${word}` } });
+      x.onclick = () => {
+        this.toggle(word);
+        this.draw();
+      };
+    }
+    this.chosenEl.createSpan({ cls: "dj-mood-count", text: `${this.picked.length} of ${MAX_MOODS}` });
+    this.bodyEl.empty();
+    const term = this.search.value.trim().toLowerCase();
+    if (term) {
+      const found = this.matches(term);
+      const words2 = this.bodyEl.createDiv({ cls: "dj-mood-words" });
+      for (const w of found)
+        this.wordChip(words2, w);
+      if (!found.includes(term)) {
+        const own = words2.createEl("button", { cls: "dj-mood-word dj-mood-own", text: `Add "${term}"`, attr: this.picked.length >= MAX_MOODS ? { disabled: "" } : {} });
+        own.onclick = () => {
+          this.toggle(term);
+          this.search.value = "";
+          this.draw();
+        };
+      }
+      return;
+    }
+    if (this.family) {
+      const f = this.family;
+      const back = this.bodyEl.createEl("button", { cls: "dj-show-back dj-mood-back" });
+      (0, import_obsidian3.setIcon)(back.createSpan(), "arrow-left");
+      back.createSpan({ text: f.name });
+      back.onclick = () => {
+        this.family = null;
+        this.draw();
+      };
+      const rows = this.bodyEl.createDiv({ cls: "dj-mood-words dj-mood-rows" });
+      for (const r of f.rows) {
+        this.wordChip(rows, r.word, true);
+        for (const w of r.more)
+          this.wordChip(rows, w);
+      }
+      return;
+    }
+    const grid = this.bodyEl.createDiv({ cls: "dj-mood-families" });
+    for (const f of moodFamilies()) {
+      const tile = grid.createEl("button", { cls: "dj-mood-family" });
+      tile.style.setProperty("--dj-mood", f.color);
+      const head = tile.createDiv({ cls: "dj-mood-family-name" });
+      head.createSpan({ cls: "dj-mood-dot" });
+      head.createSpan({ text: f.name });
+      const count = this.picked.filter((w) => f.words.includes(w)).length;
+      tile.createDiv({ cls: "dj-mood-family-hint", text: count ? `${count} picked` : f.rows.slice(0, 3).map((r) => r.word).join(", ") + "\u2026" });
+      tile.onclick = () => {
+        this.family = f;
+        this.draw();
+      };
+    }
+  }
+};
 
 // src/render.ts
 var import_obsidian4 = require("obsidian");
@@ -1281,7 +1634,7 @@ function meteoconSvg(name) {
 
 // src/template.ts
 var SHOW_CHROME = "dj-show-chrome";
-var FIELD_KEYS = ["rating", "sleep", "work", "exercise", "food", "tags"];
+var FIELD_KEYS = ["rating", "mood", "sleep", "work", "exercise", "food", "tags"];
 var block = (line) => "```journal\n" + line + "\n```\n";
 function parseBlock(source) {
   const [section = "", ...options] = source.trim().split(/\s+/);
@@ -1297,9 +1650,9 @@ function blockOnThisDay(options) {
 function blockFields(options) {
   const listed = options.filter((o) => FIELD_KEYS.includes(o));
   if (!listed.length)
-    return { rating: true, sleep: true, work: false, exercise: true, food: true, tags: false };
+    return { rating: true, mood: false, sleep: true, work: false, exercise: true, food: true, tags: false };
   const has = (k) => listed.includes(k);
-  return { rating: has("rating"), sleep: has("sleep"), work: has("work"), exercise: has("exercise"), food: has("food"), tags: has("tags") };
+  return { rating: has("rating"), mood: has("mood"), sleep: has("sleep"), work: has("work"), exercise: has("exercise"), food: has("food"), tags: has("tags") };
 }
 function layoutLines(settings) {
   const fields = FIELD_KEYS.filter((k) => settings.fields[k]);
@@ -1786,6 +2139,41 @@ function renderCheckIn(host, el, file, fm, fields) {
       };
       dots.push(b);
     }
+    paint();
+  }
+  if (fields.mood) {
+    const box = item("Mood");
+    box.addClass("dj-moods");
+    const read = () => {
+      var _a, _b, _c;
+      const m = (_c = (_b = (_a = app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter) == null ? void 0 : _b.mood) != null ? _c : fm.mood;
+      return (Array.isArray(m) ? m : m ? [m] : []).map(String);
+    };
+    let moods = read();
+    const store = () => save("mood", moods.length ? moods : null);
+    const paint = () => {
+      box.empty();
+      for (const mood of moods) {
+        const chip = box.createSpan({ cls: "dj-chip dj-mood" });
+        const family = familyOf(mood);
+        if (family)
+          chip.style.setProperty("--dj-mood", family.color);
+        chip.createSpan({ cls: "dj-mood-dot" });
+        chip.createSpan({ text: mood });
+        const x = chip.createEl("button", { cls: "dj-tag-remove", text: "\xD7", attr: { "aria-label": `Remove ${mood}` } });
+        x.onclick = () => {
+          moods = moods.filter((m) => m !== mood);
+          paint();
+          void store();
+        };
+      }
+      const add = box.createEl("button", { cls: "dj-mood-add", text: moods.length ? "+ Add" : "How are you feeling?" });
+      add.onclick = () => new MoodPickerModal(app, moods, (picked) => {
+        moods = picked;
+        paint();
+        void store();
+      }).open();
+    };
     paint();
   }
   if (fields.sleep) {
@@ -2390,6 +2778,7 @@ var JournalSettingTab = class extends import_obsidian5.PluginSettingTab {
     new import_obsidian5.Setting(card2()).setName("Check-in").setDesc("Fields saved as properties, so Bases can chart and query them. Hidden when all are off.");
     const fields = [
       ["rating", "Day rating (1\u201310)"],
+      ["mood", "Mood"],
       ["sleep", "Sleep (hours)"],
       ["work", "Work (yes/no)"],
       ["exercise", "Exercise"],
@@ -2976,7 +3365,7 @@ var CARD_PROPS = {
   reading: ["reading", "books", "pages_read"],
   hardcover: ["reading", "books", "pages_read"],
   song: SONG_KEYS,
-  checkin: ["day_rating", "sleep", "worked", "exercise", "exercise_note", "breakfast", "lunch", "dinner", "ate", "skipped_meals", "tags"],
+  checkin: ["day_rating", "mood", "sleep", "worked", "exercise", "exercise_note", "breakfast", "lunch", "dinner", "ate", "skipped_meals", "tags"],
   onthisday: []
 };
 function propsFor(section, fm) {
