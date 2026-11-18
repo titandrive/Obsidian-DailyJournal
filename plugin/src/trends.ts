@@ -146,7 +146,6 @@ export class TrendsView extends BasesView {
 				.filter((x) => x.n);
 			const most = [...feelings].sort((a, b) => b.n - a.n)[0];
 			if (most) mood.tile("Most felt", most.f.name, `on ${Math.round((100 * most.n) / moodDays.length)}% of days`);
-			mood.tile("Moods logged", String(moodDays.length), `of ${days.length} days`);
 			if (feelings.length) barList(mood.card("Feelings", "Days each was felt"),
 				feelings.map(({ f, n }) => ({ label: f.name, value: n, text: times(n), color: f.color, hint: `${n} day${n === 1 ? "" : "s"}` })));
 			const words = ranked(moodDays.flatMap((d) => moodsOf(d.fm)), 5)
