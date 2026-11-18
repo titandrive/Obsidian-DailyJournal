@@ -13,7 +13,7 @@ import { CheckInFields, JournalSettings } from "./settings";
 export const SHOW_CHROME = "dj-show-chrome";
 
 export const FIELD_KEYS: Array<keyof CheckInFields> = ["rating", "sleep", "work", "exercise", "food", "tags"];
-type Section = "header" | "reading" | "song" | "checkin" | "onthisday";
+type Section = "header" | "reading" | "song" | "watch" | "play" | "checkin" | "onthisday";
 
 const block = (line: string) => "```journal\n" + line + "\n```\n";
 
@@ -47,6 +47,9 @@ function layoutLines(settings: JournalSettings): Record<Section, string | null> 
 		header: settings.showWeather ? "header weather" : "header no-weather",
 		reading: settings.showReading ? "reading" : null,
 		song: settings.showSong ? "song" : null,
+		// Watching and Playing need their key; without one the card stays off.
+		watch: settings.showWatching && settings.tmdbKey ? "watch" : null,
+		play: settings.showPlaying && settings.rawgKey ? "play" : null,
 		checkin: fields.length ? "checkin " + fields.join(" ") : null,
 		onthisday: settings.showOnThisDay && (settings.onThisDayMonth || settings.onThisDayYears)
 			? ["onthisday", settings.onThisDayMonth && "month", settings.onThisDayYears && "years"].filter(Boolean).join(" ")
@@ -66,14 +69,16 @@ export function entryTemplate(settings: JournalSettings): string {
 		`location: ${JSON.stringify(home.name)}`, `latitude: ${home.lat}`, `longitude: ${home.lon}`, `timezone: ${JSON.stringify(home.tz)}`,
 		"---", "",
 	];
-	for (const section of ["header", "onthisday", "reading", "song", "checkin"] as Section[]) {
+	for (const section of ["header", "onthisday", "reading", "song", "watch", "play", "checkin"] as Section[]) {
 		const line = lines[section];
 		if (!line) continue;
 		// On this day hugs the header (no blank line), so when it has nothing to show it takes no space.
 		if (section === "onthisday") { parts[parts.length - 1] += block(line); continue; }
-		// Reading and Song share one row, side by side, when both are on.
+		// Reading and Song share one row, side by side, when both are on; so do Watching and Playing.
 		if (section === "reading" && lines.song) { parts.push(block(ROW_LINE)); continue; }
 		if (section === "song" && lines.reading) continue;
+		if (section === "watch" && lines.play) { parts.push(block(MEDIA_ROW_LINE)); continue; }
+		if (section === "play" && lines.watch) continue;
 		parts.push(block(line));
 	}
 	for (const prompt of settings.prompts) {
@@ -84,9 +89,10 @@ export function entryTemplate(settings: JournalSettings): string {
 
 const BLOCK = (section: Section) => new RegExp("```journal\\n" + section + "(?:[ \\t][^\\n]*)?\\n```\\n?");
 
-/** Reading and Song side by side in one block (see renderSection's "row"). */
+/** Reading and Song side by side in one block (see renderSection's "row"); Watching and Playing likewise. */
 const ROW_LINE = "row reading song";
-const ROW = /```journal\nrow(?:[ \t]([^\n]*))?\n```\n?/;
+const MEDIA_ROW_LINE = "row watch play";
+const ROW = /```journal\nrow(?:[ \t]([^\n]*))?\n```\n?/g;
 
 /**
  * An existing entry rewritten to the current card settings: cards added or removed, weather and
@@ -107,9 +113,9 @@ export function applyLayout(text: string, settings: JournalSettings): string {
 	// A side-by-side row counts as its cards for now; it's rebuilt below when both are on.
 	out = out.replace(ROW, (_m, opts: string | undefined) => (opts ?? "").trim().split(/\s+/).filter(Boolean).map((o) => block(o)).join("\n"));
 
-	// Cards between the header and the writing, in order: reading, song, then check-in.
-	const order: Section[] = ["header", "reading", "song", "checkin"];
-	for (const section of ["reading", "song", "checkin"] as Section[]) {
+	// Cards between the header and the writing, in order: reading, song, watching, playing, then check-in.
+	const order: Section[] = ["header", "reading", "song", "watch", "play", "checkin"];
+	for (const section of ["reading", "song", "watch", "play", "checkin"] as Section[]) {
 		const line = lines[section];
 		if (line && BLOCK(section).test(out)) {
 			out = out.replace(BLOCK(section), block(line));
@@ -122,9 +128,12 @@ export function applyLayout(text: string, settings: JournalSettings): string {
 		}
 	}
 
-	// Both on: Reading and Song share one row.
+	// Both on: Reading and Song share one row, and so do Watching and Playing.
 	if (lines.reading && lines.song && BLOCK("reading").test(out) && BLOCK("song").test(out)) {
 		out = out.replace(BLOCK("reading"), block(ROW_LINE)).replace(new RegExp(BLOCK("song").source + "\\n?"), "");
+	}
+	if (lines.watch && lines.play && BLOCK("watch").test(out) && BLOCK("play").test(out)) {
+		out = out.replace(BLOCK("watch"), block(MEDIA_ROW_LINE)).replace(new RegExp(BLOCK("play").source + "\\n?"), "");
 	}
 
 	// On this day sits right after the header (it used to be at the end of the entry).

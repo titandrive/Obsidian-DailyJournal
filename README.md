@@ -5,6 +5,8 @@ A daily journal for Obsidian. Each entry gets a set of cards above your writing:
 - **Header**: the date, links to your previous and next entries, that day's weather, and the entry's location (defaults to your default location; change it per entry while traveling). The star at the bottom right of the header marks the entry as a favorite (`favorite: true`), so you can find it in search (`[favorite:true]`) or the base's Favorites tab.
 - **Currently reading**: what you read that day, from your [Hardcover](https://hardcover.app) reading journal: each book's cover, progress and pages read, books started or finished (with your rating), and quotes you saved. On days with no reading it shows when you last read. Works for past entries too. Needs a Hardcover API token. Each entry asks Hardcover once and saves the result in its properties (`reading`, plus `books` and `pages_read` for Bases); after that it only updates when you run **Refresh reading**.
 - **Earworm of the day**: a song for the day from YouTube. Paste a YouTube or YouTube Music link (works out of the box), or add a free YouTube Data API key in settings to search by song, artist or both. The card shows the art, title and artist; the play button plays the whole song in the card, and the title opens it in YouTube Music. Saved as properties (`song`, `artist`, plus the video id, link and art), so the Insights base lists your songs. With Currently reading on too, the two cards sit side by side in one row (stacked again on narrow screens). The search dialog has a **Music | Podcasts** toggle: podcasts are searched in Apple's podcast directory (no key needed) and the whole episode plays in a small audio player in the card, straight from the show's own feed; the title opens the episode's web page. Episodes are saved like songs (episode and show), marked `song_kind: podcast`.
+- **Watching**: the movie or TV show you watched that day, from [TMDB](https://www.themoviedb.org): the poster and title, and for a show either just the show or a specific season and episode ("S4E6 · Piñata"). Search, pick a show, then optionally a season and an episode. Saved as properties (`watching`, `watching_type`, `watching_season`, `watching_episode`, `watching_episode_title`…). Needs a free TMDB key, and can't be turned on until one is entered.
+- **Playing**: the video game you played that day, from [RAWG](https://rawg.io): cover, title, year and platforms. Saved as properties (`playing`, `playing_platforms`…). Needs a free RAWG key, and can't be turned on until one is entered. With Watching on too, the two sit side by side in one row.
 - **Check-in**: day rating (1–10), sleep, whether you worked, exercise, food (breakfast, lunch, dinner) and tags, saved as note properties so you can chart or query them with Bases. Each meal has a **Skip** button; skipped meals are saved in `skipped_meals` (e.g. `[breakfast]`), so Trends can show how often and which meals you skip. Typing "skipped" works too.
 - **On this day**: links to entries from the same date in earlier months and years.
 
@@ -59,6 +61,27 @@ The Song of the day card works without a key: paste a YouTube or YouTube Music l
 6. In Obsidian, open **Settings → Daily Journal → Song of the day**, paste the key into **YouTube API key** and click **Test**. A new key can take a few minutes to start working.
 
 The free allowance is 10,000 units a day and a search costs 100, so about 100 searches a day. The card only searches after you pause typing, so picking a song uses a few. The key is stored in this plugin's settings in your vault, not sent anywhere except YouTube.
+
+## Getting a TMDB API key
+
+The Watching card needs a free key from TMDB (The Movie Database).
+
+1. Create a free account at [themoviedb.org](https://www.themoviedb.org/signup) and confirm your email.
+2. Open **Settings → API** on the site ([direct link](https://www.themoviedb.org/settings/api)) and request a developer key. Fill in the short form (personal use is fine).
+3. Copy either the **API Key** or the longer **API Read Access Token**; both work.
+4. In Obsidian, open **Settings → Daily Journal → Watching**, paste it into **TMDB API key** and click **Test**. The Watching switch unlocks once a key is in.
+
+This product uses the TMDB API but is not endorsed or certified by TMDB.
+
+## Getting a RAWG API key
+
+The Playing card needs a free key from RAWG, a video game database.
+
+1. Create a free account at [rawg.io](https://rawg.io/signup).
+2. Open [rawg.io/apidocs](https://rawg.io/apidocs) and click **Get API key**. Fill in the short form (personal use is fine).
+3. In Obsidian, open **Settings → Daily Journal → Playing**, paste the key into **RAWG API key** and click **Test**. The Playing switch unlocks once a key is in.
+
+The free plan allows 20,000 lookups a month, far more than picking a game a day uses. Game data comes from [RAWG](https://rawg.io).
 
 ## Data
 

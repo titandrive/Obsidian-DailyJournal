@@ -259,7 +259,23 @@ export class TrendsView extends BasesView {
 		const shows = ranked(days.filter(podcast).map((d) => str(d.fm.artist)), 5);
 		if (shows.length) barList(listening.card("Top podcasts"), shows);
 
-		for (const s of [overview, moodSleep, patterns, food, reading, listening]) {
+		// Shows, movies and games, from the Watching and Playing cards.
+		const media = section("Watching and playing");
+		const watched = days.filter((d) => str(d.fm.watching));
+		const movies = new Set(watched.filter((d) => d.fm.watching_type === "movie").map((d) => str(d.fm.watching).toLowerCase()));
+		const showsWatched = new Set(watched.filter((d) => d.fm.watching_type !== "movie").map((d) => str(d.fm.watching).toLowerCase()));
+		const played = days.filter((d) => str(d.fm.playing));
+		if (watched.length) {
+			media.tile("Shows watched", String(showsWatched.size), `${watched.filter((d) => d.fm.watching_type !== "movie").length} days`);
+			media.tile("Movies watched", String(movies.size));
+		}
+		if (played.length) media.tile("Games played", String(new Set(played.map((d) => str(d.fm.playing).toLowerCase())).size), `${played.length} days`);
+		const topShows = ranked(watched.filter((d) => d.fm.watching_type !== "movie").map((d) => str(d.fm.watching)), 5);
+		if (topShows.length) barList(media.card("Most watched shows", "Days watched"), topShows);
+		const topGames = ranked(played.map((d) => str(d.fm.playing)), 5);
+		if (topGames.length) barList(media.card("Most played games", "Days played"), topGames);
+
+		for (const s of [overview, moodSleep, patterns, food, reading, listening, media]) {
 			if (s.el.childElementCount < 2 || !s.el.querySelector(".dj-trends-tile, .dj-trends-card")) s.el.remove();
 		}
 	}

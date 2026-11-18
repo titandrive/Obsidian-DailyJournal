@@ -4,6 +4,8 @@ import { ConfirmModal, PlaceModal, PromptsModal } from "./modals";
 import { hardcoverUser } from "./hardcover";
 import { CheckInFields } from "./settings";
 import { searchSongs } from "./music";
+import { testTmdbKey } from "./tmdb";
+import { testRawgKey } from "./rawg";
 
 export class JournalSettingTab extends PluginSettingTab {
 	constructor(app: App, private plugin: DailyJournal) {
@@ -127,6 +129,55 @@ export class JournalSettingTab extends PluginSettingTab {
 					new Notice(`YouTube: ${e instanceof Error ? e.message : String(e)}`);
 				}
 			}));
+
+		// Watching and Playing need a key first: their switch stays off and greyed out until one is entered.
+		const keyedCard = (
+			name: string, desc: string | DocumentFragment, on: "showWatching" | "showPlaying", keyField: "tmdbKey" | "rawgKey",
+			keyName: string, keyDesc: DocumentFragment, test: (key: string) => Promise<string>,
+		) => {
+			const hasKey = !!s[keyField];
+			const main = new Setting(card()).setName(name).setDesc(desc);
+			main.addToggle((t) => t.setValue(s[on] && hasKey).setDisabled(!hasKey)
+				.setTooltip(hasKey ? "" : `Add a ${keyName} first`)
+				.onChange(async (v) => { s[on] = v; await save(); }));
+			sub(new Setting(group).setName(keyName).setDesc(keyDesc))
+				.addText((t) => {
+					t.inputEl.type = "password";
+					t.setPlaceholder("Paste your key").setValue(s[keyField]).onChange(async (v) => {
+						const had = !!s[keyField];
+						s[keyField] = v.trim();
+						if (!s[keyField]) s[on] = false; // no key, no card
+						await save();
+						if (had !== !!s[keyField]) this.display(); // the switch unlocks (or locks) with the key
+					});
+				})
+				.addButton((b) => b.setButtonText("Test").onClick(async () => {
+					if (!s[keyField]) { new Notice(`Paste your ${keyName} first.`); return; }
+					try { new Notice(await test(s[keyField])); } catch (e) { new Notice(e instanceof Error ? e.message : String(e)); }
+				}));
+		};
+		keyedCard(
+			"Watching", "The movie or TV show you watched that day, or one episode of it: poster, title, and season and episode. Saved as properties (watching, watching_type, watching_season…).",
+			"showWatching", "tmdbKey", "TMDB API key",
+			createFragment((f) => {
+				f.appendText("Free, from themoviedb.org: Settings → API. The API Key or the API Read Access Token both work. ");
+				f.createEl("a", { text: "How to get a key", href: "https://github.com/titandrive/Obsidian-DailyJournal#getting-a-tmdb-api-key" });
+				f.appendText(". This product uses the TMDB API but is not endorsed or certified by TMDB.");
+			}),
+			testTmdbKey,
+		);
+		keyedCard(
+			"Playing", "The video game you played that day: cover, title, year and platforms. Saved as properties (playing, playing_platforms…).",
+			"showPlaying", "rawgKey", "RAWG API key",
+			createFragment((f) => {
+				f.appendText("Free, from rawg.io. ");
+				f.createEl("a", { text: "How to get a key", href: "https://github.com/titandrive/Obsidian-DailyJournal#getting-a-rawg-api-key" });
+				f.appendText(". Game data from ");
+				f.createEl("a", { text: "RAWG", href: "https://rawg.io" });
+				f.appendText(".");
+			}),
+			testRawgKey,
+		);
 
 		new Setting(card()).setName("Check-in").setDesc("Fields saved as properties, so Bases can chart and query them. Hidden when all are off.");
 		const fields: Array<[keyof CheckInFields, string]> = [

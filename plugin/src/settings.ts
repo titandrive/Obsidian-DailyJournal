@@ -35,6 +35,12 @@ export interface JournalSettings {
 	showSong: boolean;
 	/** YouTube Data API key: optional, unlocks searching for songs. */
 	youtubeApiKey: string;
+	/** Watching card (movies and TV, from TMDB): needs a TMDB key before it can be turned on. */
+	showWatching: boolean;
+	tmdbKey: string;
+	/** Playing card (video games, from RAWG): needs a RAWG key before it can be turned on. */
+	showPlaying: boolean;
+	rawgKey: string;
 	showOnThisDay: boolean;
 	/** Show the entry from one month ago in On this day. */
 	onThisDayMonth: boolean;
@@ -63,6 +69,10 @@ export const DEFAULT_SETTINGS: JournalSettings = {
 	hardcoverToken: "",
 	showSong: true,
 	youtubeApiKey: "",
+	showWatching: false,
+	tmdbKey: "",
+	showPlaying: false,
+	rawgKey: "",
 	showOnThisDay: true,
 	onThisDayMonth: true,
 	onThisDayYears: true,

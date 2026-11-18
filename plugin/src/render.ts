@@ -1,6 +1,6 @@
 import { App, getAllTags, moment, setIcon, TFile } from "obsidian";
 import { entryDate, Moment } from "./dates";
-import { PlaceHistory, PlaceModal, SongPickerModal } from "./modals";
+import { GamePickerModal, PlaceHistory, PlaceModal, SongPickerModal, WatchPickerModal } from "./modals";
 import { CheckInFields, JournalSettings, Place } from "./settings";
 import { HardcoverDay, savedReading } from "./hardcover";
 import { meteoconSvg } from "./meteocons";
@@ -8,6 +8,8 @@ import { episodePage, playerUrl, Song, SONG_KEYS, songProperties, thumbnailUrl, 
 import { blockFields, blockOnThisDay, blockShowsWeather, parseBlock } from "./template";
 import { entryPlace, fetchWeather, PIN_ICON, weatherIcon, weatherText } from "./weather";
 import { RETRY_AFTER_MS } from "./net";
+import { episodeCode, savedWatch, Watch, WATCH_KEYS, watchProperties } from "./tmdb";
+import { Game, GAME_KEYS, gameProperties, savedGame } from "./rawg";
 
 /** What the cards need from the plugin. */
 export interface JournalHost {
@@ -61,6 +63,8 @@ export async function renderSection(host: JournalHost, source: string, el: HTMLE
 			return renderReading(host, el, file, date, fm);
 		case "checkin": return renderCheckIn(host, el, file, fm, blockFields(options));
 		case "song": return renderSong(host, el, file, fm);
+		case "watch": return renderWatch(host, el, file, fm);
+		case "play": return renderGame(host, el, file, fm);
 		case "onthisday": return renderOnThisDay(host, el, date, blockOnThisDay(options));
 		case "row": {
 			// Several cards side by side in one block, e.g. "row reading song": compact versions of each,
@@ -667,6 +671,82 @@ function renderSong(host: JournalHost, el: HTMLElement, file: TFile, fm: Frontma
 
 	const song = savedSong(fm);
 	if (song) showSong(song); else showEmpty();
+}
+
+/**
+ * A one-item media card (Watching, Playing): the item with its picture, title, a detail line, and
+ * Change / Remove; or, when empty, a button that opens the picker. `item` draws the saved item.
+ */
+function mediaCard<T>(
+	el: HTMLElement, label: string, emptyText: string, emptyIcon: string, saved: T | null,
+	draw: (row: HTMLElement, value: T) => void, pick: (done: (value: T) => void) => void, save: (value: T | null) => void,
+): void {
+	const body = card(el, label).createDiv();
+	const show = (value: T) => {
+		body.empty();
+		const row = body.createDiv({ cls: "dj-book dj-song dj-media" });
+		draw(row, value);
+		const actions = row.querySelector(".dj-book-info")?.createDiv({ cls: "dj-song-actions" });
+		if (!actions) return;
+		const change = actions.createEl("a", { cls: "dj-song-change", text: "Change", href: "#" });
+		change.onclick = (e) => { e.preventDefault(); open(); };
+		const remove = actions.createEl("a", { cls: "dj-song-change", text: "Remove", href: "#" });
+		remove.onclick = (e) => { e.preventDefault(); save(null); showEmpty(); };
+	};
+	const open = () => pick((value) => { show(value); save(value); });
+	const showEmpty = () => {
+		body.empty();
+		const add = body.createEl("button", { cls: "dj-song-add" });
+		setIcon(add.createSpan({ cls: "dj-song-add-icon" }), emptyIcon);
+		add.createSpan({ text: emptyText });
+		add.onclick = open;
+	};
+	if (saved) show(saved); else showEmpty();
+}
+
+/** A cover picture, or an icon in its place when there's none (or it fails to load). */
+function coverImage(parent: HTMLElement, src: string | null | undefined, cls: string, icon: string): void {
+	const fallback = () => { img?.remove(); const d = createDiv({ cls: `${cls} dj-cover-fallback` }); setIcon(d, icon); parent.prepend(d); };
+	const img = src ? parent.createEl("img", { cls, attr: { src, alt: "" } }) : null;
+	if (img) img.onerror = fallback; else fallback();
+}
+
+/** Watching: a movie or show (or one episode) you watched that day, picked from TMDB. */
+function renderWatch(host: JournalHost, el: HTMLElement, file: TFile, fm: Frontmatter): void {
+	const { app, settings } = host;
+	const save = (w: Watch | null) => void app.fileManager.processFrontMatter(file, (f) => {
+		for (const k of WATCH_KEYS) delete f[k];
+		if (w) Object.assign(f, watchProperties(w));
+	});
+	mediaCard<Watch>(el, "Watching", "Add a show or movie", "tv", savedWatch(fm), (row, w) => {
+		coverImage(row, w.poster, "dj-cover", w.kind === "movie" ? "film" : "tv");
+		const info = row.createDiv({ cls: "dj-book-info" });
+		const title = info.createEl("a", { cls: "dj-book-title", text: w.title, href: w.url, attr: { "aria-label": "Open on TMDB" } });
+		title.onclick = (e) => { e.preventDefault(); window.open(w.url, "_blank"); };
+		shrinkToTwoLines(title);
+		// "S4E6 · Piñata" for an episode; "TV show · 2015" or "Movie · 1999" otherwise.
+		const code = episodeCode(w);
+		const detail = code ? [code, w.episodeTitle].filter(Boolean).join(" · ") : [w.kind === "movie" ? "Movie" : "TV show", w.year].filter(Boolean).join(" · ");
+		shrinkToOneLine(info.createDiv({ cls: "dj-book-author", text: detail }));
+	}, (done) => new WatchPickerModal(app, settings.tmdbKey, done).open(), save);
+}
+
+/** Playing: the video game you played that day, picked from RAWG. */
+function renderGame(host: JournalHost, el: HTMLElement, file: TFile, fm: Frontmatter): void {
+	const { app, settings } = host;
+	const save = (g: Game | null) => void app.fileManager.processFrontMatter(file, (f) => {
+		for (const k of GAME_KEYS) delete f[k];
+		if (g) Object.assign(f, gameProperties(g));
+	});
+	mediaCard<Game>(el, "Playing", "Add a game", "gamepad-2", savedGame(fm), (row, g) => {
+		coverImage(row, g.cover, "dj-cover dj-game-cover", "gamepad-2");
+		const info = row.createDiv({ cls: "dj-book-info" });
+		const title = info.createEl("a", { cls: "dj-book-title", text: g.title, href: g.url, attr: { "aria-label": "Open on RAWG" } });
+		title.onclick = (e) => { e.preventDefault(); window.open(g.url, "_blank"); };
+		shrinkToTwoLines(title);
+		const platforms = g.platforms.slice(0, 2).join(", ") + (g.platforms.length > 2 ? "…" : "");
+		shrinkToOneLine(info.createDiv({ cls: "dj-book-author", text: [g.year, platforms].filter(Boolean).join(" · ") }));
+	}, (done) => new GamePickerModal(app, settings.rawgKey, done).open(), save);
 }
 
 /**

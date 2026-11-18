@@ -101,6 +101,10 @@ function journalBase(settings) {
     columns.push(["books", "Book"], ["pages_read", "Pages"]);
   if (settings.showSong)
     columns.push(["song", "Song"], ["artist", "Artist"]);
+  if (settings.showWatching && settings.tmdbKey)
+    columns.push(["watching", "Watching"], ["watching_episode_title", "Episode"]);
+  if (settings.showPlaying && settings.rawgKey)
+    columns.push(["playing", "Playing"]);
   const monthly = ["formula.day", ...columns.map(([k]) => k).filter((k) => ["day_rating", "sleep", "worked", "exercise", "pages_read"].includes(k))];
   const summaries = [
     f.rating ? "day_rating: Average" : "",
@@ -398,6 +402,10 @@ var DEFAULT_SETTINGS = {
   hardcoverToken: "",
   showSong: true,
   youtubeApiKey: "",
+  showWatching: false,
+  tmdbKey: "",
+  showPlaying: false,
+  rawgKey: "",
   showOnThisDay: true,
   onThisDayMonth: true,
   onThisDayYears: true,
@@ -666,6 +674,183 @@ function songProperties(song) {
   return props;
 }
 var SONG_KEYS = ["song", "artist", "song_cover", "song_id", "song_url", "song_kind", "song_audio", "song_album", "song_apple"];
+
+// src/tmdb.ts
+var IMAGE = "https://image.tmdb.org/t/p/w342";
+var year = (date) => typeof date === "string" && date.length >= 4 ? date.slice(0, 4) : null;
+var pageUrl = (kind, id) => `https://www.themoviedb.org/${kind}/${id}`;
+async function tmdb(key, path, query2 = {}) {
+  const k = key.trim();
+  if (!k)
+    throw new Error("Add a TMDB API key in Daily Journal's settings.");
+  const token = k.startsWith("eyJ") || k.length > 60;
+  const params = new URLSearchParams({ ...query2, ...token ? {} : { api_key: k } });
+  const res = await requestWithin("TMDB", {
+    url: `https://api.themoviedb.org/3${path}?${params}`,
+    headers: { accept: "application/json", ...token ? { Authorization: `Bearer ${k}` } : {} },
+    throw: false
+  });
+  if (res.status === 401)
+    throw new Error("TMDB didn't accept the API key.");
+  if (res.status < 200 || res.status >= 300)
+    throw new Error(`TMDB answered ${res.status}.`);
+  return res.json;
+}
+async function searchTitles(key, query2) {
+  var _a;
+  const data = await tmdb(key, "/search/multi", { query: query2, include_adult: "false" });
+  return ((_a = data == null ? void 0 : data.results) != null ? _a : []).filter((r) => r.media_type === "movie" || r.media_type === "tv").slice(0, 15).map((r) => {
+    var _a2, _b, _c;
+    return {
+      kind: r.media_type,
+      id: r.id,
+      title: String((_b = (_a2 = r.title) != null ? _a2 : r.name) != null ? _b : ""),
+      year: year((_c = r.release_date) != null ? _c : r.first_air_date),
+      poster: r.poster_path ? IMAGE + r.poster_path : null,
+      url: pageUrl(r.media_type, r.id)
+    };
+  });
+}
+async function seasonsOf(key, showId) {
+  var _a;
+  const data = await tmdb(key, `/tv/${showId}`);
+  const seasons = ((_a = data == null ? void 0 : data.seasons) != null ? _a : []).map((s) => {
+    var _a2, _b;
+    return {
+      number: Number(s.season_number),
+      name: String((_a2 = s.name) != null ? _a2 : `Season ${s.season_number}`),
+      episodes: Number((_b = s.episode_count) != null ? _b : 0),
+      year: year(s.air_date)
+    };
+  });
+  return [...seasons.filter((s) => s.number > 0), ...seasons.filter((s) => s.number === 0)];
+}
+async function episodesOf(key, showId, season) {
+  var _a;
+  const data = await tmdb(key, `/tv/${showId}/season/${season}`);
+  return ((_a = data == null ? void 0 : data.episodes) != null ? _a : []).map((e) => {
+    var _a2, _b;
+    return { number: Number(e.episode_number), title: String((_a2 = e.name) != null ? _a2 : ""), date: (_b = e.air_date) != null ? _b : null };
+  });
+}
+async function testTmdbKey(key) {
+  const found = await searchTitles(key, "Better Call Saul");
+  return found.length ? "TMDB works." : "The key works, but the test search found nothing.";
+}
+var episodeCode = (w) => w.season != null && w.episode != null ? `S${w.season}E${w.episode}` : null;
+var WATCH_KEYS = [
+  "watching",
+  "watching_type",
+  "watching_year",
+  "watching_season",
+  "watching_episode",
+  "watching_episode_title",
+  "watching_poster",
+  "watching_url",
+  "watching_tmdb"
+];
+function watchProperties(w) {
+  var _a, _b, _c;
+  const props = {
+    watching: w.title,
+    watching_type: w.kind,
+    watching_year: (_a = w.year) != null ? _a : null,
+    watching_poster: (_b = w.poster) != null ? _b : null,
+    watching_url: w.url,
+    watching_tmdb: w.id
+  };
+  if (w.kind === "tv" && w.season != null)
+    props.watching_season = w.season;
+  if (w.kind === "tv" && w.episode != null) {
+    props.watching_episode = w.episode;
+    props.watching_episode_title = (_c = w.episodeTitle) != null ? _c : null;
+  }
+  for (const k of Object.keys(props))
+    if (props[k] === null)
+      delete props[k];
+  return props;
+}
+function savedWatch(fm) {
+  if (!fm.watching)
+    return null;
+  const kind = fm.watching_type === "movie" ? "movie" : "tv";
+  const id = Number(fm.watching_tmdb) || 0;
+  return {
+    kind,
+    id,
+    title: String(fm.watching),
+    year: fm.watching_year != null ? String(fm.watching_year) : null,
+    poster: typeof fm.watching_poster === "string" ? fm.watching_poster : null,
+    season: fm.watching_season != null ? Number(fm.watching_season) : null,
+    episode: fm.watching_episode != null ? Number(fm.watching_episode) : null,
+    episodeTitle: fm.watching_episode_title != null ? String(fm.watching_episode_title) : null,
+    url: typeof fm.watching_url === "string" ? fm.watching_url : id ? pageUrl(kind, id) : "https://www.themoviedb.org"
+  };
+}
+
+// src/rawg.ts
+async function rawg(key, path, query2 = {}) {
+  const k = key.trim();
+  if (!k)
+    throw new Error("Add a RAWG API key in Daily Journal's settings.");
+  const params = new URLSearchParams({ ...query2, key: k });
+  const res = await requestWithin("RAWG", { url: `https://api.rawg.io/api${path}?${params}`, headers: { accept: "application/json" }, throw: false });
+  if (res.status === 401 || res.status === 403)
+    throw new Error("RAWG didn't accept the API key.");
+  if (res.status < 200 || res.status >= 300)
+    throw new Error(`RAWG answered ${res.status}.`);
+  return res.json;
+}
+async function searchGames(key, query2) {
+  var _a;
+  const data = await rawg(key, "/games", { search: query2, page_size: "12", search_precise: "true" });
+  return ((_a = data == null ? void 0 : data.results) != null ? _a : []).map((g) => {
+    var _a2, _b;
+    return {
+      id: Number(g.id),
+      title: String((_a2 = g.name) != null ? _a2 : ""),
+      year: typeof g.released === "string" ? g.released.slice(0, 4) : null,
+      cover: typeof g.background_image === "string" ? g.background_image : null,
+      platforms: ((_b = g.platforms) != null ? _b : []).map((p) => {
+        var _a3, _b2;
+        return String((_b2 = (_a3 = p == null ? void 0 : p.platform) == null ? void 0 : _a3.name) != null ? _b2 : "");
+      }).filter(Boolean),
+      url: g.slug ? `https://rawg.io/games/${g.slug}` : `https://rawg.io/games/${g.id}`
+    };
+  });
+}
+async function testRawgKey(key) {
+  const found = await searchGames(key, "Hades");
+  return found.length ? "RAWG works." : "The key works, but the test search found nothing.";
+}
+var GAME_KEYS = ["playing", "playing_year", "playing_cover", "playing_platforms", "playing_url", "playing_rawg"];
+function gameProperties(g) {
+  var _a, _b;
+  const props = {
+    playing: g.title,
+    playing_year: (_a = g.year) != null ? _a : null,
+    playing_cover: (_b = g.cover) != null ? _b : null,
+    playing_platforms: g.platforms.length ? g.platforms : null,
+    playing_url: g.url,
+    playing_rawg: g.id
+  };
+  for (const k of Object.keys(props))
+    if (props[k] === null)
+      delete props[k];
+  return props;
+}
+function savedGame(fm) {
+  if (!fm.playing)
+    return null;
+  return {
+    id: Number(fm.playing_rawg) || 0,
+    title: String(fm.playing),
+    year: fm.playing_year != null ? String(fm.playing_year) : null,
+    cover: typeof fm.playing_cover === "string" ? fm.playing_cover : null,
+    platforms: Array.isArray(fm.playing_platforms) ? fm.playing_platforms.map(String) : [],
+    url: typeof fm.playing_url === "string" ? fm.playing_url : "https://rawg.io"
+  };
+}
 
 // src/modals.ts
 var MonthPicker = class extends import_obsidian3.Modal {
@@ -1255,6 +1440,213 @@ var _SongPickerModal = class _SongPickerModal extends import_obsidian3.SuggestMo
 _SongPickerModal.kind = "music";
 _SongPickerModal.MORE = { id: "__more__", title: "Show more results", artist: "", cover: null, kind: "podcast" };
 var SongPickerModal = _SongPickerModal;
+var WatchPickerModal = class extends import_obsidian3.SuggestModal {
+  constructor(app, apiKey, onPick) {
+    var _a, _b;
+    super(app);
+    this.apiKey = apiKey;
+    this.onPick = onPick;
+    this.latest = 0;
+    this.shown = [];
+    /** The show being browsed (and season, once picked), with the search to go back to. */
+    this.show = null;
+    this.limit = 200;
+    this.modalEl.addClass("dj-song-modal", "dj-watch-modal");
+    this.setPlaceholder("Search movies and TV shows");
+    this.emptyStateText = "";
+    this.setInstructions([{ command: "\u2191\u2193", purpose: "to navigate" }, { command: "\u21B5", purpose: "to pick" }, { command: "esc", purpose: "back / cancel" }]);
+    (_a = this.inputEl.parentElement) == null ? void 0 : _a.addClass("dj-song-search-row");
+    this.bar = createDiv({ cls: "dj-show-bar" });
+    this.bar.hide();
+    (_b = this.inputEl.parentElement) == null ? void 0 : _b.before(this.bar);
+    this.inputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && this.show) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.back();
+      }
+    }, true);
+  }
+  onOpen() {
+    super.onOpen();
+    window.setTimeout(() => this.inputEl.focus(), 0);
+  }
+  /** The back bar: "← Better Call Saul" (or "← Season 4"). */
+  drawBar() {
+    this.bar.empty();
+    if (!this.show) {
+      this.bar.hide();
+      return;
+    }
+    const back = this.bar.createEl("button", { cls: "dj-show-back", attr: { "aria-label": "Back" } });
+    (0, import_obsidian3.setIcon)(back.createSpan(), "arrow-left");
+    back.createSpan({ text: this.show.season ? `${this.show.watch.title} \xB7 ${this.show.season.name}` : this.show.watch.title });
+    back.onclick = () => this.back();
+    this.bar.show();
+  }
+  back() {
+    if (!this.show)
+      return;
+    if (this.show.season) {
+      this.show.season = void 0;
+      this.show.episodes = void 0;
+      this.setPlaceholder(`Filter ${this.show.watch.title} seasons`);
+    } else {
+      const query2 = this.show.query;
+      this.show = null;
+      this.setPlaceholder("Search movies and TV shows");
+      this.inputEl.value = query2;
+    }
+    this.drawBar();
+    if (this.show)
+      this.inputEl.value = "";
+    this.inputEl.focus();
+    this.inputEl.dispatchEvent(new Event("input"));
+  }
+  async getSuggestions(query2) {
+    var _a, _b, _c, _d, _e;
+    const term = query2.trim().toLowerCase(), mine = ++this.latest;
+    try {
+      if ((_a = this.show) == null ? void 0 : _a.season) {
+        const { watch, season } = this.show;
+        (_c = (_b = this.show).episodes) != null ? _c : _b.episodes = await episodesOf(this.apiKey, watch.id, season.number);
+        if (mine !== this.latest)
+          return this.shown;
+        this.emptyStateText = "No episodes match.";
+        return this.shown = this.show.episodes.filter((e) => !term || e.title.toLowerCase().includes(term) || String(e.number) === term).map((episode) => ({ type: "episode", watch, season, episode }));
+      }
+      if (this.show) {
+        const { watch } = this.show;
+        (_e = (_d = this.show).seasons) != null ? _e : _d.seasons = await seasonsOf(this.apiKey, watch.id);
+        if (mine !== this.latest)
+          return this.shown;
+        const seasons = this.show.seasons.filter((s) => !term || s.name.toLowerCase().includes(term) || String(s.number) === term);
+        return this.shown = [{ type: "whole", watch }, ...seasons.map((season) => ({ type: "season", watch, season }))];
+      }
+      if (term.length < 2) {
+        this.emptyStateText = "";
+        return this.shown = [];
+      }
+      await new Promise((r) => window.setTimeout(r, 350));
+      if (mine !== this.latest)
+        return this.shown;
+      const found = await searchTitles(this.apiKey, query2.trim());
+      if (mine !== this.latest)
+        return this.shown;
+      this.emptyStateText = "Nothing found.";
+      return this.shown = found.map((watch) => ({ type: "title", watch }));
+    } catch (e) {
+      this.emptyStateText = e instanceof Error ? e.message : String(e);
+      return this.shown = [];
+    }
+  }
+  renderSuggestion(row, el) {
+    el.addClass("dj-song-suggestion");
+    const text = (title, meta) => {
+      const t = el.createDiv({ cls: "dj-song-result-text" });
+      t.createDiv({ cls: "dj-song-result-title", text: title });
+      if (meta)
+        t.createDiv({ cls: "dj-song-result-meta", text: meta });
+    };
+    const arrow = () => (0, import_obsidian3.setIcon)(el.createSpan({ cls: "dj-show-row-arrow" }), "chevron-right");
+    if (row.type === "title") {
+      const w = row.watch;
+      const img = w.poster ? el.createEl("img", { cls: "dj-song-thumb dj-watch-thumb", attr: { src: w.poster, alt: "" } }) : null;
+      if (!img)
+        (0, import_obsidian3.setIcon)(el.createDiv({ cls: "dj-song-thumb dj-watch-thumb dj-cover-fallback" }), w.kind === "movie" ? "film" : "tv");
+      text(w.title, [w.kind === "movie" ? "Movie" : "TV show", w.year].filter(Boolean).join(" \xB7 "));
+      if (w.kind === "tv")
+        arrow();
+    } else if (row.type === "whole") {
+      (0, import_obsidian3.setIcon)(el.createDiv({ cls: "dj-song-thumb dj-cover-fallback" }), "tv");
+      text("The whole show", "No particular episode");
+    } else if (row.type === "season") {
+      (0, import_obsidian3.setIcon)(el.createDiv({ cls: "dj-song-thumb dj-cover-fallback" }), "list");
+      text(row.season.name, [row.season.episodes ? `${row.season.episodes} episodes` : "", row.season.year].filter(Boolean).join(" \xB7 "));
+      arrow();
+    } else {
+      const e = row.episode;
+      el.createDiv({ cls: "dj-song-thumb dj-cover-fallback dj-watch-epnum", text: String(e.number) });
+      text(e.title || `Episode ${e.number}`, [`S${row.season.number}E${e.number}`, e.date ? (0, import_obsidian3.moment)(e.date, "YYYY-MM-DD").format("MMM D, YYYY") : ""].filter(Boolean).join(" \xB7 "));
+    }
+  }
+  selectSuggestion(row, evt) {
+    if (row.type === "title" && row.watch.kind === "tv") {
+      this.show = { watch: row.watch, query: this.inputEl.value };
+      this.setPlaceholder(`Filter ${row.watch.title} seasons`);
+    } else if (row.type === "season" && this.show) {
+      this.show.season = row.season;
+      this.setPlaceholder(`Filter ${row.season.name} episodes`);
+    } else {
+      super.selectSuggestion(row, evt);
+      return;
+    }
+    this.drawBar();
+    this.inputEl.value = "";
+    this.inputEl.focus();
+    this.inputEl.dispatchEvent(new Event("input"));
+  }
+  onChooseSuggestion(row) {
+    if (row.type === "episode") {
+      this.onPick({ ...row.watch, season: row.season.number, episode: row.episode.number, episodeTitle: row.episode.title || null });
+    } else {
+      this.onPick({ ...row.watch, season: null, episode: null, episodeTitle: null });
+    }
+  }
+};
+var GamePickerModal = class extends import_obsidian3.SuggestModal {
+  constructor(app, apiKey, onPick) {
+    var _a;
+    super(app);
+    this.apiKey = apiKey;
+    this.onPick = onPick;
+    this.latest = 0;
+    this.shown = [];
+    this.limit = 50;
+    this.modalEl.addClass("dj-song-modal", "dj-game-modal");
+    this.setPlaceholder("Search games");
+    this.emptyStateText = "";
+    (_a = this.inputEl.parentElement) == null ? void 0 : _a.addClass("dj-song-search-row");
+    this.setInstructions([{ command: "\u2191\u2193", purpose: "to navigate" }, { command: "\u21B5", purpose: "to pick" }, { command: "esc", purpose: "to cancel" }]);
+  }
+  onOpen() {
+    super.onOpen();
+    window.setTimeout(() => this.inputEl.focus(), 0);
+  }
+  async getSuggestions(query2) {
+    const term = query2.trim(), mine = ++this.latest;
+    if (term.length < 2) {
+      this.emptyStateText = "";
+      return this.shown = [];
+    }
+    await new Promise((r) => window.setTimeout(r, 350));
+    if (mine !== this.latest)
+      return this.shown;
+    try {
+      const found = await searchGames(this.apiKey, term);
+      if (mine !== this.latest)
+        return this.shown;
+      this.emptyStateText = "No games found.";
+      return this.shown = found;
+    } catch (e) {
+      this.emptyStateText = e instanceof Error ? e.message : String(e);
+      return this.shown = [];
+    }
+  }
+  renderSuggestion(game, el) {
+    el.addClass("dj-song-suggestion");
+    const img = game.cover ? el.createEl("img", { cls: "dj-song-thumb", attr: { src: game.cover, alt: "" } }) : null;
+    if (!img)
+      (0, import_obsidian3.setIcon)(el.createDiv({ cls: "dj-song-thumb dj-cover-fallback" }), "gamepad-2");
+    const t = el.createDiv({ cls: "dj-song-result-text" });
+    t.createDiv({ cls: "dj-song-result-title", text: game.title });
+    const platforms = game.platforms.slice(0, 3).join(", ") + (game.platforms.length > 3 ? "\u2026" : "");
+    t.createDiv({ cls: "dj-song-result-meta", text: [game.year, platforms].filter(Boolean).join(" \xB7 ") });
+  }
+  onChooseSuggestion(game) {
+    this.onPick(game);
+  }
+};
 
 // src/render.ts
 var import_obsidian4 = require("obsidian");
@@ -1307,6 +1699,9 @@ function layoutLines(settings) {
     header: settings.showWeather ? "header weather" : "header no-weather",
     reading: settings.showReading ? "reading" : null,
     song: settings.showSong ? "song" : null,
+    // Watching and Playing need their key; without one the card stays off.
+    watch: settings.showWatching && settings.tmdbKey ? "watch" : null,
+    play: settings.showPlaying && settings.rawgKey ? "play" : null,
     checkin: fields.length ? "checkin " + fields.join(" ") : null,
     onthisday: settings.showOnThisDay && (settings.onThisDayMonth || settings.onThisDayYears) ? ["onthisday", settings.onThisDayMonth && "month", settings.onThisDayYears && "years"].filter(Boolean).join(" ") : null
   };
@@ -1330,7 +1725,7 @@ function entryTemplate(settings) {
     "---",
     ""
   ];
-  for (const section of ["header", "onthisday", "reading", "song", "checkin"]) {
+  for (const section of ["header", "onthisday", "reading", "song", "watch", "play", "checkin"]) {
     const line = lines[section];
     if (!line)
       continue;
@@ -1344,6 +1739,12 @@ function entryTemplate(settings) {
     }
     if (section === "song" && lines.reading)
       continue;
+    if (section === "watch" && lines.play) {
+      parts.push(block(MEDIA_ROW_LINE));
+      continue;
+    }
+    if (section === "play" && lines.watch)
+      continue;
     parts.push(block(line));
   }
   for (const prompt of settings.prompts) {
@@ -1353,7 +1754,8 @@ function entryTemplate(settings) {
 }
 var BLOCK = (section) => new RegExp("```journal\\n" + section + "(?:[ \\t][^\\n]*)?\\n```\\n?");
 var ROW_LINE = "row reading song";
-var ROW = /```journal\nrow(?:[ \t]([^\n]*))?\n```\n?/;
+var MEDIA_ROW_LINE = "row watch play";
+var ROW = /```journal\nrow(?:[ \t]([^\n]*))?\n```\n?/g;
 function applyLayout(text, settings) {
   var _a;
   if (!BLOCK("header").test(text))
@@ -1365,8 +1767,8 @@ function applyLayout(text, settings) {
     out = BLOCK("reading").test(out) ? out.replace(new RegExp(HARDCOVER.source + "\\n?"), "") : out.replace(HARDCOVER, block("reading"));
   }
   out = out.replace(ROW, (_m, opts) => (opts != null ? opts : "").trim().split(/\s+/).filter(Boolean).map((o) => block(o)).join("\n"));
-  const order = ["header", "reading", "song", "checkin"];
-  for (const section of ["reading", "song", "checkin"]) {
+  const order = ["header", "reading", "song", "watch", "play", "checkin"];
+  for (const section of ["reading", "song", "watch", "play", "checkin"]) {
     const line = lines[section];
     if (line && BLOCK(section).test(out)) {
       out = out.replace(BLOCK(section), block(line));
@@ -1379,6 +1781,9 @@ function applyLayout(text, settings) {
   }
   if (lines.reading && lines.song && BLOCK("reading").test(out) && BLOCK("song").test(out)) {
     out = out.replace(BLOCK("reading"), block(ROW_LINE)).replace(new RegExp(BLOCK("song").source + "\\n?"), "");
+  }
+  if (lines.watch && lines.play && BLOCK("watch").test(out) && BLOCK("play").test(out)) {
+    out = out.replace(BLOCK("watch"), block(MEDIA_ROW_LINE)).replace(new RegExp(BLOCK("play").source + "\\n?"), "");
   }
   out = out.replace(new RegExp("\\n*" + BLOCK("onthisday").source), "\n");
   if (lines.onthisday)
@@ -1423,6 +1828,10 @@ async function renderSection(host, source, el, file) {
       return renderCheckIn(host, el, file, fm, blockFields(options));
     case "song":
       return renderSong(host, el, file, fm);
+    case "watch":
+      return renderWatch(host, el, file, fm);
+    case "play":
+      return renderGame(host, el, file, fm);
     case "onthisday":
       return renderOnThisDay(host, el, date, blockOnThisDay(options));
     case "row": {
@@ -2093,6 +2502,100 @@ function renderSong(host, el, file, fm) {
   else
     showEmpty();
 }
+function mediaCard(el, label, emptyText, emptyIcon, saved, draw, pick, save) {
+  const body = card(el, label).createDiv();
+  const show = (value) => {
+    var _a;
+    body.empty();
+    const row = body.createDiv({ cls: "dj-book dj-song dj-media" });
+    draw(row, value);
+    const actions = (_a = row.querySelector(".dj-book-info")) == null ? void 0 : _a.createDiv({ cls: "dj-song-actions" });
+    if (!actions)
+      return;
+    const change = actions.createEl("a", { cls: "dj-song-change", text: "Change", href: "#" });
+    change.onclick = (e) => {
+      e.preventDefault();
+      open();
+    };
+    const remove = actions.createEl("a", { cls: "dj-song-change", text: "Remove", href: "#" });
+    remove.onclick = (e) => {
+      e.preventDefault();
+      save(null);
+      showEmpty();
+    };
+  };
+  const open = () => pick((value) => {
+    show(value);
+    save(value);
+  });
+  const showEmpty = () => {
+    body.empty();
+    const add = body.createEl("button", { cls: "dj-song-add" });
+    (0, import_obsidian4.setIcon)(add.createSpan({ cls: "dj-song-add-icon" }), emptyIcon);
+    add.createSpan({ text: emptyText });
+    add.onclick = open;
+  };
+  if (saved)
+    show(saved);
+  else
+    showEmpty();
+}
+function coverImage(parent, src, cls, icon) {
+  const fallback = () => {
+    img == null ? void 0 : img.remove();
+    const d = createDiv({ cls: `${cls} dj-cover-fallback` });
+    (0, import_obsidian4.setIcon)(d, icon);
+    parent.prepend(d);
+  };
+  const img = src ? parent.createEl("img", { cls, attr: { src, alt: "" } }) : null;
+  if (img)
+    img.onerror = fallback;
+  else
+    fallback();
+}
+function renderWatch(host, el, file, fm) {
+  const { app, settings } = host;
+  const save = (w) => void app.fileManager.processFrontMatter(file, (f) => {
+    for (const k of WATCH_KEYS)
+      delete f[k];
+    if (w)
+      Object.assign(f, watchProperties(w));
+  });
+  mediaCard(el, "Watching", "Add a show or movie", "tv", savedWatch(fm), (row, w) => {
+    coverImage(row, w.poster, "dj-cover", w.kind === "movie" ? "film" : "tv");
+    const info = row.createDiv({ cls: "dj-book-info" });
+    const title = info.createEl("a", { cls: "dj-book-title", text: w.title, href: w.url, attr: { "aria-label": "Open on TMDB" } });
+    title.onclick = (e) => {
+      e.preventDefault();
+      window.open(w.url, "_blank");
+    };
+    shrinkToTwoLines(title);
+    const code = episodeCode(w);
+    const detail = code ? [code, w.episodeTitle].filter(Boolean).join(" \xB7 ") : [w.kind === "movie" ? "Movie" : "TV show", w.year].filter(Boolean).join(" \xB7 ");
+    shrinkToOneLine(info.createDiv({ cls: "dj-book-author", text: detail }));
+  }, (done) => new WatchPickerModal(app, settings.tmdbKey, done).open(), save);
+}
+function renderGame(host, el, file, fm) {
+  const { app, settings } = host;
+  const save = (g) => void app.fileManager.processFrontMatter(file, (f) => {
+    for (const k of GAME_KEYS)
+      delete f[k];
+    if (g)
+      Object.assign(f, gameProperties(g));
+  });
+  mediaCard(el, "Playing", "Add a game", "gamepad-2", savedGame(fm), (row, g) => {
+    coverImage(row, g.cover, "dj-cover dj-game-cover", "gamepad-2");
+    const info = row.createDiv({ cls: "dj-book-info" });
+    const title = info.createEl("a", { cls: "dj-book-title", text: g.title, href: g.url, attr: { "aria-label": "Open on RAWG" } });
+    title.onclick = (e) => {
+      e.preventDefault();
+      window.open(g.url, "_blank");
+    };
+    shrinkToTwoLines(title);
+    const platforms = g.platforms.slice(0, 2).join(", ") + (g.platforms.length > 2 ? "\u2026" : "");
+    shrinkToOneLine(info.createDiv({ cls: "dj-book-author", text: [g.year, platforms].filter(Boolean).join(" \xB7 ") }));
+  }, (done) => new GamePickerModal(app, settings.rawgKey, done).open(), save);
+}
 function pastMeals(host) {
   var _a, _b, _c;
   const counts = /* @__PURE__ */ new Map();
@@ -2387,6 +2890,64 @@ var JournalSettingTab = class extends import_obsidian5.PluginSettingTab {
         new import_obsidian5.Notice(`YouTube: ${e instanceof Error ? e.message : String(e)}`);
       }
     }));
+    const keyedCard = (name, desc, on, keyField, keyName, keyDesc2, test) => {
+      const hasKey = !!s[keyField];
+      const main = new import_obsidian5.Setting(card2()).setName(name).setDesc(desc);
+      main.addToggle((t) => t.setValue(s[on] && hasKey).setDisabled(!hasKey).setTooltip(hasKey ? "" : `Add a ${keyName} first`).onChange(async (v) => {
+        s[on] = v;
+        await save();
+      }));
+      sub(new import_obsidian5.Setting(group).setName(keyName).setDesc(keyDesc2)).addText((t) => {
+        t.inputEl.type = "password";
+        t.setPlaceholder("Paste your key").setValue(s[keyField]).onChange(async (v) => {
+          const had = !!s[keyField];
+          s[keyField] = v.trim();
+          if (!s[keyField])
+            s[on] = false;
+          await save();
+          if (had !== !!s[keyField])
+            this.display();
+        });
+      }).addButton((b) => b.setButtonText("Test").onClick(async () => {
+        if (!s[keyField]) {
+          new import_obsidian5.Notice(`Paste your ${keyName} first.`);
+          return;
+        }
+        try {
+          new import_obsidian5.Notice(await test(s[keyField]));
+        } catch (e) {
+          new import_obsidian5.Notice(e instanceof Error ? e.message : String(e));
+        }
+      }));
+    };
+    keyedCard(
+      "Watching",
+      "The movie or TV show you watched that day, or one episode of it: poster, title, and season and episode. Saved as properties (watching, watching_type, watching_season\u2026).",
+      "showWatching",
+      "tmdbKey",
+      "TMDB API key",
+      createFragment((f) => {
+        f.appendText("Free, from themoviedb.org: Settings \u2192 API. The API Key or the API Read Access Token both work. ");
+        f.createEl("a", { text: "How to get a key", href: "https://github.com/titandrive/Obsidian-DailyJournal#getting-a-tmdb-api-key" });
+        f.appendText(". This product uses the TMDB API but is not endorsed or certified by TMDB.");
+      }),
+      testTmdbKey
+    );
+    keyedCard(
+      "Playing",
+      "The video game you played that day: cover, title, year and platforms. Saved as properties (playing, playing_platforms\u2026).",
+      "showPlaying",
+      "rawgKey",
+      "RAWG API key",
+      createFragment((f) => {
+        f.appendText("Free, from rawg.io. ");
+        f.createEl("a", { text: "How to get a key", href: "https://github.com/titandrive/Obsidian-DailyJournal#getting-a-rawg-api-key" });
+        f.appendText(". Game data from ");
+        f.createEl("a", { text: "RAWG", href: "https://rawg.io" });
+        f.appendText(".");
+      }),
+      testRawgKey
+    );
     new import_obsidian5.Setting(card2()).setName("Check-in").setDesc("Fields saved as properties, so Bases can chart and query them. Hidden when all are off.");
     const fields = [
       ["rating", "Day rating (1\u201310)"],
@@ -2700,7 +3261,24 @@ var TrendsView = class extends import_obsidian6.BasesView {
     const shows = ranked(days.filter(podcast).map((d) => str(d.fm.artist)), 5);
     if (shows.length)
       barList(listening.card("Top podcasts"), shows);
-    for (const s of [overview, moodSleep, patterns, food, reading, listening]) {
+    const media = section("Watching and playing");
+    const watched = days.filter((d) => str(d.fm.watching));
+    const movies = new Set(watched.filter((d) => d.fm.watching_type === "movie").map((d) => str(d.fm.watching).toLowerCase()));
+    const showsWatched = new Set(watched.filter((d) => d.fm.watching_type !== "movie").map((d) => str(d.fm.watching).toLowerCase()));
+    const played = days.filter((d) => str(d.fm.playing));
+    if (watched.length) {
+      media.tile("Shows watched", String(showsWatched.size), `${watched.filter((d) => d.fm.watching_type !== "movie").length} days`);
+      media.tile("Movies watched", String(movies.size));
+    }
+    if (played.length)
+      media.tile("Games played", String(new Set(played.map((d) => str(d.fm.playing).toLowerCase())).size), `${played.length} days`);
+    const topShows = ranked(watched.filter((d) => d.fm.watching_type !== "movie").map((d) => str(d.fm.watching)), 5);
+    if (topShows.length)
+      barList(media.card("Most watched shows", "Days watched"), topShows);
+    const topGames = ranked(played.map((d) => str(d.fm.playing)), 5);
+    if (topGames.length)
+      barList(media.card("Most played games", "Days played"), topGames);
+    for (const s of [overview, moodSleep, patterns, food, reading, listening, media]) {
       if (s.el.childElementCount < 2 || !s.el.querySelector(".dj-trends-tile, .dj-trends-card"))
         s.el.remove();
     }
@@ -2976,6 +3554,8 @@ var CARD_PROPS = {
   reading: ["reading", "books", "pages_read"],
   hardcover: ["reading", "books", "pages_read"],
   song: SONG_KEYS,
+  watch: WATCH_KEYS,
+  play: GAME_KEYS,
   checkin: ["day_rating", "sleep", "worked", "exercise", "exercise_note", "breakfast", "lunch", "dinner", "ate", "skipped_meals", "tags"],
   onthisday: []
 };

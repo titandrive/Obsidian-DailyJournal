@@ -3,6 +3,8 @@ import { Moment } from "./dates";
 import { MAX_PROMPT_LEVEL, Place, Prompt } from "./settings";
 import { PlaceResult, searchPlaces } from "./weather";
 import { searchEpisodes, searchShows, searchSongs, showEpisodes, Song, SongKind, songFromLink, videoIdFromUrl } from "./music";
+import { episodeCode, Episode, episodesOf, searchTitles, Season, seasonsOf, Watch } from "./tmdb";
+import { Game, searchGames } from "./rawg";
 
 /** Month calendar for choosing a date. Days that already have an entry are marked (and can't be picked unless allowTaken). */
 export class MonthPicker extends Modal {
@@ -525,5 +527,213 @@ export class SongPickerModal extends SuggestModal<Song> {
 
 	onChooseSuggestion(song: Song): void {
 		this.onPick(song);
+	}
+}
+
+/** A row in the Watching dialog: a search result, "the whole show", a season, or an episode. */
+type WatchRow =
+	| { type: "title"; watch: Watch }
+	| { type: "whole"; watch: Watch }
+	| { type: "season"; watch: Watch; season: Season }
+	| { type: "episode"; watch: Watch; season: Season; episode: Episode };
+
+/**
+ * Search dialog for what you watched (TMDB). Pick a movie, or a show; for a show, pick "the whole
+ * show", or a season and then an episode. A bar above the results goes back a step.
+ */
+export class WatchPickerModal extends SuggestModal<WatchRow> {
+	private latest = 0;
+	private shown: WatchRow[] = [];
+	/** The show being browsed (and season, once picked), with the search to go back to. */
+	private show: { watch: Watch; query: string; seasons?: Season[]; season?: Season; episodes?: Episode[] } | null = null;
+	private bar!: HTMLElement;
+
+	constructor(app: App, private apiKey: string, private onPick: (watch: Watch) => void) {
+		super(app);
+		this.limit = 200;
+		this.modalEl.addClass("dj-song-modal", "dj-watch-modal");
+		this.setPlaceholder("Search movies and TV shows");
+		this.emptyStateText = "";
+		this.setInstructions([{ command: "↑↓", purpose: "to navigate" }, { command: "↵", purpose: "to pick" }, { command: "esc", purpose: "back / cancel" }]);
+		this.inputEl.parentElement?.addClass("dj-song-search-row");
+		this.bar = createDiv({ cls: "dj-show-bar" });
+		this.bar.hide();
+		this.inputEl.parentElement?.before(this.bar);
+		this.inputEl.addEventListener("keydown", (e) => {
+			if (e.key === "Escape" && this.show) { e.preventDefault(); e.stopPropagation(); this.back(); }
+		}, true);
+	}
+
+	onOpen(): void {
+		super.onOpen();
+		window.setTimeout(() => this.inputEl.focus(), 0);
+	}
+
+	/** The back bar: "← Better Call Saul" (or "← Season 4"). */
+	private drawBar(): void {
+		this.bar.empty();
+		if (!this.show) { this.bar.hide(); return; }
+		const back = this.bar.createEl("button", { cls: "dj-show-back", attr: { "aria-label": "Back" } });
+		setIcon(back.createSpan(), "arrow-left");
+		back.createSpan({ text: this.show.season ? `${this.show.watch.title} · ${this.show.season.name}` : this.show.watch.title });
+		back.onclick = () => this.back();
+		this.bar.show();
+	}
+
+	private back(): void {
+		if (!this.show) return;
+		if (this.show.season) {
+			this.show.season = undefined;
+			this.show.episodes = undefined;
+			this.setPlaceholder(`Filter ${this.show.watch.title} seasons`);
+		} else {
+			const query = this.show.query;
+			this.show = null;
+			this.setPlaceholder("Search movies and TV shows");
+			this.inputEl.value = query;
+		}
+		this.drawBar();
+		if (this.show) this.inputEl.value = "";
+		this.inputEl.focus();
+		this.inputEl.dispatchEvent(new Event("input"));
+	}
+
+	async getSuggestions(query: string): Promise<WatchRow[]> {
+		const term = query.trim().toLowerCase(), mine = ++this.latest;
+		try {
+			if (this.show?.season) {
+				// Episodes of the chosen season, filtered by what's typed.
+				const { watch, season } = this.show;
+				this.show.episodes ??= await episodesOf(this.apiKey, watch.id, season.number);
+				if (mine !== this.latest) return this.shown;
+				this.emptyStateText = "No episodes match.";
+				return (this.shown = this.show.episodes
+					.filter((e) => !term || e.title.toLowerCase().includes(term) || String(e.number) === term)
+					.map((episode) => ({ type: "episode", watch, season, episode })));
+			}
+			if (this.show) {
+				// The show itself, then its seasons.
+				const { watch } = this.show;
+				this.show.seasons ??= await seasonsOf(this.apiKey, watch.id);
+				if (mine !== this.latest) return this.shown;
+				const seasons = this.show.seasons.filter((s) => !term || s.name.toLowerCase().includes(term) || String(s.number) === term);
+				return (this.shown = [{ type: "whole", watch }, ...seasons.map((season): WatchRow => ({ type: "season", watch, season }))]);
+			}
+			if (term.length < 2) { this.emptyStateText = ""; return (this.shown = []); }
+			await new Promise((r) => window.setTimeout(r, 350)); // wait for a pause in typing
+			if (mine !== this.latest) return this.shown;
+			const found = await searchTitles(this.apiKey, query.trim());
+			if (mine !== this.latest) return this.shown;
+			this.emptyStateText = "Nothing found.";
+			return (this.shown = found.map((watch) => ({ type: "title", watch })));
+		} catch (e) {
+			this.emptyStateText = e instanceof Error ? e.message : String(e);
+			return (this.shown = []);
+		}
+	}
+
+	renderSuggestion(row: WatchRow, el: HTMLElement): void {
+		el.addClass("dj-song-suggestion");
+		const text = (title: string, meta: string) => {
+			const t = el.createDiv({ cls: "dj-song-result-text" });
+			t.createDiv({ cls: "dj-song-result-title", text: title });
+			if (meta) t.createDiv({ cls: "dj-song-result-meta", text: meta });
+		};
+		const arrow = () => setIcon(el.createSpan({ cls: "dj-show-row-arrow" }), "chevron-right");
+		if (row.type === "title") {
+			const w = row.watch;
+			const img = w.poster ? el.createEl("img", { cls: "dj-song-thumb dj-watch-thumb", attr: { src: w.poster, alt: "" } }) : null;
+			if (!img) setIcon(el.createDiv({ cls: "dj-song-thumb dj-watch-thumb dj-cover-fallback" }), w.kind === "movie" ? "film" : "tv");
+			text(w.title, [w.kind === "movie" ? "Movie" : "TV show", w.year].filter(Boolean).join(" · "));
+			if (w.kind === "tv") arrow();
+		} else if (row.type === "whole") {
+			setIcon(el.createDiv({ cls: "dj-song-thumb dj-cover-fallback" }), "tv");
+			text("The whole show", "No particular episode");
+		} else if (row.type === "season") {
+			setIcon(el.createDiv({ cls: "dj-song-thumb dj-cover-fallback" }), "list");
+			text(row.season.name, [row.season.episodes ? `${row.season.episodes} episodes` : "", row.season.year].filter(Boolean).join(" · "));
+			arrow();
+		} else {
+			const e = row.episode;
+			el.createDiv({ cls: "dj-song-thumb dj-cover-fallback dj-watch-epnum", text: String(e.number) });
+			text(e.title || `Episode ${e.number}`, [`S${row.season.number}E${e.number}`, e.date ? moment(e.date, "YYYY-MM-DD").format("MMM D, YYYY") : ""].filter(Boolean).join(" · "));
+		}
+	}
+
+	selectSuggestion(row: WatchRow, evt: MouseEvent | KeyboardEvent): void {
+		if (row.type === "title" && row.watch.kind === "tv") {
+			// A show: go on to "the whole show" or its seasons.
+			this.show = { watch: row.watch, query: this.inputEl.value };
+			this.setPlaceholder(`Filter ${row.watch.title} seasons`);
+		} else if (row.type === "season" && this.show) {
+			this.show.season = row.season;
+			this.setPlaceholder(`Filter ${row.season.name} episodes`);
+		} else {
+			super.selectSuggestion(row, evt);
+			return;
+		}
+		this.drawBar();
+		this.inputEl.value = "";
+		this.inputEl.focus();
+		this.inputEl.dispatchEvent(new Event("input"));
+	}
+
+	onChooseSuggestion(row: WatchRow): void {
+		if (row.type === "episode") {
+			this.onPick({ ...row.watch, season: row.season.number, episode: row.episode.number, episodeTitle: row.episode.title || null });
+		} else {
+			this.onPick({ ...row.watch, season: null, episode: null, episodeTitle: null });
+		}
+	}
+}
+
+/** Search dialog for the game you played (RAWG). */
+export class GamePickerModal extends SuggestModal<Game> {
+	private latest = 0;
+	private shown: Game[] = [];
+
+	constructor(app: App, private apiKey: string, private onPick: (game: Game) => void) {
+		super(app);
+		this.limit = 50;
+		this.modalEl.addClass("dj-song-modal", "dj-game-modal");
+		this.setPlaceholder("Search games");
+		this.emptyStateText = "";
+		this.inputEl.parentElement?.addClass("dj-song-search-row");
+		this.setInstructions([{ command: "↑↓", purpose: "to navigate" }, { command: "↵", purpose: "to pick" }, { command: "esc", purpose: "to cancel" }]);
+	}
+
+	onOpen(): void {
+		super.onOpen();
+		window.setTimeout(() => this.inputEl.focus(), 0);
+	}
+
+	async getSuggestions(query: string): Promise<Game[]> {
+		const term = query.trim(), mine = ++this.latest;
+		if (term.length < 2) { this.emptyStateText = ""; return (this.shown = []); }
+		await new Promise((r) => window.setTimeout(r, 350));
+		if (mine !== this.latest) return this.shown;
+		try {
+			const found = await searchGames(this.apiKey, term);
+			if (mine !== this.latest) return this.shown;
+			this.emptyStateText = "No games found.";
+			return (this.shown = found);
+		} catch (e) {
+			this.emptyStateText = e instanceof Error ? e.message : String(e);
+			return (this.shown = []);
+		}
+	}
+
+	renderSuggestion(game: Game, el: HTMLElement): void {
+		el.addClass("dj-song-suggestion");
+		const img = game.cover ? el.createEl("img", { cls: "dj-song-thumb", attr: { src: game.cover, alt: "" } }) : null;
+		if (!img) setIcon(el.createDiv({ cls: "dj-song-thumb dj-cover-fallback" }), "gamepad-2");
+		const t = el.createDiv({ cls: "dj-song-result-text" });
+		t.createDiv({ cls: "dj-song-result-title", text: game.title });
+		const platforms = game.platforms.slice(0, 3).join(", ") + (game.platforms.length > 3 ? "…" : "");
+		t.createDiv({ cls: "dj-song-result-meta", text: [game.year, platforms].filter(Boolean).join(" · ") });
+	}
+
+	onChooseSuggestion(game: Game): void {
+		this.onPick(game);
 	}
 }

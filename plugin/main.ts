@@ -10,6 +10,8 @@ import { applyLayout, blockShowsWeather, entryTemplate, parseBlock, SHOW_CHROME 
 import { entryPlace, fetchWeather } from "./src/weather";
 import { TRENDS_VIEW, TrendsView } from "./src/trends";
 import { SONG_KEYS } from "./src/music";
+import { WATCH_KEYS } from "./src/tmdb";
+import { GAME_KEYS } from "./src/rawg";
 import { BaseTabs } from "./src/basetabs";
 
 /**
@@ -21,6 +23,8 @@ const CARD_PROPS: Record<string, string[]> = {
 	reading: ["reading", "books", "pages_read"],
 	hardcover: ["reading", "books", "pages_read"],
 	song: SONG_KEYS,
+	watch: WATCH_KEYS,
+	play: GAME_KEYS,
 	checkin: ["day_rating", "sleep", "worked", "exercise", "exercise_note", "breakfast", "lunch", "dinner", "ate", "skipped_meals", "tags"],
 	onthisday: [],
 };
