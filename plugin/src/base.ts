@@ -54,7 +54,7 @@ export function journalBase(settings: JournalSettings): string {
 	if (f.sleep) columns.push(["sleep", "Sleep (h)"]);
 	if (f.work) columns.push(["worked", "Worked"]);
 	if (f.exercise) columns.push(["exercise", "Exercised"], ["exercise_note", "Exercise"]);
-	if (f.food) columns.push(["breakfast", "Breakfast"], ["lunch", "Lunch"], ["dinner", "Dinner"]);
+	if (f.food) columns.push(["breakfast", "Breakfast"], ["lunch", "Lunch"], ["dinner", "Dinner"], ["skipped_meals", "Skipped"]);
 	if (settings.showReading) columns.push(["books", "Book"], ["pages_read", "Pages"]);
 	if (settings.showSong) columns.push(["song", "Song"], ["artist", "Artist"]);
 	const monthly = ["formula.day", ...columns.map(([k]) => k).filter((k) => ["day_rating", "sleep", "worked", "exercise", "pages_read"].includes(k))];

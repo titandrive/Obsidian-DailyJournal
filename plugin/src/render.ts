@@ -382,18 +382,61 @@ function renderCheckIn(host: JournalHost, el: HTMLElement, file: TFile, fm: Fron
 	if (fields.food) {
 		const meals = item("Food");
 		meals.addClass("dj-meals");
-		const meal = (label: string, key: string, placeholder: string) => {
+		// Skipped meals are listed in `skipped_meals` (e.g. [breakfast, lunch]) rather than typed in, so
+		// Trends can count them; skipping clears whatever was written for that meal.
+		const skippedNow = (): string[] => {
+			const f = app.metadataCache.getFileCache(file)?.frontmatter ?? {};
+			const s = f.skipped_meals;
+			const listed = (Array.isArray(s) ? s : s ? [s] : []).map(String);
+			// Older entries where "skipped" was typed in count as skipped too.
+			const typed = ["breakfast", "lunch", "dinner"].filter((k) => typeof f[k] === "string" && /^skip(ped)?$/i.test(f[k].trim()));
+			return [...new Set([...listed, ...typed])];
+		};
+		let skipped = skippedNow();
+		const setSkipped = (key: string, on: boolean) => {
+			skipped = on ? [...skipped.filter((k) => k !== key), key] : skipped.filter((k) => k !== key);
+			return app.fileManager.processFrontMatter(file, (f) => {
+				const order = ["breakfast", "lunch", "dinner"];
+				const list = order.filter((k) => skipped.includes(k));
+				if (list.length) f.skipped_meals = list; else delete f.skipped_meals;
+				// Skipping clears what was written; un-skipping clears an old typed "skipped".
+				if (on || (typeof f[key] === "string" && /^skip(ped)?$/i.test(f[key].trim()))) delete f[key];
+			});
+		};
+		const meal = (label: string, key: string, placeholder: string, canSkip = true) => {
 			const row = meals.createDiv({ cls: "dj-meal" });
 			row.createSpan({ text: label });
 			const box = row.createDiv({ cls: "dj-meal-box" });
 			const t = textField(box, key, placeholder);
-			mealSuggest(host, t, box, (value) => { void save(key, value); });
+			if (!canSkip) {
+				mealSuggest(host, t, box, (value) => { void save(key, value); });
+				return;
+			}
+			const skip = row.createEl("button", { cls: "dj-meal-skip", text: "Skip", attr: { "aria-label": `Skipped ${label.toLowerCase()}` } });
+			const paint = () => {
+				const on = skipped.includes(key);
+				row.toggleClass("is-skipped", on);
+				skip.toggleClass("is-on", on);
+				skip.setText(on ? "Skipped" : "Skip");
+				t.disabled = on;
+				t.placeholder = on ? "Skipped" : placeholder;
+				if (on) t.value = "";
+			};
+			skip.onclick = () => { void setSkipped(key, !skipped.includes(key)); paint(); };
+			// Typing "skip" or "skipped" counts as tapping Skip.
+			const commit = (value: string) => {
+				if (/^skip(ped)?$/i.test(value.trim())) { void setSkipped(key, true); paint(); return; }
+				void save(key, value.trim() || null);
+			};
+			t.onchange = () => commit(t.value);
+			mealSuggest(host, t, box, commit);
+			paint();
 		};
 		meal("Breakfast", "breakfast", "What did you have for breakfast?");
 		meal("Lunch", "lunch", "What did you have for lunch?");
 		meal("Dinner", "dinner", "What did you have for dinner?");
 		// Older entries kept food in a single "ate" property; still show it so nothing disappears.
-		if (fm.ate) meal("Other", "ate", "");
+		if (fm.ate) meal("Other", "ate", "", false);
 	}
 
 	if (fields.tags) {
@@ -563,7 +606,7 @@ function pastMeals(host: JournalHost): string[] {
 		const fm = host.app.metadataCache.getFileCache(file)?.frontmatter;
 		for (const key of ["breakfast", "lunch", "dinner"]) {
 			const v = fm?.[key];
-			if (typeof v !== "string" || !v.trim()) continue;
+			if (typeof v !== "string" || !v.trim() || /^skip(ped)?$/i.test(v.trim())) continue;
 			const text = v.trim(), k = text.toLowerCase();
 			const c = counts.get(k) ?? { text, n: 0, spellings: new Map<string, number>() };
 			c.n++;

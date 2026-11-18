@@ -18,6 +18,14 @@ const num = (v: unknown): number | null => {
 	return Number.isFinite(n) ? n : null;
 };
 const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+/** What was eaten for a meal, or "" if nothing was written or it was skipped. */
+const mealText = (fm: Frontmatter, key: string): string => (skippedMeals(fm).includes(key) || /^skip(ped)?$/i.test(str(fm[key])) ? "" : str(fm[key]));
+/** Meals marked skipped (the skipped_meals list, or older entries where "skipped" was typed in). */
+function skippedMeals(fm: Frontmatter): string[] {
+	const s = fm.skipped_meals;
+	const listed = (Array.isArray(s) ? s : s ? [s] : []).map((x) => String(x).toLowerCase());
+	return ["breakfast", "lunch", "dinner"].filter((k) => listed.includes(k) || /^skip(ped)?$/i.test(str(fm[k])));
+}
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 const one = (n: number) => (Math.round(n * 10) / 10).toString();
 const times = (n: number) => `${n}×`;
@@ -138,13 +146,15 @@ export class TrendsView extends BasesView {
 			["Day off", (d) => d.fm.worked === false, (d) => d.fm.worked === true],
 			["Read", (d) => (num(d.fm.pages_read) ?? 0) > 0, (d) => !((num(d.fm.pages_read) ?? 0) > 0)],
 			["Podcast day", (d) => d.fm.song_kind === "podcast", (d) => !!str(d.fm.song) && d.fm.song_kind !== "podcast"],
+			...MEALS.map((k): [string, (d: Day) => boolean, (d: Day) => boolean] =>
+				[`Skipped ${k}`, (d) => skippedMeals(d.fm).includes(k), (d) => !!mealText(d.fm, k)]),
 			...SLEEP.map(([label, test]): [string, (d: Day) => boolean, (d: Day) => boolean] =>
 				[`Slept ${label.toLowerCase()}`, test, (d) => num(d.fm.sleep) !== null && !test(d)]),
 			...skies.map((s): [string, (d: Day) => boolean, (d: Day) => boolean] =>
 				[s, (d) => sky(d.fm) === s, (d) => !!sky(d.fm) && sky(d.fm) !== s]),
-			...ranked(days.flatMap((d) => MEALS.map((k) => str(d.fm[k]))), 50).filter((m) => m.value >= MIN_DAYS)
+			...ranked(days.flatMap((d) => MEALS.map((k) => mealText(d.fm, k))), 50).filter((m) => m.value >= MIN_DAYS)
 				.map((m): [string, (d: Day) => boolean, (d: Day) => boolean] => {
-					const ate = (d: Day) => MEALS.some((k) => str(d.fm[k]).toLowerCase() === m.label.toLowerCase());
+					const ate = (d: Day) => MEALS.some((k) => mealText(d.fm, k).toLowerCase() === m.label.toLowerCase());
 					return [m.label, ate, (d) => !ate(d)];
 				}),
 		];
@@ -184,8 +194,22 @@ export class TrendsView extends BasesView {
 
 		// Food
 		const food = section("Food");
-		const meals = ranked(days.flatMap((d) => MEALS.map((k) => str(d.fm[k]))), 5);
+		// Skipped meals: how often each meal is skipped, out of the days that meal was filled in or skipped.
+		const skipTotal = days.reduce((n, d) => n + skippedMeals(d.fm).length, 0);
+		const skipRows: Row[] = MEALS.map((k) => {
+			const pool = days.filter((d) => skippedMeals(d.fm).includes(k) || !!mealText(d.fm, k));
+			const n = pool.filter((d) => skippedMeals(d.fm).includes(k)).length;
+			const pct = pool.length ? Math.round((100 * n) / pool.length) : 0;
+			return { label: k[0].toUpperCase() + k.slice(1), value: n, text: `${n}× · ${pct}%`, hint: `Skipped on ${n} of ${pool.length} days` };
+		});
+		if (skipTotal) {
+			const most = [...skipRows].sort((a, b) => b.value - a.value)[0];
+			food.tile("Meals skipped", String(skipTotal), `${one(skipTotal / days.length)} per day`);
+			food.tile("Most skipped", most.label, `${most.text.split(" · ")[1]} of the time`);
+		}
+		const meals = ranked(days.flatMap((d) => MEALS.map((k) => mealText(d.fm, k))), 5);
 		if (meals.length) barList(food.card("Favorite meals", "Breakfast, lunch and dinner"), meals);
+		if (skipTotal) barList(food.card("Skipped meals", "Times skipped · share of days"), skipRows);
 
 		// Reading
 		const reading = section("Reading");
@@ -283,7 +307,8 @@ function goodVsBad(el: HTMLElement, good: Day[], bad: Day[], all: Day[]): void {
 	row("Exercised", (ds) => share(ds, "exercise"));
 	row("Worked", (ds) => share(ds, "worked"));
 	row("Most common weather", (ds) => top(ds.map((d) => sky(d.fm))));
-	row("Most common meal", (ds) => top(ds.flatMap((d) => MEALS.map((k) => str(d.fm[k])))));
+	row("Skipped a meal", (ds) => `${Math.round((100 * ds.filter((d) => skippedMeals(d.fm).length > 0).length) / ds.length)}%`);
+	row("Most common meal", (ds) => top(ds.flatMap((d) => MEALS.map((k) => mealText(d.fm, k)))));
 }
 
 /** "11/3/26–11/17/26": the full range, compact enough for a tile. */

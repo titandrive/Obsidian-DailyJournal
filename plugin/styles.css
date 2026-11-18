@@ -127,7 +127,7 @@ a.dj-book-title:hover { color: var(--text-accent); }
 }
 .dj-card textarea.dj-line:focus { border-bottom-color: var(--interactive-accent); outline: none; box-shadow: none; }
 .dj-meals { display: flex; flex-direction: column; gap: .6em; }
-.dj-meal { display: grid; grid-template-columns: 5.5em 1fr; align-items: baseline; gap: .8em; }
+.dj-meal { display: grid; grid-template-columns: 5.5em 1fr auto; align-items: baseline; gap: .8em; }
 .dj-meal > span { font-size: .8em; color: var(--text-faint); }
 
 .dj-tags { display: flex; flex-direction: column; gap: .5em; }
@@ -251,7 +251,8 @@ a.dj-book-title:hover { color: var(--text-accent); }
 	.dj-item:has(.dj-meals) > .dj-name { padding-top: 0; }
 	.dj-scale { display: grid; grid-template-columns: repeat(10, 1fr); gap: .25em; }
 	.dj-scale button { width: 100%; height: auto; aspect-ratio: 1; font-size: .78em; }
-	.dj-meal { grid-template-columns: 1fr; gap: .15em; }
+	.dj-meal { grid-template-columns: 1fr auto; gap: .15em .6em; }
+	.dj-meal > span { grid-column: 1 / -1; }
 	.dj-date { font-size: 1.55em; }
 }
 
@@ -438,3 +439,7 @@ button.dj-prompt-add { display: flex; align-items: center; gap: .4em; margin-top
 .dj-trends-up { height: 100%; background: var(--color-green); border-radius: 0 4px 4px 0; }
 .dj-trends-down { height: 100%; background: var(--color-orange); border-radius: 4px 0 0 4px; }
 .dj-trends-foot { margin-top: var(--size-4-3); }
+.dj-card button.dj-meal-skip { font-size: .75em; padding: .15em .6em; height: auto; border-radius: var(--radius-s); background: transparent; box-shadow: none; border: 1px solid var(--background-modifier-border); color: var(--text-faint); cursor: pointer; align-self: center; }
+.dj-card button.dj-meal-skip:hover { color: var(--text-muted); border-color: var(--background-modifier-border-hover); }
+.dj-card button.dj-meal-skip.is-on { background: color-mix(in srgb, var(--interactive-accent) 20%, transparent); border-color: transparent; color: var(--interactive-accent); }
+.dj-meal.is-skipped textarea.dj-line { opacity: .6; }

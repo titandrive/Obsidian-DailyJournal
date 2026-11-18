@@ -85,7 +85,7 @@ function journalBase(settings) {
   if (f.exercise)
     columns.push(["exercise", "Exercised"], ["exercise_note", "Exercise"]);
   if (f.food)
-    columns.push(["breakfast", "Breakfast"], ["lunch", "Lunch"], ["dinner", "Dinner"]);
+    columns.push(["breakfast", "Breakfast"], ["lunch", "Lunch"], ["dinner", "Dinner"], ["skipped_meals", "Skipped"]);
   if (settings.showReading)
     columns.push(["books", "Book"], ["pages_read", "Pages"]);
   if (settings.showSong)
@@ -1731,20 +1731,71 @@ function renderCheckIn(host, el, file, fm, fields) {
   if (fields.food) {
     const meals = item("Food");
     meals.addClass("dj-meals");
-    const meal = (label, key, placeholder) => {
+    const skippedNow = () => {
+      var _a, _b;
+      const f = (_b = (_a = app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter) != null ? _b : {};
+      const s = f.skipped_meals;
+      const listed = (Array.isArray(s) ? s : s ? [s] : []).map(String);
+      const typed = ["breakfast", "lunch", "dinner"].filter((k) => typeof f[k] === "string" && /^skip(ped)?$/i.test(f[k].trim()));
+      return [.../* @__PURE__ */ new Set([...listed, ...typed])];
+    };
+    let skipped = skippedNow();
+    const setSkipped = (key, on) => {
+      skipped = on ? [...skipped.filter((k) => k !== key), key] : skipped.filter((k) => k !== key);
+      return app.fileManager.processFrontMatter(file, (f) => {
+        const order = ["breakfast", "lunch", "dinner"];
+        const list2 = order.filter((k) => skipped.includes(k));
+        if (list2.length)
+          f.skipped_meals = list2;
+        else
+          delete f.skipped_meals;
+        if (on || typeof f[key] === "string" && /^skip(ped)?$/i.test(f[key].trim()))
+          delete f[key];
+      });
+    };
+    const meal = (label, key, placeholder, canSkip = true) => {
       const row = meals.createDiv({ cls: "dj-meal" });
       row.createSpan({ text: label });
       const box = row.createDiv({ cls: "dj-meal-box" });
       const t = textField(box, key, placeholder);
-      mealSuggest(host, t, box, (value) => {
-        void save(key, value);
-      });
+      if (!canSkip) {
+        mealSuggest(host, t, box, (value) => {
+          void save(key, value);
+        });
+        return;
+      }
+      const skip = row.createEl("button", { cls: "dj-meal-skip", text: "Skip", attr: { "aria-label": `Skipped ${label.toLowerCase()}` } });
+      const paint = () => {
+        const on = skipped.includes(key);
+        row.toggleClass("is-skipped", on);
+        skip.toggleClass("is-on", on);
+        skip.setText(on ? "Skipped" : "Skip");
+        t.disabled = on;
+        t.placeholder = on ? "Skipped" : placeholder;
+        if (on)
+          t.value = "";
+      };
+      skip.onclick = () => {
+        void setSkipped(key, !skipped.includes(key));
+        paint();
+      };
+      const commit = (value) => {
+        if (/^skip(ped)?$/i.test(value.trim())) {
+          void setSkipped(key, true);
+          paint();
+          return;
+        }
+        void save(key, value.trim() || null);
+      };
+      t.onchange = () => commit(t.value);
+      mealSuggest(host, t, box, commit);
+      paint();
     };
     meal("Breakfast", "breakfast", "What did you have for breakfast?");
     meal("Lunch", "lunch", "What did you have for lunch?");
     meal("Dinner", "dinner", "What did you have for dinner?");
     if (fm.ate)
-      meal("Other", "ate", "");
+      meal("Other", "ate", "", false);
   }
   if (fields.tags) {
     const box = item("Tags");
@@ -1949,7 +2000,7 @@ function pastMeals(host) {
     const fm = (_a = host.app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter;
     for (const key of ["breakfast", "lunch", "dinner"]) {
       const v = fm == null ? void 0 : fm[key];
-      if (typeof v !== "string" || !v.trim())
+      if (typeof v !== "string" || !v.trim() || /^skip(ped)?$/i.test(v.trim()))
         continue;
       const text = v.trim(), k = text.toLowerCase();
       const c = (_b = counts.get(k)) != null ? _b : { text, n: 0, spellings: /* @__PURE__ */ new Map() };
@@ -2280,6 +2331,12 @@ var num = (v) => {
   return Number.isFinite(n) ? n : null;
 };
 var str = (v) => typeof v === "string" ? v.trim() : "";
+var mealText = (fm, key) => skippedMeals(fm).includes(key) || /^skip(ped)?$/i.test(str(fm[key])) ? "" : str(fm[key]);
+function skippedMeals(fm) {
+  const s = fm.skipped_meals;
+  const listed = (Array.isArray(s) ? s : s ? [s] : []).map((x) => String(x).toLowerCase());
+  return ["breakfast", "lunch", "dinner"].filter((k) => listed.includes(k) || /^skip(ped)?$/i.test(str(fm[k])));
+}
 var mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
 var one = (n) => (Math.round(n * 10) / 10).toString();
 var times = (n) => `${n}\xD7`;
@@ -2406,10 +2463,11 @@ var TrendsView = class extends import_obsidian6.BasesView {
         return !(((_a2 = num(d.fm.pages_read)) != null ? _a2 : 0) > 0);
       }],
       ["Podcast day", (d) => d.fm.song_kind === "podcast", (d) => !!str(d.fm.song) && d.fm.song_kind !== "podcast"],
+      ...MEALS.map((k) => [`Skipped ${k}`, (d) => skippedMeals(d.fm).includes(k), (d) => !!mealText(d.fm, k)]),
       ...SLEEP.map(([label, test]) => [`Slept ${label.toLowerCase()}`, test, (d) => num(d.fm.sleep) !== null && !test(d)]),
       ...skies.map((s) => [s, (d) => sky(d.fm) === s, (d) => !!sky(d.fm) && sky(d.fm) !== s]),
-      ...ranked(days.flatMap((d) => MEALS.map((k) => str(d.fm[k]))), 50).filter((m) => m.value >= MIN_DAYS).map((m) => {
-        const ate = (d) => MEALS.some((k) => str(d.fm[k]).toLowerCase() === m.label.toLowerCase());
+      ...ranked(days.flatMap((d) => MEALS.map((k) => mealText(d.fm, k))), 50).filter((m) => m.value >= MIN_DAYS).map((m) => {
+        const ate = (d) => MEALS.some((k) => mealText(d.fm, k).toLowerCase() === m.label.toLowerCase());
         return [m.label, ate, (d) => !ate(d)];
       })
     ];
@@ -2452,9 +2510,23 @@ var TrendsView = class extends import_obsidian6.BasesView {
       goodVsBad(c, rated((r) => r >= GOOD_DAY), rated((r) => r <= BAD_DAY), days);
     }
     const food = section("Food");
-    const meals = ranked(days.flatMap((d) => MEALS.map((k) => str(d.fm[k]))), 5);
+    const skipTotal = days.reduce((n, d) => n + skippedMeals(d.fm).length, 0);
+    const skipRows = MEALS.map((k) => {
+      const pool = days.filter((d) => skippedMeals(d.fm).includes(k) || !!mealText(d.fm, k));
+      const n = pool.filter((d) => skippedMeals(d.fm).includes(k)).length;
+      const pct = pool.length ? Math.round(100 * n / pool.length) : 0;
+      return { label: k[0].toUpperCase() + k.slice(1), value: n, text: `${n}\xD7 \xB7 ${pct}%`, hint: `Skipped on ${n} of ${pool.length} days` };
+    });
+    if (skipTotal) {
+      const most = [...skipRows].sort((a, b) => b.value - a.value)[0];
+      food.tile("Meals skipped", String(skipTotal), `${one(skipTotal / days.length)} per day`);
+      food.tile("Most skipped", most.label, `${most.text.split(" \xB7 ")[1]} of the time`);
+    }
+    const meals = ranked(days.flatMap((d) => MEALS.map((k) => mealText(d.fm, k))), 5);
     if (meals.length)
       barList(food.card("Favorite meals", "Breakfast, lunch and dinner"), meals);
+    if (skipTotal)
+      barList(food.card("Skipped meals", "Times skipped \xB7 share of days"), skipRows);
     const reading = section("Reading");
     const finished = days.flatMap((d) => finishedBooks(d.fm).map((title) => ({ title, date: d.date })));
     if (pages) {
@@ -2544,7 +2616,8 @@ function goodVsBad(el, good, bad, all) {
   row("Exercised", (ds) => share(ds, "exercise"));
   row("Worked", (ds) => share(ds, "worked"));
   row("Most common weather", (ds) => top(ds.map((d) => sky(d.fm))));
-  row("Most common meal", (ds) => top(ds.flatMap((d) => MEALS.map((k) => str(d.fm[k])))));
+  row("Skipped a meal", (ds) => `${Math.round(100 * ds.filter((d) => skippedMeals(d.fm).length > 0).length / ds.length)}%`);
+  row("Most common meal", (ds) => top(ds.flatMap((d) => MEALS.map((k) => mealText(d.fm, k)))));
 }
 function dateRange(from, to) {
   return `${from.format("M/D/YY")}\u2013${to.format("M/D/YY")}`;
