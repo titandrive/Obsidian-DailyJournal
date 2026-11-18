@@ -502,14 +502,17 @@ button.dj-prompt-add { display: flex; align-items: center; gap: .4em; margin-top
 .dj-mood-modal button.dj-mood-family:hover { background: color-mix(in srgb, var(--dj-mood) 20%, var(--background-secondary)); }
 .dj-mood-family-name { display: flex; align-items: center; gap: .45em; font-weight: 600; }
 .dj-mood-family-hint { font-size: var(--font-ui-smaller); color: var(--text-muted); }
-.dj-mood-modal button.dj-mood-word:disabled { opacity: .4; cursor: default; }
+.dj-mood-modal button.dj-mood-word.is-full { opacity: .4; cursor: default; }
 .dj-mood-modal .dj-mood-back { margin-bottom: var(--size-4-2); }
 /* Words are tiles like the families: tinted in the family's color, brighter on hover, filled when picked. */
 .dj-mood-words { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: var(--size-4-2); }
 .dj-mood-words.dj-mood-rows { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .dj-mood-modal button.dj-mood-word { height: auto; min-height: 2.6em; padding: .55em .7em; justify-content: flex-start; text-align: left; white-space: normal; box-shadow: none; cursor: pointer;
 	background: color-mix(in srgb, var(--dj-mood, var(--text-faint)) 10%, var(--background-secondary)); border: 1px solid color-mix(in srgb, var(--dj-mood, var(--text-faint)) 35%, transparent); }
-.dj-mood-modal button.dj-mood-word:not(:disabled):hover { background: color-mix(in srgb, var(--dj-mood, var(--text-faint)) 22%, var(--background-secondary)); border-color: color-mix(in srgb, var(--dj-mood, var(--text-faint)) 60%, transparent); }
+.dj-mood-modal button.dj-mood-word:not(.is-full):hover { background: color-mix(in srgb, var(--dj-mood, var(--text-faint)) 22%, var(--background-secondary)); border-color: color-mix(in srgb, var(--dj-mood, var(--text-faint)) 60%, transparent); }
 .dj-mood-modal button.dj-mood-word.is-main { font-weight: 600; }
 .dj-mood-modal button.dj-mood-word.is-on, .dj-mood-modal button.dj-mood-word.is-on:hover { background: color-mix(in srgb, var(--dj-mood, var(--interactive-accent)) 38%, var(--background-secondary)); border-color: var(--dj-mood, var(--interactive-accent)); }
 .dj-mood-modal button.dj-mood-own { border-style: dashed; color: var(--text-muted); background: transparent; }
+/* Keyboard focus: a clear ring in the tile's own color. */
+.dj-mood-modal button.dj-mood-family:focus-visible, .dj-mood-modal button.dj-mood-word:focus-visible { outline: 2px solid var(--dj-mood, var(--interactive-accent)); outline-offset: 1px; box-shadow: none; }
+.dj-mood-modal .dj-mood-keys { margin-top: var(--size-4-2); padding: 0; border-top: none; }

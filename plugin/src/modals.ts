@@ -538,6 +538,8 @@ export class MoodPickerModal extends Modal {
 	private picked: string[];
 	/** The core feeling opened, or null for the seven tiles. */
 	private family: MoodFamily | null = null;
+	/** Which tile to focus after the next redraw (keyboard use), or null to leave focus alone. */
+	private focusAt: number | null = null;
 	private search!: HTMLInputElement;
 	private chosenEl!: HTMLElement;
 	private bodyEl!: HTMLElement;
@@ -570,8 +572,84 @@ export class MoodPickerModal extends Modal {
 		foot.createEl("button", { text: "Cancel" }).onclick = () => this.close();
 		const done = foot.createEl("button", { cls: "mod-cta", text: "Done" });
 		done.onclick = () => this.finish();
+		// Key hints, like Obsidian's own pickers.
+		const hints = contentEl.createDiv({ cls: "prompt-instructions dj-mood-keys" });
+		for (const [key, what] of [["↑↓←→", "move"], ["↵", "pick"], ["⌫", "back"], ["Ctrl ↵", "done"]]) {
+			const h = hints.createDiv({ cls: "prompt-instruction" });
+			h.createSpan({ cls: "prompt-instruction-command", text: key });
+			h.createSpan({ text: what });
+		}
+		// Captured here so Escape can go back a step instead of closing the whole dialog.
+		this.modalEl.addEventListener("keydown", (e) => this.onKey(e), true);
 		this.draw();
 		window.setTimeout(() => this.search.focus(), 0);
+	}
+
+	/** The tiles you can move between (the families, or the words), in order. */
+	private tiles(): HTMLButtonElement[] {
+		return Array.from(this.bodyEl.querySelectorAll<HTMLButtonElement>("button.dj-mood-family, button.dj-mood-word"));
+	}
+
+	private focusTile(i: number): void {
+		const tiles = this.tiles();
+		if (!tiles.length) return;
+		tiles[Math.max(0, Math.min(i, tiles.length - 1))].focus();
+	}
+
+	/** The tile above or below, nearest to the same column (the grid wraps, so this goes by position). */
+	private vertical(from: HTMLElement, down: boolean): number | null {
+		const tiles = this.tiles();
+		const r = from.getBoundingClientRect();
+		const x = r.left + r.width / 2;
+		const rows = tiles.map((b) => b.getBoundingClientRect());
+		const next = rows.map((b, i) => ({ i, b })).filter(({ b }) => (down ? b.top > r.top + 2 : b.top < r.top - 2));
+		if (!next.length) return null;
+		const rowTop = down ? Math.min(...next.map(({ b }) => b.top)) : Math.max(...next.map(({ b }) => b.top));
+		const row = next.filter(({ b }) => Math.abs(b.top - rowTop) < 2);
+		row.sort((a, b) => Math.abs(a.b.left + a.b.width / 2 - x) - Math.abs(b.b.left + b.b.width / 2 - x));
+		return row[0].i;
+	}
+
+	/** Back from a core feeling to the seven tiles, with focus on the one you came from. */
+	private back(): void {
+		if (!this.family) return;
+		this.focusAt = moodFamilies().indexOf(this.family);
+		this.family = null;
+		this.draw();
+	}
+
+	private onKey(e: KeyboardEvent): void {
+		const target = e.target as HTMLElement;
+		const inSearch = target === this.search;
+		const tiles = this.tiles();
+		const at = tiles.indexOf(target as HTMLButtonElement);
+		const handled = () => { e.preventDefault(); e.stopPropagation(); };
+		if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { handled(); this.finish(); return; }
+		if (e.key === "Escape" && inSearch && this.search.value) { handled(); this.search.value = ""; this.draw(); return; }
+		if (e.key === "Escape" && this.family) { handled(); this.back(); return; }
+		if (inSearch) {
+			if (e.key === "ArrowDown" && tiles.length) { handled(); this.focusTile(0); }
+			else if (e.key === "Backspace" && !this.search.value && this.family) { handled(); this.back(); }
+			return;
+		}
+		if (at < 0) return;
+		let to: number | null = null;
+		if (e.key === "ArrowRight") to = at + 1 < tiles.length ? at + 1 : at;
+		else if (e.key === "ArrowLeft") to = Math.max(0, at - 1);
+		else if (e.key === "ArrowDown") to = this.vertical(target, true) ?? at;
+		else if (e.key === "ArrowUp") {
+			to = this.vertical(target, false);
+			if (to === null) { handled(); this.search.focus(); return; }
+		} else if (e.key === "Backspace") { handled(); if (this.family) this.back(); else this.search.focus(); return; }
+		else if (e.key.length === 1 && e.key !== " " && !e.ctrlKey && !e.metaKey && !e.altKey) {
+			// Typing on a tile goes to the search box.
+			handled();
+			this.search.focus();
+			this.search.value += e.key;
+			this.search.dispatchEvent(new Event("input"));
+			return;
+		}
+		if (to !== null) { handled(); tiles[to].focus(); }
 	}
 
 	onClose(): void {
@@ -597,13 +675,25 @@ export class MoodPickerModal extends Modal {
 	private wordChip(parent: HTMLElement, word: string, main = false): void {
 		const on = this.picked.includes(word);
 		const full = !on && this.picked.length >= MAX_MOODS;
-		const b = parent.createEl("button", { cls: "dj-mood-word" + (on ? " is-on" : "") + (main ? " is-main" : ""), text: word, attr: full ? { disabled: "" } : {} });
+		const b = parent.createEl("button", { cls: "dj-mood-word" + (on ? " is-on" : "") + (main ? " is-main" : "") + (full ? " is-full" : ""), text: word, attr: full ? { "aria-disabled": "true" } : {} });
 		const family = familyOf(word);
 		if (family) b.style.setProperty("--dj-mood", family.color);
-		b.onclick = () => { this.toggle(word); this.draw(); };
+		b.onclick = () => { if (full) return; this.keepFocus(); this.toggle(word); this.draw(); };
 	}
 
+	/** Before a redraw: if a tile has focus, focus the same spot again afterwards. */
+	private keepFocus(): void {
+		const at = this.tiles().indexOf(activeDocument.activeElement as HTMLButtonElement);
+		if (at >= 0) this.focusAt = at;
+	}
+
+	/** Redraw, then put keyboard focus back where it was asked to go. */
 	private draw(): void {
+		this.paint();
+		if (this.focusAt !== null) { this.focusTile(this.focusAt); this.focusAt = null; }
+	}
+
+	private paint(): void {
 		// What's picked so far, at the top.
 		this.chosenEl.empty();
 		this.chosenEl.toggle(this.picked.length > 0);
@@ -626,8 +716,8 @@ export class MoodPickerModal extends Modal {
 			const words = this.bodyEl.createDiv({ cls: "dj-mood-words" });
 			for (const w of found) this.wordChip(words, w);
 			if (!found.includes(term)) {
-				const own = words.createEl("button", { cls: "dj-mood-word dj-mood-own", text: `Add "${term}"`, attr: this.picked.length >= MAX_MOODS ? { disabled: "" } : {} });
-				own.onclick = () => { this.toggle(term); this.search.value = ""; this.draw(); };
+				const own = words.createEl("button", { cls: "dj-mood-word dj-mood-own" + (this.picked.length >= MAX_MOODS ? " is-full" : ""), text: `Add "${term}"` });
+				own.onclick = () => { if (this.picked.length >= MAX_MOODS) return; this.toggle(term); this.search.value = ""; this.draw(); };
 			}
 			return;
 		}
@@ -637,7 +727,7 @@ export class MoodPickerModal extends Modal {
 			const back = this.bodyEl.createEl("button", { cls: "dj-show-back dj-mood-back" });
 			setIcon(back.createSpan(), "arrow-left");
 			back.createSpan({ text: f.name });
-			back.onclick = () => { this.family = null; this.draw(); };
+			back.onclick = () => this.back();
 			const rows = this.bodyEl.createDiv({ cls: "dj-mood-words dj-mood-rows" });
 			for (const r of f.rows) {
 				this.wordChip(rows, r.word, true);
@@ -655,7 +745,12 @@ export class MoodPickerModal extends Modal {
 			head.createSpan({ text: f.name });
 			const count = this.picked.filter((w) => f.words.includes(w)).length;
 			tile.createDiv({ cls: "dj-mood-family-hint", text: count ? `${count} picked` : f.rows.slice(0, 3).map((r) => r.word).join(", ") + "…" });
-			tile.onclick = () => { this.family = f; this.draw(); };
+			tile.onclick = () => {
+				// From the keyboard (or a tap), land on the first word so arrows work straight away.
+				if (this.tiles().includes(activeDocument.activeElement as HTMLButtonElement)) this.focusAt = 0;
+				this.family = f;
+				this.draw();
+			};
 		}
 	}
 }
