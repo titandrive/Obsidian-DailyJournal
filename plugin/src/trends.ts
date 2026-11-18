@@ -29,7 +29,7 @@ function skippedMeals(fm: Frontmatter): string[] {
 }
 /** The mood words an entry saved (lowercase). */
 const moodsOf = (fm: Frontmatter): string[] => (Array.isArray(fm.mood) ? fm.mood : fm.mood ? [fm.mood] : []).map((m) => String(m).trim().toLowerCase()).filter(Boolean);
-/** The core feelings (Angry, Sad...) an entry's moods belong to, each once. */
+/** The core feelings (Anger, Sadness...) an entry's moods belong to, each once. */
 const feelingsOf = (fm: Frontmatter): string[] => [...new Set(moodsOf(fm).map((m) => familyOf(m)?.name).filter((n): n is string => !!n))];
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 const one = (n: number) => (Math.round(n * 10) / 10).toString();

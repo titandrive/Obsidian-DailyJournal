@@ -1,180 +1,48 @@
 {
-  "Angry": {
-    "Let down": [
-      "Betrayed",
-      "Resentful"
-    ],
-    "Humiliated": [
-      "Disrespected",
-      "Ridiculed"
-    ],
-    "Bitter": [
-      "Indignant",
-      "Violated"
-    ],
-    "Mad": [
-      "Furious",
-      "Jealous"
-    ],
-    "Aggressive": [
-      "Provoked",
-      "Hostile"
-    ],
-    "Frustrated": [
-      "Infuriated",
-      "Annoyed"
-    ],
-    "Distant": [
-      "Withdrawn",
-      "Numb"
-    ],
-    "Critical": [
-      "Skeptical",
-      "Dismissive"
-    ]
+  "Anger": {
+    "enraged": ["hateful", "hostile"],
+    "exasperated": ["agitated", "frustrated"],
+    "irritable": ["annoyed", "aggravated"],
+    "jealous": ["resentful", "envious"],
+    "disgusted": ["contemptuous", "revolted"]
   },
-  "Disgusted": {
-    "Disapproving": [
-      "Judgmental",
-      "Embarrassed"
-    ],
-    "Disappointed": [
-      "Appalled",
-      "Revolted"
-    ],
-    "Awful": [
-      "Nauseated",
-      "Detestable"
-    ],
-    "Repelled": [
-      "Horrified",
-      "Hesitant"
-    ]
+  "Fear": {
+    "scared": ["frightened", "helpless"],
+    "terrified": ["panicked", "hysterical"],
+    "insecure": ["inferior", "inadequate"],
+    "nervous": ["worried", "anxious"],
+    "horrified": ["mortified", "dreadful"]
   },
-  "Fearful": {
-    "Scared": [
-      "Helpless",
-      "Frightened"
-    ],
-    "Anxious": [
-      "Overwhelmed",
-      "Worried"
-    ],
-    "Insecure": [
-      "Inadequate",
-      "Inferior"
-    ],
-    "Weak": [
-      "Worthless",
-      "Insignificant"
-    ],
-    "Rejected": [
-      "Excluded",
-      "Persecuted"
-    ],
-    "Threatened": [
-      "Nervous",
-      "Exposed"
-    ]
+  "Sadness": {
+    "hurt": ["agonized", "disturbed"],
+    "unhappy": ["miserable", "disheartened"],
+    "disappointed": ["dismayed", "displeased"],
+    "shameful": ["regretful", "guilty"],
+    "lonely": ["isolated", "neglected"],
+    "gloomy": ["hopeless", "depressed"]
   },
-  "Sad": {
-    "Lonely": [
-      "Isolated",
-      "Abandoned"
-    ],
-    "Vulnerable": [
-      "Victimized",
-      "Fragile"
-    ],
-    "Despair": [
-      "Grief",
-      "Powerless"
-    ],
-    "Guilty": [
-      "Ashamed",
-      "Remorseful"
-    ],
-    "Depressed": [
-      "Inferior",
-      "Empty"
-    ],
-    "Hurt": [
-      "Embarrassed",
-      "Disappointed"
-    ]
+  "Surprise": {
+    "moved": ["touched", "stimulated"],
+    "overcome": ["astounded", "speechless"],
+    "amazed": ["awe-struck", "astonished"],
+    "confused": ["perplexed", "disillusioned"],
+    "stunned": ["bewildered", "shocked"]
   },
-  "Bad": {
-    "Bored": [
-      "Indifferent",
-      "Apathetic"
-    ],
-    "Busy": [
-      "Pressured",
-      "Rushed"
-    ],
-    "Stressed": [
-      "Overwhelmed",
-      "Out of control"
-    ],
-    "Tired": [
-      "Sleepy",
-      "Unfocused"
-    ]
+  "Love": {
+    "enchanted": ["enthralled", "rapturous"],
+    "romantic": ["passionate", "enamored"],
+    "affectionate": ["warmhearted", "compassionate"],
+    "sentimental": ["tender", "nostalgic"],
+    "grateful": ["appreciative", "thankful"]
   },
-  "Surprised": {
-    "Startled": [
-      "Shocked",
-      "Dismayed"
-    ],
-    "Confused": [
-      "Disillusioned",
-      "Perplexed"
-    ],
-    "Amazed": [
-      "Astonished",
-      "Awe"
-    ],
-    "Excited": [
-      "Eager",
-      "Energetic"
-    ]
-  },
-  "Happy": {
-    "Playful": [
-      "Aroused",
-      "Cheeky"
-    ],
-    "Content": [
-      "Free",
-      "Joyful"
-    ],
-    "Interested": [
-      "Curious",
-      "Inquisitive"
-    ],
-    "Proud": [
-      "Successful",
-      "Confident"
-    ],
-    "Accepted": [
-      "Respected",
-      "Valued"
-    ],
-    "Powerful": [
-      "Courageous",
-      "Creative"
-    ],
-    "Peaceful": [
-      "Loving",
-      "Thankful"
-    ],
-    "Trusting": [
-      "Sensitive",
-      "Intimate"
-    ],
-    "Optimistic": [
-      "Hopeful",
-      "Inspired"
-    ]
+  "Joy": {
+    "euphoric": ["jubilant", "elated"],
+    "excited": ["zealous", "enthusiastic"],
+    "optimistic": ["hopeful", "eager"],
+    "proud": ["illustrious", "triumphant"],
+    "cheerful": ["playful", "amused"],
+    "happy": ["delighted", "jovial"],
+    "content": ["pleased", "satisfied"],
+    "peaceful": ["serene", "tranquil"]
   }
 }

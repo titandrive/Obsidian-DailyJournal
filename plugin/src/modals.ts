@@ -531,12 +531,12 @@ export class SongPickerModal extends SuggestModal<Song> {
 
 /**
  * The mood finder: pick how you feel, in one to three words. Start from a core feeling on the
- * Feelings Wheel (Angry, Sad, Happy...) and pick the word that fits best, or search every word. A word that
+ * Junto Emotion Wheel (Anger, Sadness, Joy...) and pick the word that fits best, or search every word. A word that
  * isn't listed can be typed and added with Enter. Done saves; Escape leaves things as they were.
  */
 export class MoodPickerModal extends Modal {
 	private picked: string[];
-	/** The core feeling opened, or null for the seven tiles. */
+	/** The core feeling opened, or null for the six tiles. */
 	private family: MoodFamily | null = null;
 	/** Which tile to focus after the next redraw (keyboard use), or null to leave focus alone. */
 	private focusAt: number | null = null;
@@ -612,7 +612,7 @@ export class MoodPickerModal extends Modal {
 		return row[0].i;
 	}
 
-	/** Back from a core feeling to the seven tiles, with focus on the one you came from. */
+	/** Back from a core feeling to the six tiles, with focus on the one you came from. */
 	private back(): void {
 		if (!this.family) return;
 		this.focusAt = moodFamilies().indexOf(this.family);
@@ -711,7 +711,7 @@ export class MoodPickerModal extends Modal {
 		this.chosenEl.createSpan({ cls: "dj-mood-count", text: `${this.picked.length} of ${MAX_MOODS}` });
 
 		this.bodyEl.empty();
-		// Search is for the seven tiles; a core feeling's page is short enough without it.
+		// Search is for the six tiles; a core feeling's page is short enough without it.
 		this.search.toggle(!this.family);
 		const term = this.search.value.trim().toLowerCase();
 		if (term) {
@@ -747,7 +747,7 @@ export class MoodPickerModal extends Modal {
 			}
 			return;
 		}
-		// The seven core feelings, unpleasant to pleasant.
+		// The six core emotions, unpleasant to pleasant.
 		const grid = this.bodyEl.createDiv({ cls: "dj-mood-families" });
 		for (const f of moodFamilies()) {
 			const tile = grid.createEl("button", { cls: "dj-mood-family" });

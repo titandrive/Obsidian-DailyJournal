@@ -671,196 +671,62 @@ var SONG_KEYS = ["song", "artist", "song_cover", "song_id", "song_url", "song_ki
 
 // src/moodlists/junto.json
 var junto_default = {
-  Angry: {
-    "Let down": [
-      "Betrayed",
-      "Resentful"
-    ],
-    Humiliated: [
-      "Disrespected",
-      "Ridiculed"
-    ],
-    Bitter: [
-      "Indignant",
-      "Violated"
-    ],
-    Mad: [
-      "Furious",
-      "Jealous"
-    ],
-    Aggressive: [
-      "Provoked",
-      "Hostile"
-    ],
-    Frustrated: [
-      "Infuriated",
-      "Annoyed"
-    ],
-    Distant: [
-      "Withdrawn",
-      "Numb"
-    ],
-    Critical: [
-      "Skeptical",
-      "Dismissive"
-    ]
+  Anger: {
+    enraged: ["hateful", "hostile"],
+    exasperated: ["agitated", "frustrated"],
+    irritable: ["annoyed", "aggravated"],
+    jealous: ["resentful", "envious"],
+    disgusted: ["contemptuous", "revolted"]
   },
-  Disgusted: {
-    Disapproving: [
-      "Judgmental",
-      "Embarrassed"
-    ],
-    Disappointed: [
-      "Appalled",
-      "Revolted"
-    ],
-    Awful: [
-      "Nauseated",
-      "Detestable"
-    ],
-    Repelled: [
-      "Horrified",
-      "Hesitant"
-    ]
+  Fear: {
+    scared: ["frightened", "helpless"],
+    terrified: ["panicked", "hysterical"],
+    insecure: ["inferior", "inadequate"],
+    nervous: ["worried", "anxious"],
+    horrified: ["mortified", "dreadful"]
   },
-  Fearful: {
-    Scared: [
-      "Helpless",
-      "Frightened"
-    ],
-    Anxious: [
-      "Overwhelmed",
-      "Worried"
-    ],
-    Insecure: [
-      "Inadequate",
-      "Inferior"
-    ],
-    Weak: [
-      "Worthless",
-      "Insignificant"
-    ],
-    Rejected: [
-      "Excluded",
-      "Persecuted"
-    ],
-    Threatened: [
-      "Nervous",
-      "Exposed"
-    ]
+  Sadness: {
+    hurt: ["agonized", "disturbed"],
+    unhappy: ["miserable", "disheartened"],
+    disappointed: ["dismayed", "displeased"],
+    shameful: ["regretful", "guilty"],
+    lonely: ["isolated", "neglected"],
+    gloomy: ["hopeless", "depressed"]
   },
-  Sad: {
-    Lonely: [
-      "Isolated",
-      "Abandoned"
-    ],
-    Vulnerable: [
-      "Victimized",
-      "Fragile"
-    ],
-    Despair: [
-      "Grief",
-      "Powerless"
-    ],
-    Guilty: [
-      "Ashamed",
-      "Remorseful"
-    ],
-    Depressed: [
-      "Inferior",
-      "Empty"
-    ],
-    Hurt: [
-      "Embarrassed",
-      "Disappointed"
-    ]
+  Surprise: {
+    moved: ["touched", "stimulated"],
+    overcome: ["astounded", "speechless"],
+    amazed: ["awe-struck", "astonished"],
+    confused: ["perplexed", "disillusioned"],
+    stunned: ["bewildered", "shocked"]
   },
-  Bad: {
-    Bored: [
-      "Indifferent",
-      "Apathetic"
-    ],
-    Busy: [
-      "Pressured",
-      "Rushed"
-    ],
-    Stressed: [
-      "Overwhelmed",
-      "Out of control"
-    ],
-    Tired: [
-      "Sleepy",
-      "Unfocused"
-    ]
+  Love: {
+    enchanted: ["enthralled", "rapturous"],
+    romantic: ["passionate", "enamored"],
+    affectionate: ["warmhearted", "compassionate"],
+    sentimental: ["tender", "nostalgic"],
+    grateful: ["appreciative", "thankful"]
   },
-  Surprised: {
-    Startled: [
-      "Shocked",
-      "Dismayed"
-    ],
-    Confused: [
-      "Disillusioned",
-      "Perplexed"
-    ],
-    Amazed: [
-      "Astonished",
-      "Awe"
-    ],
-    Excited: [
-      "Eager",
-      "Energetic"
-    ]
-  },
-  Happy: {
-    Playful: [
-      "Aroused",
-      "Cheeky"
-    ],
-    Content: [
-      "Free",
-      "Joyful"
-    ],
-    Interested: [
-      "Curious",
-      "Inquisitive"
-    ],
-    Proud: [
-      "Successful",
-      "Confident"
-    ],
-    Accepted: [
-      "Respected",
-      "Valued"
-    ],
-    Powerful: [
-      "Courageous",
-      "Creative"
-    ],
-    Peaceful: [
-      "Loving",
-      "Thankful"
-    ],
-    Trusting: [
-      "Sensitive",
-      "Intimate"
-    ],
-    Optimistic: [
-      "Hopeful",
-      "Inspired"
-    ]
+  Joy: {
+    euphoric: ["jubilant", "elated"],
+    excited: ["zealous", "enthusiastic"],
+    optimistic: ["hopeful", "eager"],
+    proud: ["illustrious", "triumphant"],
+    cheerful: ["playful", "amused"],
+    happy: ["delighted", "jovial"],
+    content: ["pleased", "satisfied"],
+    peaceful: ["serene", "tranquil"]
   }
 };
 
 // src/moods.ts
 var COLORS = {
-  angry: "var(--color-red)",
-  /** Muddy olive: green dulled with gray, so it reads as "off" rather than calm. */
-  disgusted: "color-mix(in srgb, var(--color-green) 45%, var(--color-base-50, gray))",
-  fearful: "var(--color-purple)",
-  sad: "var(--color-blue)",
-  bad: "var(--color-base-50, var(--text-muted))",
-  surprised: "var(--color-pink)",
-  happy: "var(--color-yellow)"
+  anger: "var(--color-red)",
+  fear: "var(--color-purple)",
+  sadness: "var(--color-blue)",
+  surprise: "var(--color-cyan)",
+  love: "var(--color-pink)",
+  joy: "var(--color-yellow)"
 };
 var low = (w) => w.trim().toLowerCase();
 var FAMILIES = Object.entries(junto_default).map(([name, inner]) => {
@@ -1476,7 +1342,7 @@ var MoodPickerModal = class extends import_obsidian3.Modal {
   constructor(app, current, onDone) {
     super(app);
     this.onDone = onDone;
-    /** The core feeling opened, or null for the seven tiles. */
+    /** The core feeling opened, or null for the six tiles. */
     this.family = null;
     /** Which tile to focus after the next redraw (keyboard use), or null to leave focus alone. */
     this.focusAt = null;
@@ -1546,7 +1412,7 @@ var MoodPickerModal = class extends import_obsidian3.Modal {
     row.sort((a, b) => Math.abs(a.b.left + a.b.width / 2 - x) - Math.abs(b.b.left + b.b.width / 2 - x));
     return row[0].i;
   }
-  /** Back from a core feeling to the seven tiles, with focus on the one you came from. */
+  /** Back from a core feeling to the six tiles, with focus on the one you came from. */
   back() {
     if (!this.family)
       return;

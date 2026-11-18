@@ -1,13 +1,14 @@
 import wheelData from "./moodlists/junto.json";
 
 /*
- * Moods for the check-in, from the Feelings Wheel (Junto version): seven core feelings, each with
- * more specific feelings, and each of those with two more specific still. Pick a core feeling, then
- * the word that fits (or search every word). Saved as `mood: [word, ...]`.
+ * Moods for the check-in, from the Junto Emotion Wheel (© 2016 The Junto Institute for
+ * Entrepreneurial Leadership; for personal use): six core emotions, each with categories, and each
+ * category with two more specific feelings. Pick a core emotion, then the word that fits (or search
+ * every word). Saved as `mood: [word, ...]`.
  */
 
 export interface MoodFamily {
-	/** A core feeling: Angry, Disgusted, Fearful, Sad, Bad, Surprised, Happy. */
+	/** A core emotion: Anger, Fear, Sadness, Surprise, Love, Joy. */
 	name: string;
 	/** A theme color, so the core feelings are told apart at a glance. */
 	color: string;
@@ -18,14 +19,12 @@ export interface MoodFamily {
 }
 
 const COLORS: Record<string, string> = {
-	angry: "var(--color-red)",
-	/** Muddy olive: green dulled with gray, so it reads as "off" rather than calm. */
-	disgusted: "color-mix(in srgb, var(--color-green) 45%, var(--color-base-50, gray))",
-	fearful: "var(--color-purple)",
-	sad: "var(--color-blue)",
-	bad: "var(--color-base-50, var(--text-muted))",
-	surprised: "var(--color-pink)",
-	happy: "var(--color-yellow)",
+	anger: "var(--color-red)",
+	fear: "var(--color-purple)",
+	sadness: "var(--color-blue)",
+	surprise: "var(--color-cyan)",
+	love: "var(--color-pink)",
+	joy: "var(--color-yellow)",
 };
 
 const low = (w: string) => w.trim().toLowerCase();
