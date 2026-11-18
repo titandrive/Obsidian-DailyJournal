@@ -262,38 +262,56 @@ export function drawReading(el: HTMLElement, day: HardcoverDay, date: Moment): v
 		return;
 	}
 
-	// Several books: one at a time with a pager (‹ 1/2 ›) beside the label, most pages read first. All
-	// books share one grid cell, so the card is as tall as the tallest and doesn't jump when paging.
+	// Several books: a page at a time with a pager (‹ 1/2 ›) beside the label, most pages read first.
+	// A page holds one book, or two side by side when the card is wide enough (the pager hides when
+	// they all fit). Every book sits in the same grid row, so the card is as tall as the tallest book
+	// and doesn't jump when paging.
 	const books = [...day.books].sort((a, b) => (b.pages ?? 0) - (a.pages ?? 0));
 	let list: HTMLElement = c;
 	const rows: HTMLElement[] = [];
+	let layout = () => {};
 	if (books.length > 1) {
 		const head = createDiv({ cls: "dj-card-head" });
 		const label = c.querySelector(":scope > .dj-label");
 		c.prepend(head);
 		if (label) head.append(label);
 		const pager = head.createDiv({ cls: "dj-pager" });
-		const prev = pager.createEl("button", { text: "‹", attr: { "aria-label": "Previous book" } });
+		const prev = pager.createEl("button", { text: "‹", attr: { "aria-label": "Previous" } });
 		const count = pager.createSpan({ cls: "dj-pager-count" });
-		const next = pager.createEl("button", { text: "›", attr: { "aria-label": "Next book" } });
+		const next = pager.createEl("button", { text: "›", attr: { "aria-label": "Next" } });
 		list = c.createDiv({ cls: "dj-book-pages" });
-		let at = 0;
+		let page = 0, perPage = 1;
+		const pages = () => Math.ceil(books.length / perPage);
 		const show = (i: number) => {
-			at = (i + books.length) % books.length;
-			rows.forEach((r, j) => r.toggleClass("is-shown", j === at));
-			count.setText(`${at + 1}/${books.length}`);
+			page = (i + pages()) % pages();
+			rows.forEach((r, j) => {
+				r.toggleClass("is-shown", Math.floor(j / perPage) === page);
+				r.style.gridColumn = String((j % perPage) + 1);
+			});
+			list.style.gridTemplateColumns = `repeat(${perPage}, minmax(0, 1fr))`;
+			pager.toggle(pages() > 1);
+			count.setText(`${page + 1}/${pages()}`);
 		};
-		prev.onclick = () => show(at - 1);
-		next.onclick = () => show(at + 1);
+		// Two per page from about 560px wide; rechecked when the card is resized.
+		layout = () => {
+			const fit = list.clientWidth >= 560 ? 2 : 1;
+			if (fit === perPage && list.style.gridTemplateColumns) return;
+			const first = page * perPage;
+			perPage = fit;
+			show(Math.floor(first / perPage));
+		};
+		const watch = new ResizeObserver(() => (list.isConnected ? layout() : watch.disconnect()));
+		watch.observe(list);
+		prev.onclick = () => show(page - 1);
+		next.onclick = () => show(page + 1);
 		// Swipe left/right on phones.
 		let startX: number | null = null;
 		list.addEventListener("touchstart", (e) => { startX = e.touches[0]?.clientX ?? null; }, { passive: true });
 		list.addEventListener("touchend", (e) => {
 			const dx = startX === null ? 0 : (e.changedTouches[0]?.clientX ?? startX) - startX;
 			startX = null;
-			if (Math.abs(dx) > 40) show(at + (dx < 0 ? 1 : -1));
+			if (Math.abs(dx) > 40 && pages() > 1) show(page + (dx < 0 ? 1 : -1));
 		});
-		count.setText(`1/${books.length}`);
 	}
 
 	for (const b of books) {
@@ -330,6 +348,7 @@ export function drawReading(el: HTMLElement, day: HardcoverDay, date: Moment): v
 		}
 	}
 	rows[0]?.addClass("is-shown");
+	layout();
 	if (!day.quotes.length) return;
 	// In a side-by-side row the card is half width: quotes go in their own full-width card under the
 	// row (like the song player), so both cards in the row stay compact.

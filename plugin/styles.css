@@ -461,6 +461,6 @@ button.dj-prompt-add { display: flex; align-items: center; gap: .4em; margin-top
 .dj-pager-count { min-width: 2.4em; text-align: center; font-variant-numeric: tabular-nums; }
 .dj-card .dj-pager button { padding: 0 .45em; height: 1.6em; background: transparent; box-shadow: none; border: none; color: var(--text-muted); font-size: 1.25em; line-height: 1; cursor: pointer; }
 .dj-card .dj-pager button:hover { color: var(--text-normal); background: var(--background-modifier-hover); }
-.dj-book-pages { display: grid; }
-.dj-book-pages > .dj-book { grid-area: 1 / 1; visibility: hidden; }
+.dj-book-pages { display: grid; column-gap: 1.6em; }
+.dj-book-pages > .dj-book { grid-row: 1; visibility: hidden; min-width: 0; }
 .dj-book-pages > .dj-book.is-shown { visibility: visible; }

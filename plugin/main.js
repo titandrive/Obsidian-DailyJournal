@@ -1620,6 +1620,8 @@ function drawReading(el, day, date) {
   });
   let list = c;
   const rows = [];
+  let layout = () => {
+  };
   if (books.length > 1) {
     const head = createDiv({ cls: "dj-card-head" });
     const label = c.querySelector(":scope > .dj-label");
@@ -1627,18 +1629,34 @@ function drawReading(el, day, date) {
     if (label)
       head.append(label);
     const pager = head.createDiv({ cls: "dj-pager" });
-    const prev = pager.createEl("button", { text: "\u2039", attr: { "aria-label": "Previous book" } });
+    const prev = pager.createEl("button", { text: "\u2039", attr: { "aria-label": "Previous" } });
     const count = pager.createSpan({ cls: "dj-pager-count" });
-    const next = pager.createEl("button", { text: "\u203A", attr: { "aria-label": "Next book" } });
+    const next = pager.createEl("button", { text: "\u203A", attr: { "aria-label": "Next" } });
     list = c.createDiv({ cls: "dj-book-pages" });
-    let at = 0;
+    let page = 0, perPage = 1;
+    const pages = () => Math.ceil(books.length / perPage);
     const show = (i) => {
-      at = (i + books.length) % books.length;
-      rows.forEach((r, j) => r.toggleClass("is-shown", j === at));
-      count.setText(`${at + 1}/${books.length}`);
+      page = (i + pages()) % pages();
+      rows.forEach((r, j) => {
+        r.toggleClass("is-shown", Math.floor(j / perPage) === page);
+        r.style.gridColumn = String(j % perPage + 1);
+      });
+      list.style.gridTemplateColumns = `repeat(${perPage}, minmax(0, 1fr))`;
+      pager.toggle(pages() > 1);
+      count.setText(`${page + 1}/${pages()}`);
     };
-    prev.onclick = () => show(at - 1);
-    next.onclick = () => show(at + 1);
+    layout = () => {
+      const fit = list.clientWidth >= 560 ? 2 : 1;
+      if (fit === perPage && list.style.gridTemplateColumns)
+        return;
+      const first = page * perPage;
+      perPage = fit;
+      show(Math.floor(first / perPage));
+    };
+    const watch = new ResizeObserver(() => list.isConnected ? layout() : watch.disconnect());
+    watch.observe(list);
+    prev.onclick = () => show(page - 1);
+    next.onclick = () => show(page + 1);
     let startX = null;
     list.addEventListener("touchstart", (e) => {
       var _a2, _b2;
@@ -1648,10 +1666,9 @@ function drawReading(el, day, date) {
       var _a2, _b2;
       const dx = startX === null ? 0 : ((_b2 = (_a2 = e.changedTouches[0]) == null ? void 0 : _a2.clientX) != null ? _b2 : startX) - startX;
       startX = null;
-      if (Math.abs(dx) > 40)
-        show(at + (dx < 0 ? 1 : -1));
+      if (Math.abs(dx) > 40 && pages() > 1)
+        show(page + (dx < 0 ? 1 : -1));
     });
-    count.setText(`1/${books.length}`);
   }
   for (const b of books) {
     const row2 = list.createDiv({ cls: "dj-book" });
@@ -1702,6 +1719,7 @@ function drawReading(el, day, date) {
     }
   }
   (_b = rows[0]) == null ? void 0 : _b.addClass("is-shown");
+  layout();
   if (!day.quotes.length)
     return;
   const row = el.closest(".dj-row-wrap");
