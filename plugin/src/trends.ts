@@ -148,6 +148,8 @@ export class TrendsView extends BasesView {
 			["Podcast day", (d) => d.fm.song_kind === "podcast", (d) => !!str(d.fm.song) && d.fm.song_kind !== "podcast"],
 			...MEALS.map((k): [string, (d: Day) => boolean, (d: Day) => boolean] =>
 				[`Skipped ${k}`, (d) => skippedMeals(d.fm).includes(k), (d) => !!mealText(d.fm, k)]),
+			// Any meal skipped, compared with days where meals were logged and none skipped.
+			["Skipped a meal", (d) => skippedMeals(d.fm).length > 0, (d) => skippedMeals(d.fm).length === 0 && MEALS.some((k) => !!mealText(d.fm, k))],
 			...SLEEP.map(([label, test]): [string, (d: Day) => boolean, (d: Day) => boolean] =>
 				[`Slept ${label.toLowerCase()}`, test, (d) => num(d.fm.sleep) !== null && !test(d)]),
 			...skies.map((s): [string, (d: Day) => boolean, (d: Day) => boolean] =>
@@ -202,14 +204,24 @@ export class TrendsView extends BasesView {
 			const pct = pool.length ? Math.round((100 * n) / pool.length) : 0;
 			return { label: k[0].toUpperCase() + k.slice(1), value: n, text: `${n}× · ${pct}%`, hint: `Skipped on ${n} of ${pool.length} days` };
 		});
+		// Any meal: days with at least one meal skipped, out of the days with any meal logged or skipped.
+		const foodDays = days.filter((d) => skippedMeals(d.fm).length > 0 || MEALS.some((k) => !!mealText(d.fm, k)));
+		const skipDays = foodDays.filter((d) => skippedMeals(d.fm).length > 0).length;
+		const skipDayPct = foodDays.length ? Math.round((100 * skipDays) / foodDays.length) : 0;
 		if (skipTotal) {
-			const most = [...skipRows].sort((a, b) => b.value - a.value)[0];
+			// Most times skipped; a tie goes to the one skipped on a bigger share of its days.
+			const pctOf = (r: Row) => Number(r.text.split(" · ")[1]?.replace("%", "") ?? 0);
+			const most = [...skipRows].sort((a, b) => b.value - a.value || pctOf(b) - pctOf(a))[0];
+			food.tile("Days with a skipped meal", `${skipDayPct}%`, `${skipDays} of ${foodDays.length} days`);
 			food.tile("Meals skipped", String(skipTotal), `${one(skipTotal / days.length)} per day`);
-			food.tile("Most skipped", most.label, `${most.text.split(" · ")[1]} of the time`);
+			food.tile("Most skipped meal", most.label, `${most.text.split(" · ")[1]} of the time`);
 		}
 		const meals = ranked(days.flatMap((d) => MEALS.map((k) => mealText(d.fm, k))), 5);
 		if (meals.length) barList(food.card("Favorite meals", "Breakfast, lunch and dinner"), meals);
-		if (skipTotal) barList(food.card("Skipped meals", "Times skipped · share of days"), skipRows);
+		if (skipTotal) barList(food.card("Skipped meals", "Times skipped · share of days"), [
+			...skipRows,
+			{ label: "Any meal", value: skipDays, text: `${skipDays}× · ${skipDayPct}%`, hint: `Skipped a meal on ${skipDays} of ${foodDays.length} days` },
+		]);
 
 		// Reading
 		const reading = section("Reading");
