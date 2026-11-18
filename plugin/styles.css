@@ -542,5 +542,5 @@ button.dj-prompt-add { display: flex; align-items: center; gap: .4em; margin-top
 /* Keyboard focus in the check-in: a clear ring on whatever has focus. */
 .block-language-journal .dj-list :is(button, a, input, textarea):focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; box-shadow: none; }
 /* A single big value in a card (Most felt). */
-.dj-trends-big { display: flex; align-items: center; gap: .4em; font-size: 1.8em; font-weight: 600; margin: var(--size-4-2) 0 var(--size-2-2); }
+.dj-trends-big { display: flex; align-items: center; gap: .4em; font-size: 1.25em; font-weight: 600; line-height: 1.2; margin: var(--size-2-2) 0 var(--size-2-1); }
 .dj-trends-big .dj-mood-dot { width: .45em; height: .45em; }
