@@ -516,3 +516,11 @@ button.dj-prompt-add { display: flex; align-items: center; gap: .4em; margin-top
 /* Keyboard focus: a clear ring in the tile's own color. */
 .dj-mood-modal button.dj-mood-family:focus-visible, .dj-mood-modal button.dj-mood-word:focus-visible { outline: 2px solid var(--dj-mood, var(--interactive-accent)); outline-offset: 1px; box-shadow: none; }
 .dj-mood-modal .dj-mood-keys { margin-top: var(--size-4-2); padding: 0; border-top: none; }
+/* Tiles keep a modest corner everywhere (phones otherwise make every button a pill). */
+.dj-mood-modal button.dj-mood-family, .dj-mood-modal button.dj-mood-word { border-radius: var(--radius-m); }
+/* Phones: just the name on each core feeling (plus "n picked"), and no key hints. */
+.is-mobile .dj-mood-modal .dj-mood-family-hint:not(.is-count), .is-mobile .dj-mood-modal .dj-mood-keys { display: none; }
+.is-mobile .dj-mood-modal button.dj-mood-family { padding: .8em .9em; }
+/* Phones: three words across must fit, so smaller text and padding, and long words may wrap. */
+.is-mobile .dj-mood-modal button.dj-mood-word { font-size: calc(var(--font-ui-small) * .8); padding: .7em .5em; overflow-wrap: break-word; }
+.is-mobile .dj-mood-words.dj-mood-rows { gap: var(--size-4-1) var(--size-4-2); }

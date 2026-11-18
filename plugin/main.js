@@ -1518,7 +1518,8 @@ var MoodPickerModal = class extends import_obsidian3.Modal {
     }
     this.modalEl.addEventListener("keydown", (e) => this.onKey(e), true);
     this.draw();
-    window.setTimeout(() => this.search.focus(), 0);
+    if (!import_obsidian3.Platform.isMobile)
+      window.setTimeout(() => this.focusTile(0), 0);
   }
   /** The tiles you can move between (the families, or the words), in order. */
   tiles() {
@@ -1601,7 +1602,8 @@ var MoodPickerModal = class extends import_obsidian3.Modal {
       to = this.vertical(target, false);
       if (to === null) {
         handled();
-        this.search.focus();
+        if (!this.family)
+          this.search.focus();
         return;
       }
     } else if (e.key === "Backspace") {
@@ -1611,7 +1613,7 @@ var MoodPickerModal = class extends import_obsidian3.Modal {
       else
         this.search.focus();
       return;
-    } else if (e.key.length === 1 && e.key !== " " && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    } else if (!this.family && e.key.length === 1 && e.key !== " " && !e.ctrlKey && !e.metaKey && !e.altKey) {
       handled();
       this.search.focus();
       this.search.value += e.key;
@@ -1688,6 +1690,7 @@ var MoodPickerModal = class extends import_obsidian3.Modal {
     }
     this.chosenEl.createSpan({ cls: "dj-mood-count", text: `${this.picked.length} of ${MAX_MOODS}` });
     this.bodyEl.empty();
+    this.search.toggle(!this.family);
     const term = this.search.value.trim().toLowerCase();
     if (term) {
       const found = this.matches(term);
@@ -1728,7 +1731,7 @@ var MoodPickerModal = class extends import_obsidian3.Modal {
       head.createSpan({ cls: "dj-mood-dot" });
       head.createSpan({ text: f.name });
       const count = this.picked.filter((w) => f.words.includes(w)).length;
-      tile.createDiv({ cls: "dj-mood-family-hint", text: count ? `${count} picked` : f.rows.slice(0, 3).map((r) => r.word).join(", ") + "\u2026" });
+      tile.createDiv({ cls: "dj-mood-family-hint" + (count ? " is-count" : ""), text: count ? `${count} picked` : f.rows.slice(0, 3).map((r) => r.word).join(", ") + "\u2026" });
       tile.onclick = () => {
         if (this.tiles().includes(activeDocument.activeElement))
           this.focusAt = 0;

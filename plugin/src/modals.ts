@@ -1,4 +1,4 @@
-import { App, Modal, moment, setIcon, SuggestModal } from "obsidian";
+import { App, Modal, moment, Platform, setIcon, SuggestModal } from "obsidian";
 import { Moment } from "./dates";
 import { MAX_PROMPT_LEVEL, Place, Prompt } from "./settings";
 import { PlaceResult, searchPlaces } from "./weather";
@@ -582,7 +582,9 @@ export class MoodPickerModal extends Modal {
 		// Captured here so Escape can go back a step instead of closing the whole dialog.
 		this.modalEl.addEventListener("keydown", (e) => this.onKey(e), true);
 		this.draw();
-		window.setTimeout(() => this.search.focus(), 0);
+		// The search box isn't focused (on phones that would open the keyboard over the tiles). On a
+		// computer, focus starts on the first core feeling so the arrow keys work straight away.
+		if (!Platform.isMobile) window.setTimeout(() => this.focusTile(0), 0);
 	}
 
 	/** The tiles you can move between (the families, or the words), in order. */
@@ -639,9 +641,9 @@ export class MoodPickerModal extends Modal {
 		else if (e.key === "ArrowDown") to = this.vertical(target, true) ?? at;
 		else if (e.key === "ArrowUp") {
 			to = this.vertical(target, false);
-			if (to === null) { handled(); this.search.focus(); return; }
+			if (to === null) { handled(); if (!this.family) this.search.focus(); return; }
 		} else if (e.key === "Backspace") { handled(); if (this.family) this.back(); else this.search.focus(); return; }
-		else if (e.key.length === 1 && e.key !== " " && !e.ctrlKey && !e.metaKey && !e.altKey) {
+		else if (!this.family && e.key.length === 1 && e.key !== " " && !e.ctrlKey && !e.metaKey && !e.altKey) {
 			// Typing on a tile goes to the search box.
 			handled();
 			this.search.focus();
@@ -709,6 +711,8 @@ export class MoodPickerModal extends Modal {
 		this.chosenEl.createSpan({ cls: "dj-mood-count", text: `${this.picked.length} of ${MAX_MOODS}` });
 
 		this.bodyEl.empty();
+		// Search is for the seven tiles; a core feeling's page is short enough without it.
+		this.search.toggle(!this.family);
 		const term = this.search.value.trim().toLowerCase();
 		if (term) {
 			// Searching: matching words from every family, or an offer to add what was typed.
@@ -744,7 +748,7 @@ export class MoodPickerModal extends Modal {
 			head.createSpan({ cls: "dj-mood-dot" });
 			head.createSpan({ text: f.name });
 			const count = this.picked.filter((w) => f.words.includes(w)).length;
-			tile.createDiv({ cls: "dj-mood-family-hint", text: count ? `${count} picked` : f.rows.slice(0, 3).map((r) => r.word).join(", ") + "…" });
+			tile.createDiv({ cls: "dj-mood-family-hint" + (count ? " is-count" : ""), text: count ? `${count} picked` : f.rows.slice(0, 3).map((r) => r.word).join(", ") + "…" });
 			tile.onclick = () => {
 				// From the keyboard (or a tap), land on the first word so arrows work straight away.
 				if (this.tiles().includes(activeDocument.activeElement as HTMLButtonElement)) this.focusAt = 0;
