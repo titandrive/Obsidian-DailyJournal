@@ -117,6 +117,21 @@ async function renderHeader(host: JournalHost, el: HTMLElement, file: TFile, dat
 		}, undefined, host.placeHistory).open();
 	};
 
+	// Star (bottom right, after the chips): marks the entry as a favorite, saved as `favorite: true`, so search and the Insights base can find it.
+	let starred = fm.favorite === true;
+	const star = chips.createEl("button", { cls: "dj-star" });
+	setIcon(star, "star");
+	const paintStar = () => {
+		star.toggleClass("is-on", starred);
+		star.setAttr("aria-label", starred ? "Remove from favorites" : "Add to favorites");
+	};
+	star.onclick = () => {
+		starred = !starred;
+		paintStar();
+		void app.fileManager.processFrontMatter(file, (f) => { if (starred) f.favorite = true; else delete f.favorite; });
+	};
+	paintStar();
+
 	// First time an entry is opened, look up that day's weather and save it.
 	// Tried once per entry per session, so a failed lookup can't turn into a retry loop.
 	if (weatherOn && !fm.weather && !host.weatherTried.has(file.path) && !date.isAfter(moment(), "day")) {

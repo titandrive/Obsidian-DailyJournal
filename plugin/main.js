@@ -73,7 +73,7 @@ function journalBase(settings) {
   const folder = settings.folder.replace(/\/+$/, "") || "/";
   const icons = `${folder === "/" ? "" : folder + "/"}${ICONS_FOLDER}`;
   const f = settings.fields;
-  const columns = [["formula.day", "Day"], ["formula.place", "Location"]];
+  const columns = [["formula.day", "Day"], ["favorite", "Favorite"], ["formula.place", "Location"]];
   if (settings.showWeather)
     columns.push(["formula.sky", " "], ["weather", "Weather"]);
   if (f.rating)
@@ -127,6 +127,17 @@ function journalBase(settings) {
     "      - property: formula.entry_date",
     "        direction: DESC",
     ...summaries.length ? ["    summaries:", ...summaries.map((s) => "      " + s)] : [],
+    // Only starred entries.
+    "  - type: table",
+    "    name: Favorites",
+    "    filters:",
+    "      and:",
+    "        - favorite == true",
+    "    order:",
+    ...columns.filter(([k]) => k !== "favorite").map(([k]) => `      - ${k}`),
+    "    sort:",
+    "      - property: formula.entry_date",
+    "        direction: DESC",
     "  - type: table",
     "    name: By month",
     "    groupBy:",
@@ -1448,6 +1459,24 @@ async function renderHeader(host, el, file, date, fm, weatherOn) {
       showWeather(weatherOn ? weather : null);
     }, void 0, host.placeHistory).open();
   };
+  let starred = fm.favorite === true;
+  const star = chips.createEl("button", { cls: "dj-star" });
+  (0, import_obsidian4.setIcon)(star, "star");
+  const paintStar = () => {
+    star.toggleClass("is-on", starred);
+    star.setAttr("aria-label", starred ? "Remove from favorites" : "Add to favorites");
+  };
+  star.onclick = () => {
+    starred = !starred;
+    paintStar();
+    void app.fileManager.processFrontMatter(file, (f) => {
+      if (starred)
+        f.favorite = true;
+      else
+        delete f.favorite;
+    });
+  };
+  paintStar();
   if (weatherOn && !fm.weather && !host.weatherTried.has(file.path) && !date.isAfter((0, import_obsidian4.moment)(), "day")) {
     host.weatherTried.add(file.path);
     const save = async (weather2) => {

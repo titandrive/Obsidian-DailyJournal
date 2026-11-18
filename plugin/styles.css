@@ -443,3 +443,10 @@ button.dj-prompt-add { display: flex; align-items: center; gap: .4em; margin-top
 .dj-card button.dj-meal-skip:hover { color: var(--text-muted); border-color: var(--background-modifier-border-hover); }
 .dj-card button.dj-meal-skip.is-on { background: color-mix(in srgb, var(--interactive-accent) 20%, transparent); border-color: transparent; color: var(--interactive-accent); }
 .dj-meal.is-skipped textarea.dj-line { opacity: .6; }
+
+/* Favorite star, at the right end of the chip row */
+.dj-card button.dj-star { margin-inline-start: auto; flex-shrink: 0; padding: 4px; width: auto; height: auto; background: transparent; box-shadow: none; border: none; color: var(--text-faint); cursor: pointer; }
+.dj-card button.dj-star:hover { background: transparent; color: var(--text-muted); }
+.dj-card button.dj-star svg { width: 20px; height: 20px; display: block; }
+.dj-card button.dj-star.is-on, .dj-card button.dj-star.is-on:hover { color: var(--color-yellow); }
+.dj-card button.dj-star.is-on svg { fill: currentColor; }

@@ -48,7 +48,8 @@ export function journalBase(settings: JournalSettings): string {
 	const icons = `${folder === "/" ? "" : folder + "/"}${ICONS_FOLDER}`;
 	const f = settings.fields;
 
-	const columns: Array<[string, string]> = [["formula.day", "Day"], ["formula.place", "Location"]];
+	// Favorite (the header star) right after the day, so starred entries are easy to spot and sort by.
+	const columns: Array<[string, string]> = [["formula.day", "Day"], ["favorite", "Favorite"], ["formula.place", "Location"]];
 	if (settings.showWeather) columns.push(["formula.sky", " "], ["weather", "Weather"]);
 	if (f.rating) columns.push(["day_rating", "Rating"]);
 	if (f.sleep) columns.push(["sleep", "Sleep (h)"]);
@@ -86,6 +87,11 @@ export function journalBase(settings: JournalSettings): string {
 		...columns.map(([k]) => `      - ${k}`),
 		"    sort:", "      - property: formula.entry_date", "        direction: DESC",
 		...(summaries.length ? ["    summaries:", ...summaries.map((s) => "      " + s)] : []),
+		// Only starred entries.
+		"  - type: table", "    name: Favorites",
+		"    filters:", "      and:", "        - favorite == true",
+		"    order:", ...columns.filter(([k]) => k !== "favorite").map(([k]) => `      - ${k}`),
+		"    sort:", "      - property: formula.entry_date", "        direction: DESC",
 		"  - type: table", "    name: By month",
 		"    groupBy:", "      property: formula.month", "      direction: DESC",
 		"    order:", ...monthly.map((k) => `      - ${k}`),
