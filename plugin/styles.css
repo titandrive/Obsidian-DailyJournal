@@ -285,8 +285,8 @@ a.dj-otd-tile:hover { border-color: var(--interactive-accent); }
 .dj-otd-media .dj-otd-book { width: 31px; }
 .dj-otd-media .dj-otd-song { width: 46px; }
 
-/* Meal suggestions from past entries, shown under the box being typed in. */
-.dj-meal-box { position: relative; min-width: 0; }
+/* Meal and tag suggestions from past entries, shown under the box being typed in. */
+.dj-meal-box, .dj-tag-box { position: relative; min-width: 0; }
 .dj-suggest {
 	position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 20; padding: 4px;
 	background: var(--background-primary); border: 1px solid var(--background-modifier-border); border-radius: 10px;
@@ -471,3 +471,4 @@ button.dj-prompt-add { display: flex; align-items: center; gap: .4em; margin-top
 	border-radius: 0 0 9px 9px; white-space: nowrap; pointer-events: none;
 	background: color-mix(in srgb, var(--background-primary) 85%, transparent); color: var(--interactive-accent); backdrop-filter: blur(4px); }
 .dj-badge.dj-cover-badge.is-finished { color: var(--color-green); }
+.dj-suggest.dj-suggest-floating { position: fixed; right: auto; top: 0; z-index: var(--layer-popover, 40); font-size: var(--font-text-size, 16px); }

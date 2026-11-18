@@ -515,21 +515,19 @@ function renderCheckIn(host: JournalHost, el: HTMLElement, file: TFile, fm: Fron
 		const box = item("Tags");
 		box.addClass("dj-tags");
 		const chips = box.createDiv({ cls: "dj-row" });
-		const input = box.createEl("input", { cls: "dj-tag-input", type: "text", attr: { placeholder: "Add a tag…", list: "dj-tag-list" } });
-		// Suggest tags from journal entries, rebuilt on each focus so tags added in other entries show up right away.
-		const refreshSuggestions = () => {
-			const list = document.getElementById("dj-tag-list") ?? document.body.createEl("datalist", { attr: { id: "dj-tag-list" } });
-			list.empty();
-			// Only tags used in journal entries, not the rest of the vault.
-			const journalTags = new Set<string>();
+		const inputBox = box.createDiv({ cls: "dj-tag-box" });
+		const input = inputBox.createEl("input", { cls: "dj-tag-input", type: "text", attr: { placeholder: "Add a tag…" } });
+		// Suggest tags used in journal entries only (not the rest of the vault), with the same list the
+		// meal boxes use; read on each focus so tags added in other entries show up right away.
+		const journalTags = (): string[] => {
+			const found = new Set<string>();
 			for (const entry of host.journalEntries()) {
 				const cache = app.metadataCache.getFileCache(entry.file);
-				for (const tag of (cache && getAllTags(cache)) ?? []) journalTags.add(tag.replace(/^#/, ""));
+				for (const tag of (cache && getAllTags(cache)) ?? []) found.add(tag.replace(/^#/, ""));
 			}
-			journalTags.delete("journal");
-			for (const name of [...journalTags].sort((a, b) => a.localeCompare(b))) list.createEl("option", { attr: { value: name } });
+			found.delete("journal");
+			return [...found].filter((t) => !tags.includes(t)).sort((a, b) => a.localeCompare(b));
 		};
-		refreshSuggestions();
 		const current = (): string[] => {
 			const t = app.metadataCache.getFileCache(file)?.frontmatter?.tags;
 			return (Array.isArray(t) ? t : t ? [t] : []).map(String);
@@ -545,6 +543,9 @@ function renderCheckIn(host: JournalHost, el: HTMLElement, file: TFile, fm: Fron
 			for (const tag of tags) {
 				const chip = chips.createSpan({ cls: "dj-chip dj-tag", text: "#" + tag });
 				const x = chip.createEl("button", { cls: "dj-tag-remove", text: "×", attr: { "aria-label": `Remove #${tag}` } });
+				// mousedown is stopped so the tag box keeps focus: otherwise leaving it would save whatever
+				// is half-typed there as a tag.
+				x.addEventListener("mousedown", (e) => e.preventDefault());
 				x.onclick = () => { tags = tags.filter((t) => t !== tag); paint(); void store(); };
 			}
 		};
@@ -557,7 +558,8 @@ function renderCheckIn(host: JournalHost, el: HTMLElement, file: TFile, fm: Fron
 			paint();
 			void store();
 		};
-		input.addEventListener("focus", refreshSuggestions);
+		// Registered before the Enter handler below, so picking a suggestion with Enter adds just that tag.
+		suggestList(input, inputBox, journalTags, () => add());
 		input.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); add(); } });
 		input.addEventListener("change", add);
 		paint();
@@ -697,6 +699,16 @@ function pastMeals(host: JournalHost): string[] {
  * text, so the same meal is always spelled the same way.
  */
 function mealSuggest(host: JournalHost, input: HTMLTextAreaElement, box: HTMLElement, commit: (value: string) => void): void {
+	suggestList(input, box, () => pastMeals(host), commit);
+}
+
+/**
+ * A suggestion list under a text box (meals, tags): `source` is read each time the box gets focus,
+ * prefix matches come first, then matches anywhere. ↑↓ and Enter/Tab (or a click) pick one.
+ * The list floats above the page (cards would clip it), under `box` or above it when there's no room
+ * below, and closes on scroll. Keys it handles don't reach other listeners.
+ */
+function suggestList(input: HTMLTextAreaElement | HTMLInputElement, box: HTMLElement, source: () => string[], commit: (value: string) => void): void {
 	let all: string[] = [];
 	let list: HTMLElement | null = null;
 	let items: string[] = [];
@@ -716,28 +728,42 @@ function mealSuggest(host: JournalHost, input: HTMLTextAreaElement, box: HTMLEle
 		const contains = all.filter((m) => !m.toLowerCase().startsWith(typed) && m.toLowerCase().includes(typed));
 		items = [...starts, ...contains].filter((m) => m.toLowerCase() !== typed).slice(0, 6);
 		if (!items.length) return;
-		list = box.createDiv({ cls: "dj-suggest" });
+		const r = box.getBoundingClientRect();
+		list = box.doc.body.createDiv({ cls: "dj-suggest dj-suggest-floating" });
+		list.style.left = `${r.left}px`;
+		list.style.width = `${r.width}px`;
 		items.forEach((m, i) => {
 			const el = list!.createDiv({ cls: "dj-suggest-item", text: m });
 			// mousedown, not click: picking must happen before the box loses focus.
 			el.addEventListener("mousedown", (e) => { e.preventDefault(); accept(m); });
 			el.addEventListener("mousemove", () => { active = i; paint(); });
 		});
+		// Below the box, or above it if the list would run off the bottom of the window.
+		const below = r.bottom + 4;
+		const fits = below + list.offsetHeight <= box.win.innerHeight - 8;
+		list.style.top = `${fits ? below : Math.max(8, r.top - 4 - list.offsetHeight)}px`;
 	};
-	input.addEventListener("focus", () => { all = pastMeals(host); });
+	// A floating list would drift away from its box when the note scrolls, so close it instead.
+	const onScroll = () => { if (list) close(); };
+	input.addEventListener("focus", () => box.doc.addEventListener("scroll", onScroll, true));
+	input.addEventListener("blur", () => box.doc.removeEventListener("scroll", onScroll, true));
+	input.addEventListener("focus", () => { all = source(); });
 	input.addEventListener("input", update);
 	input.addEventListener("blur", () => window.setTimeout(close, 100));
-	input.addEventListener("keydown", (e) => {
+	input.addEventListener("keydown", (e: KeyboardEvent) => {
 		if (!list || !items.length) return;
 		if (e.key === "ArrowDown" || e.key === "ArrowUp") {
 			e.preventDefault();
+			e.stopImmediatePropagation();
 			active = e.key === "ArrowDown" ? (active + 1) % items.length : (active <= 0 ? items.length - 1 : active - 1);
 			paint();
 		} else if ((e.key === "Enter" || e.key === "Tab") && active >= 0) {
 			e.preventDefault();
+			e.stopImmediatePropagation();
 			accept(items[active]);
 		} else if (e.key === "Escape") {
 			e.preventDefault();
+			e.stopImmediatePropagation();
 			close();
 		}
 	});

@@ -10,12 +10,34 @@ import { JournalSettingTab } from "./src/settings-tab";
 import { applyLayout, blockShowsWeather, entryTemplate, parseBlock, SHOW_CHROME } from "./src/template";
 import { entryPlace, fetchWeather } from "./src/weather";
 import { TRENDS_VIEW, TrendsView } from "./src/trends";
+import { SONG_KEYS } from "./src/music";
 import { BaseTabs } from "./src/basetabs";
 
-/** One rendered `journal` block. Redraws when its entry's properties change (e.g. weather arrives). */
+/**
+ * The properties each card shows, so a card only redraws when one of its own changes (saving a tag
+ * shouldn't redraw the header or the reading card). On this day shows other entries, never its own.
+ */
+const CARD_PROPS: Record<string, string[]> = {
+	header: ["weather", "location", "latitude", "longitude", "timezone", "favorite"],
+	reading: ["reading", "books", "pages_read"],
+	hardcover: ["reading", "books", "pages_read"],
+	song: SONG_KEYS,
+	checkin: ["day_rating", "sleep", "worked", "exercise", "exercise_note", "breakfast", "lunch", "dinner", "ate", "skipped_meals", "tags"],
+	onthisday: [],
+};
+
+/** The part of an entry's properties a block's cards show ("row reading song" covers both cards). */
+function propsFor(section: string, fm: Record<string, unknown>): string {
+	const words = section.trim().split(/\s+/);
+	const cards = words[0] === "row" ? words.slice(1) : [words[0]];
+	const keys = cards.flatMap((c) => CARD_PROPS[c] ?? Object.keys(fm));
+	return JSON.stringify(keys.map((k) => [k, fm[k] ?? null]));
+}
+
+/** One rendered `journal` block. Redraws when the properties its cards show change (e.g. weather arrives). */
 class JournalBlock extends MarkdownRenderChild {
 	private timer = 0;
-	/** The entry's properties as last drawn: typing in the note body doesn't change them, so no redraw. */
+	/** The properties this block's cards showed when last drawn (see propsFor). */
 	private drawnProps = "";
 
 	constructor(private plugin: DailyJournal, containerEl: HTMLElement, private section: string, private file: TFile) {
@@ -27,8 +49,9 @@ class JournalBlock extends MarkdownRenderChild {
 		this.render();
 		this.registerEvent(this.plugin.app.metadataCache.on("changed", (changed, _data, cache) => {
 			if (changed.path !== this.file.path) return;
-			// Obsidian reports a change on every autosave while you type; the cards only show properties.
-			if (JSON.stringify(cache.frontmatter ?? {}) === this.drawnProps) return;
+			// Obsidian reports a change on every autosave while you type, and most property changes
+			// belong to other cards: only redraw when this block's own properties changed.
+			if (propsFor(this.section, cache.frontmatter ?? {}) === this.drawnProps) return;
 			// Don't redraw under someone typing in one of the card's fields.
 			if (this.containerEl.contains(document.activeElement)) return;
 			window.clearTimeout(this.timer);
@@ -52,7 +75,7 @@ class JournalBlock extends MarkdownRenderChild {
 	}
 
 	private render(): void {
-		this.drawnProps = JSON.stringify(this.plugin.app.metadataCache.getFileCache(this.file)?.frontmatter ?? {});
+		this.drawnProps = propsFor(this.section, this.plugin.app.metadataCache.getFileCache(this.file)?.frontmatter ?? {});
 		this.containerEl.empty();
 		this.containerEl.addClass("dj-block");
 		void renderSection(this.plugin, this.section, this.containerEl, this.file);

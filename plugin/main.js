@@ -1892,22 +1892,19 @@ function renderCheckIn(host, el, file, fm, fields) {
     const box = item("Tags");
     box.addClass("dj-tags");
     const chips = box.createDiv({ cls: "dj-row" });
-    const input = box.createEl("input", { cls: "dj-tag-input", type: "text", attr: { placeholder: "Add a tag\u2026", list: "dj-tag-list" } });
-    const refreshSuggestions = () => {
-      var _a, _b;
-      const list2 = (_a = document.getElementById("dj-tag-list")) != null ? _a : document.body.createEl("datalist", { attr: { id: "dj-tag-list" } });
-      list2.empty();
-      const journalTags = /* @__PURE__ */ new Set();
+    const inputBox = box.createDiv({ cls: "dj-tag-box" });
+    const input = inputBox.createEl("input", { cls: "dj-tag-input", type: "text", attr: { placeholder: "Add a tag\u2026" } });
+    const journalTags = () => {
+      var _a;
+      const found = /* @__PURE__ */ new Set();
       for (const entry of host.journalEntries()) {
         const cache = app.metadataCache.getFileCache(entry.file);
-        for (const tag of (_b = cache && (0, import_obsidian4.getAllTags)(cache)) != null ? _b : [])
-          journalTags.add(tag.replace(/^#/, ""));
+        for (const tag of (_a = cache && (0, import_obsidian4.getAllTags)(cache)) != null ? _a : [])
+          found.add(tag.replace(/^#/, ""));
       }
-      journalTags.delete("journal");
-      for (const name of [...journalTags].sort((a, b) => a.localeCompare(b)))
-        list2.createEl("option", { attr: { value: name } });
+      found.delete("journal");
+      return [...found].filter((t) => !tags.includes(t)).sort((a, b) => a.localeCompare(b));
     };
-    refreshSuggestions();
     const current = () => {
       var _a, _b;
       const t = (_b = (_a = app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter) == null ? void 0 : _b.tags;
@@ -1924,6 +1921,7 @@ function renderCheckIn(host, el, file, fm, fields) {
       for (const tag of tags) {
         const chip = chips.createSpan({ cls: "dj-chip dj-tag", text: "#" + tag });
         const x = chip.createEl("button", { cls: "dj-tag-remove", text: "\xD7", attr: { "aria-label": `Remove #${tag}` } });
+        x.addEventListener("mousedown", (e) => e.preventDefault());
         x.onclick = () => {
           tags = tags.filter((t) => t !== tag);
           paint();
@@ -1940,7 +1938,7 @@ function renderCheckIn(host, el, file, fm, fields) {
       paint();
       void store();
     };
-    input.addEventListener("focus", refreshSuggestions);
+    suggestList(input, inputBox, journalTags, () => add());
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === ",") {
         e.preventDefault();
@@ -2103,6 +2101,9 @@ function pastMeals(host) {
   return [...counts.values()].map((c) => ({ n: c.n, text: [...c.spellings].sort((a, b) => b[1] - a[1])[0][0] })).sort((a, b) => b.n - a.n || a.text.localeCompare(b.text)).map((c) => c.text);
 }
 function mealSuggest(host, input, box, commit) {
+  suggestList(input, box, () => pastMeals(host), commit);
+}
+function suggestList(input, box, source, commit) {
   let all = [];
   let list = null;
   let items = [];
@@ -2129,7 +2130,10 @@ function mealSuggest(host, input, box, commit) {
     items = [...starts, ...contains].filter((m) => m.toLowerCase() !== typed).slice(0, 6);
     if (!items.length)
       return;
-    list = box.createDiv({ cls: "dj-suggest" });
+    const r = box.getBoundingClientRect();
+    list = box.doc.body.createDiv({ cls: "dj-suggest dj-suggest-floating" });
+    list.style.left = `${r.left}px`;
+    list.style.width = `${r.width}px`;
     items.forEach((m, i) => {
       const el = list.createDiv({ cls: "dj-suggest-item", text: m });
       el.addEventListener("mousedown", (e) => {
@@ -2141,9 +2145,18 @@ function mealSuggest(host, input, box, commit) {
         paint();
       });
     });
+    const below = r.bottom + 4;
+    const fits = below + list.offsetHeight <= box.win.innerHeight - 8;
+    list.style.top = `${fits ? below : Math.max(8, r.top - 4 - list.offsetHeight)}px`;
   };
+  const onScroll = () => {
+    if (list)
+      close();
+  };
+  input.addEventListener("focus", () => box.doc.addEventListener("scroll", onScroll, true));
+  input.addEventListener("blur", () => box.doc.removeEventListener("scroll", onScroll, true));
   input.addEventListener("focus", () => {
-    all = pastMeals(host);
+    all = source();
   });
   input.addEventListener("input", update);
   input.addEventListener("blur", () => window.setTimeout(close, 100));
@@ -2152,13 +2165,16 @@ function mealSuggest(host, input, box, commit) {
       return;
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
+      e.stopImmediatePropagation();
       active = e.key === "ArrowDown" ? (active + 1) % items.length : active <= 0 ? items.length - 1 : active - 1;
       paint();
     } else if ((e.key === "Enter" || e.key === "Tab") && active >= 0) {
       e.preventDefault();
+      e.stopImmediatePropagation();
       accept(items[active]);
     } else if (e.key === "Escape") {
       e.preventDefault();
+      e.stopImmediatePropagation();
       close();
     }
   });
@@ -2911,6 +2927,26 @@ var BaseTabs = class {
 };
 
 // main.ts
+var CARD_PROPS = {
+  header: ["weather", "location", "latitude", "longitude", "timezone", "favorite"],
+  reading: ["reading", "books", "pages_read"],
+  hardcover: ["reading", "books", "pages_read"],
+  song: SONG_KEYS,
+  checkin: ["day_rating", "sleep", "worked", "exercise", "exercise_note", "breakfast", "lunch", "dinner", "ate", "skipped_meals", "tags"],
+  onthisday: []
+};
+function propsFor(section, fm) {
+  const words2 = section.trim().split(/\s+/);
+  const cards = words2[0] === "row" ? words2.slice(1) : [words2[0]];
+  const keys = cards.flatMap((c) => {
+    var _a;
+    return (_a = CARD_PROPS[c]) != null ? _a : Object.keys(fm);
+  });
+  return JSON.stringify(keys.map((k) => {
+    var _a;
+    return [k, (_a = fm[k]) != null ? _a : null];
+  }));
+}
 var JournalBlock = class extends import_obsidian8.MarkdownRenderChild {
   constructor(plugin, containerEl, section, file) {
     super(containerEl);
@@ -2918,7 +2954,7 @@ var JournalBlock = class extends import_obsidian8.MarkdownRenderChild {
     this.section = section;
     this.file = file;
     this.timer = 0;
-    /** The entry's properties as last drawn: typing in the note body doesn't change them, so no redraw. */
+    /** The properties this block's cards showed when last drawn (see propsFor). */
     this.drawnProps = "";
   }
   onload() {
@@ -2928,7 +2964,7 @@ var JournalBlock = class extends import_obsidian8.MarkdownRenderChild {
       var _a;
       if (changed.path !== this.file.path)
         return;
-      if (JSON.stringify((_a = cache.frontmatter) != null ? _a : {}) === this.drawnProps)
+      if (propsFor(this.section, (_a = cache.frontmatter) != null ? _a : {}) === this.drawnProps)
         return;
       if (this.containerEl.contains(document.activeElement))
         return;
@@ -2952,7 +2988,7 @@ var JournalBlock = class extends import_obsidian8.MarkdownRenderChild {
   }
   render() {
     var _a, _b;
-    this.drawnProps = JSON.stringify((_b = (_a = this.plugin.app.metadataCache.getFileCache(this.file)) == null ? void 0 : _a.frontmatter) != null ? _b : {});
+    this.drawnProps = propsFor(this.section, (_b = (_a = this.plugin.app.metadataCache.getFileCache(this.file)) == null ? void 0 : _a.frontmatter) != null ? _b : {});
     this.containerEl.empty();
     this.containerEl.addClass("dj-block");
     void renderSection(this.plugin, this.section, this.containerEl, this.file);
