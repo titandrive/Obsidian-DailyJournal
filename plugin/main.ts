@@ -3,7 +3,7 @@ import { BASE_NAME, ICONS_FOLDER, journalBase, OLD_BASE_NAMES, SKY_ICONS } from 
 import { entryDate, entryPath, Moment } from "./src/dates";
 import { HardcoverDay, hardcoverDay, readingProperties } from "./src/hardcover";
 import { MonthPicker, PlaceHistory, PlaceModal } from "./src/modals";
-import { drawReading, JournalHost, renderSection } from "./src/render";
+import { drawReading, firstControl, JournalHost, renderSection } from "./src/render";
 import { DEFAULT_SETTINGS, JournalSettings, Place, Prompt } from "./src/settings";
 import { JournalSettingTab } from "./src/settings-tab";
 import { applyLayout, blockShowsWeather, entryTemplate, parseBlock, SHOW_CHROME } from "./src/template";
@@ -120,6 +120,17 @@ export default class DailyJournal extends Plugin implements JournalHost {
 			name: "Create Journal (Choose Date)",
 			callback: () => this.pickEntryDate(),
 		});
+		// Keyboard: jump from writing into the cards (Escape in a card jumps back).
+		const focusCards = (label?: string) => (checking: boolean) => {
+			const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+			const target = view ? firstControl(view.containerEl, label) : null;
+			if (checking) return !!target;
+			target?.scrollIntoView({ block: "nearest" });
+			target?.focus();
+			return true;
+		};
+		this.addCommand({ id: "focus-checkin", name: "Focus check-in", checkCallback: focusCards("Check-in") });
+		this.addCommand({ id: "focus-cards", name: "Focus journal cards", checkCallback: focusCards() });
 		this.addCommand({
 			id: "open-insights",
 			name: "Open Insights",

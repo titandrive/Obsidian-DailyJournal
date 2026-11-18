@@ -1,4 +1,4 @@
-import { App, getAllTags, moment, setIcon, TFile } from "obsidian";
+import { App, getAllTags, MarkdownView, moment, setIcon, TFile } from "obsidian";
 import { entryDate, Moment } from "./dates";
 import { MoodPickerModal, PlaceHistory, PlaceModal, SongPickerModal } from "./modals";
 import { familyOf } from "./moods";
@@ -47,6 +47,39 @@ function card(parent: HTMLElement, label?: string): HTMLElement {
 	return c;
 }
 
+/**
+ * Arrow keys within a row of buttons (the day rating, Yes/No): ← → (and Home/End) move between them,
+ * Enter or Space picks. Only one of them is a Tab stop, the picked one (or the first), so Tab moves on
+ * to the next field instead of through every button. Call the returned function after each repaint.
+ */
+function arrowRow(buttons: HTMLButtonElement[]): () => void {
+	const stops = () => {
+		const on = buttons.findIndex((b) => b.hasClass("is-on"));
+		buttons.forEach((b, i) => { b.tabIndex = i === (on < 0 ? 0 : on) ? 0 : -1; });
+	};
+	buttons.forEach((b, i) => b.addEventListener("keydown", (e) => {
+		const to = e.key === "ArrowRight" ? i + 1 : e.key === "ArrowLeft" ? i - 1 : e.key === "Home" ? 0 : e.key === "End" ? buttons.length - 1 : null;
+		if (to === null) return;
+		e.preventDefault();
+		e.stopPropagation();
+		buttons[Math.max(0, Math.min(buttons.length - 1, to))].focus();
+	}));
+	stops();
+	return stops;
+}
+
+/** The journal's cards in a note view, and the first control in them you can Tab to (optionally in one card). */
+export function firstControl(root: HTMLElement, cardLabel?: string): HTMLElement | null {
+	const cards = Array.from(root.querySelectorAll<HTMLElement>(".dj-card"))
+		.filter((c) => !cardLabel || c.querySelector(".dj-label")?.textContent === cardLabel);
+	for (const c of cards) {
+		const hit = Array.from(c.querySelectorAll<HTMLElement>("button, a[href], input, textarea, [tabindex]"))
+			.find((x) => x.tabIndex >= 0 && !(x as HTMLButtonElement).disabled && x.offsetParent !== null);
+		if (hit) return hit;
+	}
+	return null;
+}
+
 export async function renderSection(host: JournalHost, source: string, el: HTMLElement, file: TFile): Promise<void> {
 	const { section, options } = parseBlock(source);
 	const date = entryDate(host.settings, file);
@@ -54,6 +87,15 @@ export async function renderSection(host: JournalHost, source: string, el: HTMLE
 	const fm: Frontmatter = host.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
 	// Keep clicks inside the cards from moving the editor cursor into the code block.
 	el.addEventListener("mousedown", (e) => { if (!(e.target instanceof HTMLAnchorElement)) e.stopPropagation(); });
+	// Escape in a card goes back to writing (unless something in the card, like a suggestion list, used it).
+	el.addEventListener("keydown", (e) => {
+		if (e.key !== "Escape" || e.defaultPrevented) return;
+		const view = host.app.workspace.getActiveViewOfType(MarkdownView);
+		if (!view) return;
+		e.preventDefault();
+		(e.target as HTMLElement).blur();
+		if (view.getMode() === "source") view.editor.focus();
+	});
 
 	switch (section) {
 		case "header": return renderHeader(host, el, file, date, fm, blockShowsWeather(options));
@@ -327,6 +369,10 @@ export function drawReading(el: HTMLElement, day: HardcoverDay, date: Moment): v
 			node.addClass("dj-clickable");
 			node.setAttr("aria-label", "Open on Hardcover");
 			node.addEventListener("click", openBook);
+			// Reachable by keyboard too: Tab to it, Enter opens the book.
+			node.tabIndex = 0;
+			node.setAttr("role", "link");
+			node.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); if (b.url) window.open(b.url, "_blank"); } });
 			return node;
 		};
 		// The cover sits in a wrapper so the Started/Finished chip can overlay its bottom edge instead of
@@ -399,14 +445,16 @@ function renderCheckIn(host: JournalHost, el: HTMLElement, file: TFile, fm: Fron
 		const scale = item("Day rating");
 		scale.addClass("dj-scale");
 		const dots: HTMLButtonElement[] = [];
-		const paint = () => dots.forEach((d, i) => d.toggleClass("is-on", rating === i + 1));
+		let stops = () => {};
+		const paint = () => { dots.forEach((d, i) => d.toggleClass("is-on", rating === i + 1)); stops(); };
 		for (let i = 1; i <= 10; i++) {
-			const b = scale.createEl("button", { text: String(i) });
+			const b = scale.createEl("button", { text: String(i), attr: { "aria-label": `Rate the day ${i}` } });
 			b.style.setProperty("--dj-hue", `hsl(${Math.round(((i - 1) / 9) * 125)}, 65%, 68%)`);
 			b.onclick = () => { rating = rating === i ? null : i; paint(); save("day_rating", rating); };
 			dots.push(b);
 		}
 		paint();
+		stops = arrowRow(dots);
 	}
 
 	if (fields.mood) {
@@ -461,8 +509,10 @@ function renderCheckIn(host: JournalHost, el: HTMLElement, file: TFile, fm: Fron
 			b.onclick = () => { value = value === v ? null : v; paint(); save(key, value); };
 			return { b, v };
 		});
+		const stops = arrowRow(pills.map((p) => p.b));
 		const paint = () => {
 			for (const { b, v } of pills) b.toggleClass("is-on", value === v);
+			stops();
 			onChange?.(value);
 		};
 		return paint;

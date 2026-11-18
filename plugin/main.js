@@ -1761,6 +1761,36 @@ function card(parent, label) {
     c.createDiv({ cls: "dj-label", text: label });
   return c;
 }
+function arrowRow(buttons) {
+  const stops = () => {
+    const on = buttons.findIndex((b) => b.hasClass("is-on"));
+    buttons.forEach((b, i) => {
+      b.tabIndex = i === (on < 0 ? 0 : on) ? 0 : -1;
+    });
+  };
+  buttons.forEach((b, i) => b.addEventListener("keydown", (e) => {
+    const to = e.key === "ArrowRight" ? i + 1 : e.key === "ArrowLeft" ? i - 1 : e.key === "Home" ? 0 : e.key === "End" ? buttons.length - 1 : null;
+    if (to === null)
+      return;
+    e.preventDefault();
+    e.stopPropagation();
+    buttons[Math.max(0, Math.min(buttons.length - 1, to))].focus();
+  }));
+  stops();
+  return stops;
+}
+function firstControl(root, cardLabel) {
+  const cards = Array.from(root.querySelectorAll(".dj-card")).filter((c) => {
+    var _a;
+    return !cardLabel || ((_a = c.querySelector(".dj-label")) == null ? void 0 : _a.textContent) === cardLabel;
+  });
+  for (const c of cards) {
+    const hit = Array.from(c.querySelectorAll("button, a[href], input, textarea, [tabindex]")).find((x) => x.tabIndex >= 0 && !x.disabled && x.offsetParent !== null);
+    if (hit)
+      return hit;
+  }
+  return null;
+}
 async function renderSection(host, source, el, file) {
   var _a, _b;
   const { section, options } = parseBlock(source);
@@ -1771,6 +1801,17 @@ async function renderSection(host, source, el, file) {
   el.addEventListener("mousedown", (e) => {
     if (!(e.target instanceof HTMLAnchorElement))
       e.stopPropagation();
+  });
+  el.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || e.defaultPrevented)
+      return;
+    const view = host.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+    if (!view)
+      return;
+    e.preventDefault();
+    e.target.blur();
+    if (view.getMode() === "source")
+      view.editor.focus();
   });
   switch (section) {
     case "header":
@@ -2055,6 +2096,15 @@ function drawReading(el, day, date) {
       node.addClass("dj-clickable");
       node.setAttr("aria-label", "Open on Hardcover");
       node.addEventListener("click", openBook);
+      node.tabIndex = 0;
+      node.setAttr("role", "link");
+      node.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          if (b.url)
+            window.open(b.url, "_blank");
+        }
+      });
       return node;
     };
     const coverWrap = row2.createDiv({ cls: "dj-cover-wrap" });
@@ -2134,9 +2184,14 @@ function renderCheckIn(host, el, file, fm, fields) {
     const scale = item("Day rating");
     scale.addClass("dj-scale");
     const dots = [];
-    const paint = () => dots.forEach((d, i) => d.toggleClass("is-on", rating === i + 1));
+    let stops = () => {
+    };
+    const paint = () => {
+      dots.forEach((d, i) => d.toggleClass("is-on", rating === i + 1));
+      stops();
+    };
     for (let i = 1; i <= 10; i++) {
-      const b = scale.createEl("button", { text: String(i) });
+      const b = scale.createEl("button", { text: String(i), attr: { "aria-label": `Rate the day ${i}` } });
       b.style.setProperty("--dj-hue", `hsl(${Math.round((i - 1) / 9 * 125)}, 65%, 68%)`);
       b.onclick = () => {
         rating = rating === i ? null : i;
@@ -2146,6 +2201,7 @@ function renderCheckIn(host, el, file, fm, fields) {
       dots.push(b);
     }
     paint();
+    stops = arrowRow(dots);
   }
   if (fields.mood) {
     const box = item("Mood");
@@ -2207,9 +2263,11 @@ function renderCheckIn(host, el, file, fm, fields) {
       };
       return { b, v };
     });
+    const stops = arrowRow(pills.map((p) => p.b));
     const paint = () => {
       for (const { b, v } of pills)
         b.toggleClass("is-on", value === v);
+      stops();
       onChange == null ? void 0 : onChange(value);
     };
     return paint;
@@ -3523,6 +3581,17 @@ var DailyJournal = class extends import_obsidian8.Plugin {
       name: "Create Journal (Choose Date)",
       callback: () => this.pickEntryDate()
     });
+    const focusCards = (label) => (checking) => {
+      const view = this.app.workspace.getActiveViewOfType(import_obsidian8.MarkdownView);
+      const target = view ? firstControl(view.containerEl, label) : null;
+      if (checking)
+        return !!target;
+      target == null ? void 0 : target.scrollIntoView({ block: "nearest" });
+      target == null ? void 0 : target.focus();
+      return true;
+    };
+    this.addCommand({ id: "focus-checkin", name: "Focus check-in", checkCallback: focusCards("Check-in") });
+    this.addCommand({ id: "focus-cards", name: "Focus journal cards", checkCallback: focusCards() });
     this.addCommand({
       id: "open-insights",
       name: "Open Insights",
