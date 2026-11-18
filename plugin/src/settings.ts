@@ -69,8 +69,8 @@ export const DEFAULT_SETTINGS: JournalSettings = {
 	fields: { rating: true, sleep: true, work: true, exercise: true, food: true, tags: true },
 	prompts: [
 		{ text: "How was your day?", level: 0 },
-		{ text: "What was the best part of your day?", level: 1 },
-		{ text: "What was the worst part of your day?", level: 1 },
+		{ text: "What was the best part of your day?", level: 0 },
+		{ text: "What was the worst part of your day?", level: 0 },
 	],
 	fillNewEntries: true,
 	useAsDailyTemplate: true,
