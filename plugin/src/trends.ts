@@ -138,7 +138,7 @@ export class TrendsView extends BasesView {
 		lineChart(moodSleep.card("Sleep", "7-day average"), recent, (d) => num(d.fm.sleep), 12);
 
 		// Mood: which core feelings come up, the words used, and how rated days went with each feeling.
-		const mood = section("Mood");
+		const mood = section("Moods");
 		const moodDays = days.filter((d) => moodsOf(d.fm).length);
 		if (moodDays.length) {
 			const feelings = moodFamilies()

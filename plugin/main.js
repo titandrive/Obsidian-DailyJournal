@@ -3063,7 +3063,7 @@ var TrendsView = class extends import_obsidian6.BasesView {
     const recent = days.filter((d) => !d.date.isBefore(days[days.length - 1].date.clone().subtract(89, "days"), "day"));
     lineChart(moodSleep.card("Day rating", "7-day average"), recent, (d) => num(d.fm.day_rating), 10);
     lineChart(moodSleep.card("Sleep", "7-day average"), recent, (d) => num(d.fm.sleep), 12);
-    const mood = section("Mood");
+    const mood = section("Moods");
     const moodDays = days.filter((d) => moodsOf(d.fm).length);
     if (moodDays.length) {
       const feelings = moodFamilies().map((f) => ({ f, n: moodDays.filter((d) => feelingsOf(d.fm).includes(f.name)).length })).filter((x) => x.n);
