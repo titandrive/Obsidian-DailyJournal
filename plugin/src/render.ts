@@ -68,18 +68,6 @@ function arrowRow(buttons: HTMLButtonElement[]): () => void {
 	return stops;
 }
 
-/** The journal's cards in a note view, and the first control in them you can Tab to (optionally in one card). */
-export function firstControl(root: HTMLElement, cardLabel?: string): HTMLElement | null {
-	const cards = Array.from(root.querySelectorAll<HTMLElement>(".dj-card"))
-		.filter((c) => !cardLabel || c.querySelector(".dj-label")?.textContent === cardLabel);
-	for (const c of cards) {
-		const hit = Array.from(c.querySelectorAll<HTMLElement>("button, a[href], input, textarea, [tabindex]"))
-			.find((x) => x.tabIndex >= 0 && !(x as HTMLButtonElement).disabled && x.offsetParent !== null);
-		if (hit) return hit;
-	}
-	return null;
-}
-
 export async function renderSection(host: JournalHost, source: string, el: HTMLElement, file: TFile): Promise<void> {
 	const { section, options } = parseBlock(source);
 	const date = entryDate(host.settings, file);
@@ -369,10 +357,6 @@ export function drawReading(el: HTMLElement, day: HardcoverDay, date: Moment): v
 			node.addClass("dj-clickable");
 			node.setAttr("aria-label", "Open on Hardcover");
 			node.addEventListener("click", openBook);
-			// Reachable by keyboard too: Tab to it, Enter opens the book.
-			node.tabIndex = 0;
-			node.setAttr("role", "link");
-			node.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); if (b.url) window.open(b.url, "_blank"); } });
 			return node;
 		};
 		// The cover sits in a wrapper so the Started/Finished chip can overlay its bottom edge instead of
@@ -640,9 +624,53 @@ function renderCheckIn(host: JournalHost, el: HTMLElement, file: TFile, fm: Fron
 		// Registered before the Enter handler below, so picking a suggestion with Enter adds just that tag.
 		suggestList(input, inputBox, journalTags, () => add());
 		input.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); add(); } });
+		// Tab from the tags box (the end of the check-in) goes on to writing: the cursor lands at the
+		// end of the entry's first section, under its first heading.
+		input.addEventListener("keydown", (e) => {
+			if (e.key !== "Tab" || e.shiftKey || e.defaultPrevented) return;
+			const view = app.workspace.getActiveViewOfType(MarkdownView);
+			if (!view || view.file !== file || view.getMode() !== "source") return;
+			e.preventDefault();
+			add();
+			input.blur();
+			jumpToWriting(view);
+		});
 		input.addEventListener("change", add);
 		paint();
 	}
+}
+
+/**
+ * Put the editor's cursor at the end of the entry's first section of writing: the text under the
+ * first heading outside the code blocks (after the cards), subheadings included. If that section is empty, the line under
+ * the heading (added if the heading is the last line).
+ */
+function jumpToWriting(view: MarkdownView): void {
+	const editor = view.editor;
+	const lines = editor.getValue().split("\n");
+	let i = 0;
+	if (lines[0] === "---") { i = 1; while (i < lines.length && lines[i] !== "---") i++; i++; }
+	let fence = false, heading = -1;
+	for (; i < lines.length; i++) {
+		if (/^\s*(```|~~~)/.test(lines[i])) { fence = !fence; continue; }
+		if (!fence && /^#{1,6}\s/.test(lines[i])) { heading = i; break; }
+	}
+	if (heading < 0) { editor.focus(); return; }
+	// The section runs to the next heading of the same or a higher level (subheadings stay inside it).
+	const level = (s: string) => /^(#{1,6})\s/.exec(s)?.[1].length ?? 0;
+	const own = level(lines[heading]);
+	let end = heading + 1;
+	while (end < lines.length && !(level(lines[end]) && level(lines[end]) <= own)) end++;
+	let last = end - 1;
+	while (last > heading && !lines[last].trim()) last--;
+	if (last === heading) {
+		if (heading + 1 >= lines.length) editor.replaceRange("\n", { line: heading, ch: lines[heading].length });
+		last = heading + 1;
+	}
+	const pos = { line: last, ch: editor.getLine(last).length };
+	editor.focus();
+	editor.setCursor(pos);
+	editor.scrollIntoView({ from: pos, to: pos }, true);
 }
 
 /** The song saved in an entry, or null (older Apple-based picks have no YouTube id and are ignored). */

@@ -1779,18 +1779,6 @@ function arrowRow(buttons) {
   stops();
   return stops;
 }
-function firstControl(root, cardLabel) {
-  const cards = Array.from(root.querySelectorAll(".dj-card")).filter((c) => {
-    var _a;
-    return !cardLabel || ((_a = c.querySelector(".dj-label")) == null ? void 0 : _a.textContent) === cardLabel;
-  });
-  for (const c of cards) {
-    const hit = Array.from(c.querySelectorAll("button, a[href], input, textarea, [tabindex]")).find((x) => x.tabIndex >= 0 && !x.disabled && x.offsetParent !== null);
-    if (hit)
-      return hit;
-  }
-  return null;
-}
 async function renderSection(host, source, el, file) {
   var _a, _b;
   const { section, options } = parseBlock(source);
@@ -2096,15 +2084,6 @@ function drawReading(el, day, date) {
       node.addClass("dj-clickable");
       node.setAttr("aria-label", "Open on Hardcover");
       node.addEventListener("click", openBook);
-      node.tabIndex = 0;
-      node.setAttr("role", "link");
-      node.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          if (b.url)
-            window.open(b.url, "_blank");
-        }
-      });
       return node;
     };
     const coverWrap = row2.createDiv({ cls: "dj-cover-wrap" });
@@ -2408,9 +2387,66 @@ function renderCheckIn(host, el, file, fm, fields) {
         add();
       }
     });
+    input.addEventListener("keydown", (e) => {
+      if (e.key !== "Tab" || e.shiftKey || e.defaultPrevented)
+        return;
+      const view = app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+      if (!view || view.file !== file || view.getMode() !== "source")
+        return;
+      e.preventDefault();
+      add();
+      input.blur();
+      jumpToWriting(view);
+    });
     input.addEventListener("change", add);
     paint();
   }
+}
+function jumpToWriting(view) {
+  const editor = view.editor;
+  const lines = editor.getValue().split("\n");
+  let i = 0;
+  if (lines[0] === "---") {
+    i = 1;
+    while (i < lines.length && lines[i] !== "---")
+      i++;
+    i++;
+  }
+  let fence = false, heading = -1;
+  for (; i < lines.length; i++) {
+    if (/^\s*(```|~~~)/.test(lines[i])) {
+      fence = !fence;
+      continue;
+    }
+    if (!fence && /^#{1,6}\s/.test(lines[i])) {
+      heading = i;
+      break;
+    }
+  }
+  if (heading < 0) {
+    editor.focus();
+    return;
+  }
+  const level = (s) => {
+    var _a, _b;
+    return (_b = (_a = /^(#{1,6})\s/.exec(s)) == null ? void 0 : _a[1].length) != null ? _b : 0;
+  };
+  const own = level(lines[heading]);
+  let end = heading + 1;
+  while (end < lines.length && !(level(lines[end]) && level(lines[end]) <= own))
+    end++;
+  let last = end - 1;
+  while (last > heading && !lines[last].trim())
+    last--;
+  if (last === heading) {
+    if (heading + 1 >= lines.length)
+      editor.replaceRange("\n", { line: heading, ch: lines[heading].length });
+    last = heading + 1;
+  }
+  const pos = { line: last, ch: editor.getLine(last).length };
+  editor.focus();
+  editor.setCursor(pos);
+  editor.scrollIntoView({ from: pos, to: pos }, true);
 }
 function savedSong(fm) {
   var _a;
@@ -3581,17 +3617,6 @@ var DailyJournal = class extends import_obsidian8.Plugin {
       name: "Create Journal (Choose Date)",
       callback: () => this.pickEntryDate()
     });
-    const focusCards = (label) => (checking) => {
-      const view = this.app.workspace.getActiveViewOfType(import_obsidian8.MarkdownView);
-      const target = view ? firstControl(view.containerEl, label) : null;
-      if (checking)
-        return !!target;
-      target == null ? void 0 : target.scrollIntoView({ block: "nearest" });
-      target == null ? void 0 : target.focus();
-      return true;
-    };
-    this.addCommand({ id: "focus-checkin", name: "Focus check-in", checkCallback: focusCards("Check-in") });
-    this.addCommand({ id: "focus-cards", name: "Focus journal cards", checkCallback: focusCards() });
     this.addCommand({
       id: "open-insights",
       name: "Open Insights",

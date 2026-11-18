@@ -539,5 +539,5 @@ button.dj-prompt-add { display: flex; align-items: center; gap: .4em; margin-top
 /* Picked always shows as filled, in either column. */
 .dj-mood-modal .dj-mood-rows button.dj-mood-word.is-on, .dj-mood-modal .dj-mood-rows button.dj-mood-word.is-on:hover { background: color-mix(in srgb, var(--dj-mood) 40%, var(--background-secondary)); border-color: var(--dj-mood); color: var(--text-normal); }
 
-/* Keyboard focus in the cards: a clear ring on whatever has focus. */
-.block-language-journal :is(button, a, input, textarea, [tabindex="0"]):focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; box-shadow: none; }
+/* Keyboard focus in the check-in: a clear ring on whatever has focus. */
+.block-language-journal .dj-list :is(button, a, input, textarea):focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; box-shadow: none; }
