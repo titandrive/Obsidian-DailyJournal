@@ -532,9 +532,9 @@ button.dj-prompt-add { display: flex; align-items: center; gap: .4em; margin-top
 /* A feeling's page: the left column (the kind of feeling) stands out; the two words that narrow it are quieter. */
 .dj-mood-col { font-size: var(--font-ui-smaller); color: var(--text-faint); text-transform: uppercase; letter-spacing: .04em; padding-inline-start: .2em; }
 .dj-mood-col-more { grid-column: span 2; }
-.dj-mood-modal button.dj-mood-word.is-main { box-shadow: inset 3px 0 0 var(--dj-mood); }
-.dj-mood-modal .dj-mood-rows button.dj-mood-word:not(.is-main) { background: transparent; border-color: color-mix(in srgb, var(--dj-mood) 25%, transparent); color: var(--text-muted); }
-.dj-mood-modal .dj-mood-rows button.dj-mood-word:not(.is-main):not(.is-full):hover { background: color-mix(in srgb, var(--dj-mood) 14%, transparent); color: var(--text-normal); }
+.dj-mood-modal button.dj-mood-word.is-main { background: color-mix(in srgb, var(--dj-mood) 16%, var(--background-secondary)); box-shadow: inset 3px 0 0 var(--dj-mood); }
+.dj-mood-modal .dj-mood-rows button.dj-mood-word:not(.is-main) { background: color-mix(in srgb, var(--dj-mood) 6%, var(--background-secondary)); border-color: color-mix(in srgb, var(--dj-mood) 25%, transparent); color: var(--text-muted); }
+.dj-mood-modal .dj-mood-rows button.dj-mood-word:not(.is-main):not(.is-full):hover { background: color-mix(in srgb, var(--dj-mood) 14%, var(--background-secondary)); color: var(--text-normal); }
 .dj-mood-modal .dj-mood-rows button.dj-mood-word.is-on { color: var(--text-normal); }
 /* Picked always shows as filled, in either column. */
-.dj-mood-modal .dj-mood-rows button.dj-mood-word.is-on, .dj-mood-modal .dj-mood-rows button.dj-mood-word.is-on:hover { background: color-mix(in srgb, var(--dj-mood) 38%, var(--background-secondary)); border-color: var(--dj-mood); color: var(--text-normal); }
+.dj-mood-modal .dj-mood-rows button.dj-mood-word.is-on, .dj-mood-modal .dj-mood-rows button.dj-mood-word.is-on:hover { background: color-mix(in srgb, var(--dj-mood) 40%, var(--background-secondary)); border-color: var(--dj-mood); color: var(--text-normal); }
