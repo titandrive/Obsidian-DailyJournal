@@ -1605,7 +1605,7 @@ function shrinkToOneLine(el, sizes = TITLE_SIZES, ready = false) {
     el.setAttr("title", (_a = el.textContent) != null ? _a : "");
 }
 function drawReading(el, day, date) {
-  var _a, _b;
+  var _a, _b, _c;
   const c = card(el, "Currently reading");
   if (!day.books.length && !day.quotes.length) {
     const last = day.lastRead ? (0, import_obsidian4.moment)(day.lastRead.date, "YYYY-MM-DD") : null;
@@ -1614,10 +1614,48 @@ function drawReading(el, day, date) {
     c.createDiv({ cls: "dj-muted", text });
     return;
   }
-  if (day.pages && day.books.length > 1)
-    c.createDiv({ cls: "dj-day-total", text: `${day.pages} pages` });
-  for (const b of day.books) {
-    const row2 = c.createDiv({ cls: "dj-book" });
+  const books = [...day.books].sort((a, b) => {
+    var _a2, _b2;
+    return ((_a2 = b.pages) != null ? _a2 : 0) - ((_b2 = a.pages) != null ? _b2 : 0);
+  });
+  let list = c;
+  const rows = [];
+  if (books.length > 1) {
+    const head = createDiv({ cls: "dj-card-head" });
+    const label = c.querySelector(":scope > .dj-label");
+    c.prepend(head);
+    if (label)
+      head.append(label);
+    const pager = head.createDiv({ cls: "dj-pager" });
+    const prev = pager.createEl("button", { text: "\u2039", attr: { "aria-label": "Previous book" } });
+    const count = pager.createSpan({ cls: "dj-pager-count" });
+    const next = pager.createEl("button", { text: "\u203A", attr: { "aria-label": "Next book" } });
+    list = c.createDiv({ cls: "dj-book-pages" });
+    let at = 0;
+    const show = (i) => {
+      at = (i + books.length) % books.length;
+      rows.forEach((r, j) => r.toggleClass("is-shown", j === at));
+      count.setText(`${at + 1}/${books.length}`);
+    };
+    prev.onclick = () => show(at - 1);
+    next.onclick = () => show(at + 1);
+    let startX = null;
+    list.addEventListener("touchstart", (e) => {
+      var _a2, _b2;
+      startX = (_b2 = (_a2 = e.touches[0]) == null ? void 0 : _a2.clientX) != null ? _b2 : null;
+    }, { passive: true });
+    list.addEventListener("touchend", (e) => {
+      var _a2, _b2;
+      const dx = startX === null ? 0 : ((_b2 = (_a2 = e.changedTouches[0]) == null ? void 0 : _a2.clientX) != null ? _b2 : startX) - startX;
+      startX = null;
+      if (Math.abs(dx) > 40)
+        show(at + (dx < 0 ? 1 : -1));
+    });
+    count.setText(`1/${books.length}`);
+  }
+  for (const b of books) {
+    const row2 = list.createDiv({ cls: "dj-book" });
+    rows.push(row2);
     const initials = b.title.split(/[\s:]+/).filter((w) => /^[A-Za-z0-9]/.test(w)).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
     const openBook = (e) => {
       e.preventDefault();
@@ -1663,6 +1701,7 @@ function drawReading(el, day, date) {
         line.createSpan({ text: `+${b.pages} pages` });
     }
   }
+  (_b = rows[0]) == null ? void 0 : _b.addClass("is-shown");
   if (!day.quotes.length)
     return;
   const row = el.closest(".dj-row-wrap");
@@ -1670,7 +1709,7 @@ function drawReading(el, day, date) {
   if (row) {
     row.querySelectorAll(":scope > .dj-row-quotes").forEach((q2) => q2.remove());
     target = createDiv({ cls: "dj-card dj-row-quotes" });
-    (_b = row.querySelector(":scope > .dj-row-cards")) == null ? void 0 : _b.after(target);
+    (_c = row.querySelector(":scope > .dj-row-cards")) == null ? void 0 : _c.after(target);
   }
   if (row)
     shrinkToOneLine(target.createDiv({ cls: "dj-label dj-one-line", text: "Today's Highlights" }), ["0.76em", "0.68em"]);

@@ -262,11 +262,43 @@ export function drawReading(el: HTMLElement, day: HardcoverDay, date: Moment): v
 		return;
 	}
 
-	// Day total, when more than one book (or time) is involved.
-	if (day.pages && day.books.length > 1) c.createDiv({ cls: "dj-day-total", text: `${day.pages} pages` });
+	// Several books: one at a time with a pager (‹ 1/2 ›) beside the label, most pages read first. All
+	// books share one grid cell, so the card is as tall as the tallest and doesn't jump when paging.
+	const books = [...day.books].sort((a, b) => (b.pages ?? 0) - (a.pages ?? 0));
+	let list: HTMLElement = c;
+	const rows: HTMLElement[] = [];
+	if (books.length > 1) {
+		const head = createDiv({ cls: "dj-card-head" });
+		const label = c.querySelector(":scope > .dj-label");
+		c.prepend(head);
+		if (label) head.append(label);
+		const pager = head.createDiv({ cls: "dj-pager" });
+		const prev = pager.createEl("button", { text: "‹", attr: { "aria-label": "Previous book" } });
+		const count = pager.createSpan({ cls: "dj-pager-count" });
+		const next = pager.createEl("button", { text: "›", attr: { "aria-label": "Next book" } });
+		list = c.createDiv({ cls: "dj-book-pages" });
+		let at = 0;
+		const show = (i: number) => {
+			at = (i + books.length) % books.length;
+			rows.forEach((r, j) => r.toggleClass("is-shown", j === at));
+			count.setText(`${at + 1}/${books.length}`);
+		};
+		prev.onclick = () => show(at - 1);
+		next.onclick = () => show(at + 1);
+		// Swipe left/right on phones.
+		let startX: number | null = null;
+		list.addEventListener("touchstart", (e) => { startX = e.touches[0]?.clientX ?? null; }, { passive: true });
+		list.addEventListener("touchend", (e) => {
+			const dx = startX === null ? 0 : (e.changedTouches[0]?.clientX ?? startX) - startX;
+			startX = null;
+			if (Math.abs(dx) > 40) show(at + (dx < 0 ? 1 : -1));
+		});
+		count.setText(`1/${books.length}`);
+	}
 
-	for (const b of day.books) {
-		const row = c.createDiv({ cls: "dj-book" });
+	for (const b of books) {
+		const row = list.createDiv({ cls: "dj-book" });
+		rows.push(row);
 		const initials = b.title.split(/[\s:]+/).filter((w) => /^[A-Za-z0-9]/.test(w)).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
 		// The cover and title open the book on Hardcover. Opened explicitly: inside the editor, a plain
 		// link's click doesn't reach Obsidian's link handling.
@@ -297,6 +329,7 @@ export function drawReading(el: HTMLElement, day: HardcoverDay, date: Moment): v
 			if (b.pages) line.createSpan({ text: `+${b.pages} pages` });
 		}
 	}
+	rows[0]?.addClass("is-shown");
 	if (!day.quotes.length) return;
 	// In a side-by-side row the card is half width: quotes go in their own full-width card under the
 	// row (like the song player), so both cards in the row stay compact.

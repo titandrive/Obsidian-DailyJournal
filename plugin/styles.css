@@ -454,3 +454,13 @@ button.dj-prompt-add { display: flex; align-items: center; gap: .4em; margin-top
 /* Tab buttons in base toolbars */
 .dj-base-tabs { display: flex; align-items: center; gap: 2px; }
 .dj-base-tab.is-active { color: var(--interactive-accent); background-color: var(--background-modifier-hover); }
+
+/* Currently reading with several books: one at a time, paged from the header */
+.dj-card-head { display: flex; align-items: center; justify-content: space-between; gap: .5em; }
+.dj-pager { display: flex; align-items: center; gap: .15em; font-size: .85em; color: var(--text-muted); }
+.dj-pager-count { min-width: 2.4em; text-align: center; font-variant-numeric: tabular-nums; }
+.dj-card .dj-pager button { padding: 0 .45em; height: 1.6em; background: transparent; box-shadow: none; border: none; color: var(--text-muted); font-size: 1.25em; line-height: 1; cursor: pointer; }
+.dj-card .dj-pager button:hover { color: var(--text-normal); background: var(--background-modifier-hover); }
+.dj-book-pages { display: grid; }
+.dj-book-pages > .dj-book { grid-area: 1 / 1; visibility: hidden; }
+.dj-book-pages > .dj-book.is-shown { visibility: visible; }
