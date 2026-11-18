@@ -728,10 +728,14 @@ export class MoodPickerModal extends Modal {
 		if (this.family) {
 			// One core feeling: rows of three, the feeling (bold) then its two more specific ones.
 			const f = this.family;
-			const back = this.bodyEl.createEl("button", { cls: "dj-show-back dj-mood-back" });
-			setIcon(back.createSpan(), "arrow-left");
-			back.createSpan({ text: f.name });
+			// A header: a small back arrow, then the feeling's name and color, like the tile you tapped.
+			const head = this.bodyEl.createDiv({ cls: "dj-mood-head" });
+			head.style.setProperty("--dj-mood", f.color);
+			const back = head.createEl("button", { cls: "dj-mood-back clickable-icon", attr: { "aria-label": "Back" } });
+			setIcon(back, "arrow-left");
 			back.onclick = () => this.back();
+			head.createSpan({ cls: "dj-mood-dot" });
+			head.createSpan({ cls: "dj-mood-head-name", text: f.name });
 			const rows = this.bodyEl.createDiv({ cls: "dj-mood-words dj-mood-rows" });
 			for (const r of f.rows) {
 				this.wordChip(rows, r.word, true);

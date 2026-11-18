@@ -503,7 +503,6 @@ button.dj-prompt-add { display: flex; align-items: center; gap: .4em; margin-top
 .dj-mood-family-name { display: flex; align-items: center; gap: .45em; font-weight: 600; }
 .dj-mood-family-hint { font-size: var(--font-ui-smaller); color: var(--text-muted); }
 .dj-mood-modal button.dj-mood-word.is-full { opacity: .4; cursor: default; }
-.dj-mood-modal .dj-mood-back { margin-bottom: var(--size-4-2); }
 /* Words are tiles like the families: tinted in the family's color, brighter on hover, filled when picked. */
 .dj-mood-words { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: var(--size-4-2); }
 .dj-mood-words.dj-mood-rows { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -524,3 +523,9 @@ button.dj-prompt-add { display: flex; align-items: center; gap: .4em; margin-top
 /* Phones: three words across must fit, so smaller text and padding, and long words may wrap. */
 .is-mobile .dj-mood-modal button.dj-mood-word { font-size: calc(var(--font-ui-small) * .8); padding: .7em .5em; overflow-wrap: break-word; }
 .is-mobile .dj-mood-words.dj-mood-rows { gap: var(--size-4-1) var(--size-4-2); }
+/* A core feeling's page: back arrow, then its dot and name. */
+.dj-mood-head { display: flex; align-items: center; gap: .5em; margin-bottom: var(--size-4-3); }
+.dj-mood-head-name { font-weight: 600; font-size: var(--font-ui-medium); }
+.dj-mood-modal button.dj-mood-back { width: auto; height: auto; padding: var(--size-2-2); border-radius: var(--radius-s); background: transparent; box-shadow: none; color: var(--text-muted); }
+.dj-mood-modal button.dj-mood-back:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
+.dj-mood-modal button.dj-mood-back:focus-visible { outline: 2px solid var(--dj-mood, var(--interactive-accent)); outline-offset: 1px; }
