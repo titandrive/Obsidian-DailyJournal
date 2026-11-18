@@ -133,7 +133,7 @@ export class TrendsView extends BasesView {
 		lineChart(moodSleep.card("Sleep", "7-day average"), recent, (d) => num(d.fm.sleep), 12);
 
 		// What lines up with good and bad days
-		const patterns = section("Good and bad days");
+		const patterns = section("Trends");
 		const sleepIn = (lo: number, hi: number) => (d: Day) => { const s = num(d.fm.sleep); return s !== null && s >= lo && s < hi; };
 		const SLEEP: Array<[string, (d: Day) => boolean]> = [
 			["Under 6 h", sleepIn(0, 6)], ["6–7 h", sleepIn(6, 7)], ["7–8 h", sleepIn(7, 8)], ["8 h+", sleepIn(8, 99)],
@@ -168,7 +168,7 @@ export class TrendsView extends BasesView {
 		const ups = effects.filter((x) => x.diff > 0).sort((a, b) => b.diff - a.diff).slice(0, 4);
 		const downs = effects.filter((x) => x.diff < 0).sort((a, b) => b.diff - a.diff).slice(-4);
 		if (ratings.length) {
-			const c = patterns.card("What moves your rating", "How much higher or lower you rate days with each of these");
+			const c = patterns.card("What affects your day", "How certain factors affect your day rating");
 			c.addClass("dj-trends-wide");
 			if (ups.length || downs.length) {
 				diverging(c, [...ups, ...downs]);

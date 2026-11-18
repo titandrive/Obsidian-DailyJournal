@@ -2552,7 +2552,7 @@ var TrendsView = class extends import_obsidian6.BasesView {
     const recent = days.filter((d) => !d.date.isBefore(days[days.length - 1].date.clone().subtract(89, "days"), "day"));
     lineChart(moodSleep.card("Day rating", "7-day average"), recent, (d) => num(d.fm.day_rating), 10);
     lineChart(moodSleep.card("Sleep", "7-day average"), recent, (d) => num(d.fm.sleep), 12);
-    const patterns = section("Good and bad days");
+    const patterns = section("Trends");
     const sleepIn = (lo, hi) => (d) => {
       const s = num(d.fm.sleep);
       return s !== null && s >= lo && s < hi;
@@ -2593,7 +2593,7 @@ var TrendsView = class extends import_obsidian6.BasesView {
     const ups = effects.filter((x) => x.diff > 0).sort((a, b) => b.diff - a.diff).slice(0, 4);
     const downs = effects.filter((x) => x.diff < 0).sort((a, b) => b.diff - a.diff).slice(-4);
     if (ratings.length) {
-      const c = patterns.card("What moves your rating", "How much higher or lower you rate days with each of these");
+      const c = patterns.card("What affects your day", "How certain factors affect your day rating");
       c.addClass("dj-trends-wide");
       if (ups.length || downs.length) {
         diverging(c, [...ups, ...downs]);
