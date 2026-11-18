@@ -145,7 +145,15 @@ export class TrendsView extends BasesView {
 				.map((f) => ({ f, n: moodDays.filter((d) => feelingsOf(d.fm).includes(f.name)).length }))
 				.filter((x) => x.n);
 			const most = [...feelings].sort((a, b) => b.n - a.n)[0];
-			if (most) mood.tile("Most felt", most.f.name, `on ${Math.round((100 * most.n) / moodDays.length)}% of days`);
+			if (most) {
+				// A card like the others (not a tile), so the section is an even grid of cards.
+				const c = mood.card("Most felt", "Core emotion on the most days");
+				const big = c.createDiv({ cls: "dj-trends-big" });
+				big.style.setProperty("--dj-mood", most.f.color);
+				big.createSpan({ cls: "dj-mood-dot" });
+				big.createSpan({ text: most.f.name });
+				c.createDiv({ cls: "dj-trends-muted", text: `on ${Math.round((100 * most.n) / moodDays.length)}% of days with a mood` });
+			}
 			if (feelings.length) barList(mood.card("Feelings", "Days each was felt"),
 				feelings.map(({ f, n }) => ({ label: f.name, value: n, text: times(n), color: f.color, hint: `${n} day${n === 1 ? "" : "s"}` })));
 			const words = ranked(moodDays.flatMap((d) => moodsOf(d.fm)), 5)

@@ -3068,8 +3068,14 @@ var TrendsView = class extends import_obsidian6.BasesView {
     if (moodDays.length) {
       const feelings = moodFamilies().map((f) => ({ f, n: moodDays.filter((d) => feelingsOf(d.fm).includes(f.name)).length })).filter((x) => x.n);
       const most = [...feelings].sort((a, b) => b.n - a.n)[0];
-      if (most)
-        mood.tile("Most felt", most.f.name, `on ${Math.round(100 * most.n / moodDays.length)}% of days`);
+      if (most) {
+        const c = mood.card("Most felt", "Core emotion on the most days");
+        const big = c.createDiv({ cls: "dj-trends-big" });
+        big.style.setProperty("--dj-mood", most.f.color);
+        big.createSpan({ cls: "dj-mood-dot" });
+        big.createSpan({ text: most.f.name });
+        c.createDiv({ cls: "dj-trends-muted", text: `on ${Math.round(100 * most.n / moodDays.length)}% of days with a mood` });
+      }
       if (feelings.length)
         barList(
           mood.card("Feelings", "Days each was felt"),
