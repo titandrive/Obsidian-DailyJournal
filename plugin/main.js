@@ -2726,15 +2726,12 @@ function goodVsBad(el, good, bad, all) {
     return (_b = (_a = ranked(values, 1)[0]) == null ? void 0 : _a.label) != null ? _b : null;
   };
   const groups = [good, bad, all];
-  const table = el.createDiv({ cls: "dj-trends-compare" });
-  for (const cell of ["", "Good days", "Bad days", "All days"])
-    table.createDiv({ cls: "dj-trends-compare-head", text: cell });
+  const names = ["Good days", "Bad days", "All days"];
+  const rows = [];
   const row = (label, value) => {
     const cells = groups.map((ds) => ds.length ? value(ds) : null);
-    if (cells.every((c) => c === null))
-      return;
-    table.createDiv({ text: label });
-    cells.forEach((c, i) => table.createDiv({ cls: "dj-trends-compare-value" + (i === 2 ? " dj-trends-muted" : ""), text: c != null ? c : "\u2013" }));
+    if (cells.some((c) => c !== null))
+      rows.push([label, cells]);
   };
   row("Days", (ds) => String(ds.length));
   row("Sleep", (ds) => avgOf(ds, "sleep"));
@@ -2743,6 +2740,29 @@ function goodVsBad(el, good, bad, all) {
   row("Most common weather", (ds) => top(ds.map((d) => sky(d.fm))));
   row("Skipped a meal", (ds) => `${Math.round(100 * ds.filter((d) => skippedMeals(d.fm).length > 0).length / ds.length)}%`);
   row("Most common meal", (ds) => top(ds.flatMap((d) => MEALS.map((k) => mealText(d.fm, k)))));
+  const table = el.createDiv({ cls: "dj-trends-compare" });
+  for (const cell of ["", ...names])
+    table.createDiv({ cls: "dj-trends-compare-head", text: cell });
+  for (const [label, cells] of rows) {
+    table.createDiv({ text: label });
+    cells.forEach((c, i) => table.createDiv({ cls: "dj-trends-compare-value" + (i === 2 ? " dj-trends-muted" : ""), text: c != null ? c : "\u2013" }));
+  }
+  const narrow = el.createDiv({ cls: "dj-trends-gvb" });
+  const tabs = narrow.createDiv({ cls: "dj-trends-gvb-tabs" });
+  const list = narrow.createDiv({ cls: "dj-trends-gvb-list" });
+  const show = (g) => {
+    var _a;
+    tabs.querySelectorAll("button").forEach((b, i) => b.toggleClass("is-active", i === g));
+    list.empty();
+    for (const [label, cells] of rows) {
+      list.createDiv({ cls: "dj-trends-gvb-label", text: label });
+      list.createDiv({ cls: "dj-trends-gvb-value", text: (_a = cells[g]) != null ? _a : "\u2013" });
+    }
+  };
+  names.forEach((name, i) => {
+    tabs.createEl("button", { text: name }).onclick = () => show(i);
+  });
+  show(0);
 }
 function dateRange(from, to) {
   return `${from.format("M/D/YY")}\u2013${to.format("M/D/YY")}`;

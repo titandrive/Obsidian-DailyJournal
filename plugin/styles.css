@@ -423,7 +423,8 @@ button.dj-prompt-add { display: flex; align-items: center; gap: .4em; margin-top
 .dj-trends-dot circle:not(.dj-trends-hit) { fill: color-mix(in srgb, var(--interactive-accent) 45%, var(--background-secondary)); }
 .dj-trends-dot .dj-trends-hit { fill: transparent; }
 .dj-trends-dot:hover circle:not(.dj-trends-hit) { fill: var(--interactive-accent); r: 5; }
-.dj-trends-compare { display: grid; grid-template-columns: 1fr repeat(3, auto); gap: 6px 1.5em; font-size: var(--font-ui-small); }
+.dj-trends-compare { display: grid; grid-template-columns: minmax(min-content, 1.3fr) repeat(3, minmax(min-content, 1fr)); gap: 6px 1.2em; font-size: var(--font-ui-small); }
+.dj-trends-compare > div { overflow-wrap: break-word; min-width: 0; }
 .dj-trends-compare-head { color: var(--text-muted); font-size: var(--font-ui-smaller); text-align: right; }
 .dj-trends-compare-value { text-align: right; font-variant-numeric: tabular-nums; }
 .dj-trends { gap: var(--size-4-8); }
@@ -472,3 +473,16 @@ button.dj-prompt-add { display: flex; align-items: center; gap: .4em; margin-top
 	background: color-mix(in srgb, var(--background-primary) 85%, transparent); color: var(--interactive-accent); backdrop-filter: blur(4px); }
 .dj-badge.dj-cover-badge.is-finished { color: var(--color-green); }
 .dj-suggest.dj-suggest-floating { position: fixed; right: auto; top: 0; z-index: var(--layer-popover, 40); font-size: var(--font-text-size, 16px); }
+
+/* Narrow cards (phones, split panes): Good vs bad days switches from the table to one group at a time. */
+.dj-trends-card { container-type: inline-size; }
+.dj-trends-gvb { display: none; }
+.dj-trends-gvb-tabs { display: flex; gap: 4px; margin-bottom: var(--size-4-3); }
+.dj-trends-card .dj-trends-gvb-tabs button { flex: 1; height: auto; padding: .35em .5em; font-size: var(--font-ui-smaller); border-radius: var(--radius-s); background: transparent; box-shadow: none; border: 1px solid var(--background-modifier-border); color: var(--text-muted); }
+.dj-trends-card .dj-trends-gvb-tabs button.is-active { background: color-mix(in srgb, var(--interactive-accent) 20%, transparent); border-color: transparent; color: var(--interactive-accent); }
+.dj-trends-gvb-list { display: grid; grid-template-columns: 1fr auto; gap: 6px 1em; font-size: var(--font-ui-small); }
+.dj-trends-gvb-value { text-align: right; font-variant-numeric: tabular-nums; }
+@container (max-width: 520px) {
+	.dj-trends-compare { display: none; }
+	.dj-trends-gvb { display: block; }
+}

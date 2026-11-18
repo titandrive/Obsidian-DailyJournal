@@ -306,13 +306,11 @@ function goodVsBad(el: HTMLElement, good: Day[], bad: Day[], all: Day[]): void {
 	const top = (values: string[]) => ranked(values, 1)[0]?.label ?? null;
 	const groups = [good, bad, all];
 
-	const table = el.createDiv({ cls: "dj-trends-compare" });
-	for (const cell of ["", "Good days", "Bad days", "All days"]) table.createDiv({ cls: "dj-trends-compare-head", text: cell });
+	const names = ["Good days", "Bad days", "All days"];
+	const rows: Array<[string, Array<string | null>]> = [];
 	const row = (label: string, value: (ds: Day[]) => string | null) => {
 		const cells = groups.map((ds) => (ds.length ? value(ds) : null));
-		if (cells.every((c) => c === null)) return;
-		table.createDiv({ text: label });
-		cells.forEach((c, i) => table.createDiv({ cls: "dj-trends-compare-value" + (i === 2 ? " dj-trends-muted" : ""), text: c ?? "–" }));
+		if (cells.some((c) => c !== null)) rows.push([label, cells]);
 	};
 	row("Days", (ds) => String(ds.length));
 	row("Sleep", (ds) => avgOf(ds, "sleep"));
@@ -321,6 +319,30 @@ function goodVsBad(el: HTMLElement, good: Day[], bad: Day[], all: Day[]): void {
 	row("Most common weather", (ds) => top(ds.map((d) => sky(d.fm))));
 	row("Skipped a meal", (ds) => `${Math.round((100 * ds.filter((d) => skippedMeals(d.fm).length > 0).length) / ds.length)}%`);
 	row("Most common meal", (ds) => top(ds.flatMap((d) => MEALS.map((k) => mealText(d.fm, k)))));
+
+	// Wide cards: one table, the three groups side by side.
+	const table = el.createDiv({ cls: "dj-trends-compare" });
+	for (const cell of ["", ...names]) table.createDiv({ cls: "dj-trends-compare-head", text: cell });
+	for (const [label, cells] of rows) {
+		table.createDiv({ text: label });
+		cells.forEach((c, i) => table.createDiv({ cls: "dj-trends-compare-value" + (i === 2 ? " dj-trends-muted" : ""), text: c ?? "–" }));
+	}
+
+	// Narrow cards (phones): four columns don't fit, so pick a group and see it as a plain
+	// label/value list, like the other cards. CSS shows one layout or the other.
+	const narrow = el.createDiv({ cls: "dj-trends-gvb" });
+	const tabs = narrow.createDiv({ cls: "dj-trends-gvb-tabs" });
+	const list = narrow.createDiv({ cls: "dj-trends-gvb-list" });
+	const show = (g: number) => {
+		tabs.querySelectorAll("button").forEach((b, i) => b.toggleClass("is-active", i === g));
+		list.empty();
+		for (const [label, cells] of rows) {
+			list.createDiv({ cls: "dj-trends-gvb-label", text: label });
+			list.createDiv({ cls: "dj-trends-gvb-value", text: cells[g] ?? "–" });
+		}
+	};
+	names.forEach((name, i) => { tabs.createEl("button", { text: name }).onclick = () => show(i); });
+	show(0);
 }
 
 /** "11/3/26–11/17/26": the full range, compact enough for a tile. */
