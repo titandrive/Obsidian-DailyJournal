@@ -8,9 +8,10 @@ import { JournalSettings } from "./settings";
 export const BASE_NAME = "Insights.base";
 /** Earlier names of the base, moved to BASE_NAME (links follow) when found. */
 export const OLD_BASE_NAMES = ["Journal.base"];
+/** Where the base used to keep weather icon files (removed now; the base uses built-in icons). */
 export const ICONS_FOLDER = "Weather Icons";
 
-/** Weather labels (as saved by the header) and their icon files, longest label first. */
+/** Weather labels (as saved by the header) and their icon names, longest label first. */
 const SKY: Array<[string, string]> = [
 	["Partly cloudy", "partly-cloudy"], ["Snow showers", "snow-showers"], ["Thunderstorm", "thunderstorm"],
 	["Overcast", "overcast"], ["Drizzle", "drizzle"], ["Showers", "showers"], ["Clear", "clear"],
@@ -18,6 +19,12 @@ const SKY: Array<[string, string]> = [
 ];
 
 export const SKY_ICONS = SKY.map(([, icon]) => icon);
+
+/** Each weather as one of Obsidian's built-in (Lucide) icons, which Bases draws without any files. */
+const SKY_LUCIDE: Record<string, string> = {
+	"partly-cloudy": "cloud-sun", "snow-showers": "cloud-snow", "thunderstorm": "cloud-lightning", "overcast": "cloud",
+	"drizzle": "cloud-drizzle", "showers": "cloud-rain", "clear": "sun", "rain": "cloud-rain", "snow": "snowflake", "fog": "cloud-fog",
+};
 
 const q = (s: string) => JSON.stringify(s);
 
@@ -45,7 +52,6 @@ function dateFormula(dateFormat: string): string {
 /** The base's YAML for the current settings. */
 export function journalBase(settings: JournalSettings): string {
 	const folder = settings.folder.replace(/\/+$/, "") || "/";
-	const icons = `${folder === "/" ? "" : folder + "/"}${ICONS_FOLDER}`;
 	const f = settings.fields;
 
 	// Favorite (the header star) right after the day, so starred entries are easy to spot and sort by.
@@ -64,7 +70,7 @@ export function journalBase(settings: JournalSettings): string {
 	].filter(Boolean);
 
 	let sky = q("");
-	for (const [label, icon] of [...SKY].reverse()) sky = `if(weather.startsWith(${q(label)}), image(${q(`${icons}/${icon}.svg`)}), ${sky})`;
+	for (const [label, icon] of [...SKY].reverse()) sky = `if(weather.startsWith(${q(label)}), icon(${q(SKY_LUCIDE[icon])}), ${sky})`;
 
 	const lines = [
 		"filters:", "  and:",

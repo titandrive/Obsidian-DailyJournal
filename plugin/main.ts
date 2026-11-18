@@ -1,6 +1,5 @@
 import { debounce, MarkdownRenderChild, MarkdownView, Notice, normalizePath, Plugin, TAbstractFile, TFile, TFolder, moment } from "obsidian";
 import { BASE_NAME, ICONS_FOLDER, journalBase, OLD_BASE_NAMES, SKY_ICONS } from "./src/base";
-import { METEOCONS } from "./src/meteocons";
 import { entryDate, entryPath, Moment } from "./src/dates";
 import { HardcoverDay, hardcoverDay, readingProperties } from "./src/hardcover";
 import { MonthPicker, PlaceHistory, PlaceModal } from "./src/modals";
@@ -284,9 +283,8 @@ export default class DailyJournal extends Plugin implements JournalHost {
 	}
 
 	/**
-	 * Keep the Insights base (and the weather icons it shows) in the journal folder while the setting
-	 * is on, matching the current settings; move them to the trash when it's turned off or the
-	 * journal folder moves. Only acts on an existing folder, so typing a folder name doesn't scatter
+	 * Keep the Insights base in the journal folder while the setting is on, matching the current
+	 * settings; move it to the trash when it's turned off or the journal folder moves. Only acts on an existing folder, so typing a folder name doesn't scatter
 	 * bases across half-typed paths.
 	 */
 	async syncJournalBase(): Promise<void> {
@@ -319,16 +317,28 @@ export default class DailyJournal extends Plugin implements JournalHost {
 			else await this.app.fileManager.renameFile(file, inFolder(BASE_NAME));
 		}
 		await write(inFolder(BASE_NAME), journalBase(s));
-		if (s.showWeather) for (const icon of SKY_ICONS) await write(inFolder(`${ICONS_FOLDER}/${icon}.svg`), METEOCONS[icon]);
+		await this.removeOldWeatherIcons(inFolder(ICONS_FOLDER));
 		if (s.baseFolder !== target) { s.baseFolder = target; await this.saveData(s); }
+	}
+
+	/**
+	 * The base used to show weather with image files kept in a "Weather Icons" folder beside it; it now
+	 * uses Obsidian's built-in icons. Trash that folder, but only if it holds nothing but those icons.
+	 */
+	private async removeOldWeatherIcons(path: string): Promise<void> {
+		const folder = this.app.vault.getAbstractFileByPath(path);
+		if (!(folder instanceof TFolder)) return;
+		const ours = new Set(SKY_ICONS.map((i) => `${i}.svg`));
+		if (folder.children.every((f) => f instanceof TFile && ours.has(f.name))) await this.app.fileManager.trashFile(folder);
 	}
 
 	private async removeJournalBase(folder: string): Promise<void> {
 		const inFolder = (name: string) => normalizePath(folder === "/" ? name : `${folder}/${name}`);
-		for (const path of [inFolder(BASE_NAME), ...OLD_BASE_NAMES.map(inFolder), inFolder(ICONS_FOLDER)]) {
+		for (const path of [inFolder(BASE_NAME), ...OLD_BASE_NAMES.map(inFolder)]) {
 			const item = this.app.vault.getAbstractFileByPath(path);
 			if (item) await this.app.fileManager.trashFile(item);
 		}
+		await this.removeOldWeatherIcons(inFolder(ICONS_FOLDER));
 	}
 
 	journalEntries(): Array<{ file: TFile; date: Moment }> {
