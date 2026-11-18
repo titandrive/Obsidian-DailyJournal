@@ -543,6 +543,8 @@ button.dj-prompt-add { display: flex; align-items: center; gap: .4em; margin-top
 .dj-trends-big .dj-mood-dot { width: .45em; height: .45em; }
 /* Good vs bad days: a table with row lines, colored column headings, and the good and bad columns tinted. */
 .dj-trends-compare { display: grid; grid-template-columns: auto repeat(3, minmax(min-content, 1fr)); font-size: var(--font-ui-small); }
+/* Narrow cards (phones) use the pick-a-group list instead; repeated here, after the table's own rules, so it wins. */
+@container (max-width: 520px) { .dj-trends-compare { display: none; } }
 .dj-trends-compare > div { padding: .45em .8em; border-bottom: 1px solid var(--background-modifier-border); }
 .dj-trends-compare > div:nth-last-child(-n+4) { border-bottom: none; }
 .dj-trends-compare-label { padding-inline-start: 0 !important; color: var(--text-muted); }
