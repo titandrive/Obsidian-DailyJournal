@@ -1720,6 +1720,9 @@ var MoodPickerModal = class extends import_obsidian3.Modal {
       head.createSpan({ cls: "dj-mood-dot" });
       head.createSpan({ cls: "dj-mood-head-name", text: f.name });
       const rows = this.bodyEl.createDiv({ cls: "dj-mood-words dj-mood-rows" });
+      rows.style.setProperty("--dj-mood", f.color);
+      rows.createDiv({ cls: "dj-mood-col", text: "Feeling" });
+      rows.createDiv({ cls: "dj-mood-col dj-mood-col-more", text: "More specific" });
       for (const r of f.rows) {
         this.wordChip(rows, r.word, true);
         for (const w of r.more)

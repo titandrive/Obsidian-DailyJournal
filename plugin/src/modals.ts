@@ -737,6 +737,10 @@ export class MoodPickerModal extends Modal {
 			head.createSpan({ cls: "dj-mood-dot" });
 			head.createSpan({ cls: "dj-mood-head-name", text: f.name });
 			const rows = this.bodyEl.createDiv({ cls: "dj-mood-words dj-mood-rows" });
+			rows.style.setProperty("--dj-mood", f.color);
+			// Column headings, so it's clear the left column is the kind of feeling and the others narrow it.
+			rows.createDiv({ cls: "dj-mood-col", text: "Feeling" });
+			rows.createDiv({ cls: "dj-mood-col dj-mood-col-more", text: "More specific" });
 			for (const r of f.rows) {
 				this.wordChip(rows, r.word, true);
 				for (const w of r.more) this.wordChip(rows, w);
