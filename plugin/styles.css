@@ -423,10 +423,7 @@ button.dj-prompt-add { display: flex; align-items: center; gap: .4em; margin-top
 .dj-trends-dot circle:not(.dj-trends-hit) { fill: color-mix(in srgb, var(--interactive-accent) 45%, var(--background-secondary)); }
 .dj-trends-dot .dj-trends-hit { fill: transparent; }
 .dj-trends-dot:hover circle:not(.dj-trends-hit) { fill: var(--interactive-accent); r: 5; }
-.dj-trends-compare { display: grid; grid-template-columns: minmax(min-content, 1.3fr) repeat(3, minmax(min-content, 1fr)); gap: 6px 1.2em; font-size: var(--font-ui-small); }
 .dj-trends-compare > div { overflow-wrap: break-word; min-width: 0; }
-.dj-trends-compare-head { color: var(--text-muted); font-size: var(--font-ui-smaller); text-align: right; }
-.dj-trends-compare-value { text-align: right; font-variant-numeric: tabular-nums; }
 .dj-trends { gap: var(--size-4-8); }
 .dj-trends-section { display: flex; flex-direction: column; gap: var(--size-4-3); }
 .dj-trends-section-title { font-size: var(--font-ui-medium); font-weight: 600; color: var(--text-normal); padding-bottom: var(--size-4-1); border-bottom: 1px solid var(--background-modifier-border); }
@@ -544,3 +541,16 @@ button.dj-prompt-add { display: flex; align-items: center; gap: .4em; margin-top
 /* A single big value in a card (Most felt). */
 .dj-trends-big { display: flex; align-items: center; gap: .4em; font-size: 1.2em; font-weight: 600; line-height: 1.2; margin: 0 0 var(--size-2-1); }
 .dj-trends-big .dj-mood-dot { width: .45em; height: .45em; }
+/* Good vs bad days: a table with row lines, colored column headings, and the good and bad columns tinted. */
+.dj-trends-compare { display: grid; grid-template-columns: auto repeat(3, minmax(min-content, 1fr)); font-size: var(--font-ui-small); }
+.dj-trends-compare > div { padding: .45em .8em; border-bottom: 1px solid var(--background-modifier-border); }
+.dj-trends-compare > div:nth-last-child(-n+4) { border-bottom: none; }
+.dj-trends-compare-label { padding-inline-start: 0 !important; color: var(--text-muted); }
+.dj-trends-compare-head { font-weight: 600; text-align: center; border-bottom-color: var(--background-modifier-border-hover) !important; }
+.dj-trends-compare-value { text-align: center; font-variant-numeric: tabular-nums; }
+.dj-trends-compare .is-good { background: color-mix(in srgb, var(--color-green) 7%, transparent); }
+.dj-trends-compare .is-bad { background: color-mix(in srgb, var(--color-orange) 7%, transparent); }
+.dj-trends-compare-head.is-good { color: var(--color-green); border-radius: var(--radius-s) var(--radius-s) 0 0; }
+.dj-trends-compare-head.is-bad { color: var(--color-orange); border-radius: var(--radius-s) var(--radius-s) 0 0; }
+.dj-trends-compare-head.is-all { color: var(--text-muted); }
+.dj-trends-compare-value.is-all { color: var(--text-muted); }

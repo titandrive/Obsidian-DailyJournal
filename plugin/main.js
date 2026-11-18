@@ -3284,11 +3284,12 @@ function goodVsBad(el, good, bad, all) {
   row("Skipped a meal", (ds) => `${Math.round(100 * ds.filter((d) => skippedMeals(d.fm).length > 0).length / ds.length)}%`);
   row("Most common meal", (ds) => top(ds.flatMap((d) => MEALS.map((k) => mealText(d.fm, k)))));
   const table = el.createDiv({ cls: "dj-trends-compare" });
-  for (const cell of ["", ...names])
-    table.createDiv({ cls: "dj-trends-compare-head", text: cell });
+  const col = ["is-good", "is-bad", "is-all"];
+  table.createDiv({ cls: "dj-trends-compare-head" });
+  names.forEach((name, i) => table.createDiv({ cls: `dj-trends-compare-head ${col[i]}`, text: name }));
   for (const [label, cells] of rows) {
-    table.createDiv({ text: label });
-    cells.forEach((c, i) => table.createDiv({ cls: "dj-trends-compare-value" + (i === 2 ? " dj-trends-muted" : ""), text: c != null ? c : "\u2013" }));
+    table.createDiv({ cls: "dj-trends-compare-label", text: label });
+    cells.forEach((c, i) => table.createDiv({ cls: `dj-trends-compare-value ${col[i]}`, text: c != null ? c : "\u2013" }));
   }
   const narrow = el.createDiv({ cls: "dj-trends-gvb" });
   const tabs = narrow.createDiv({ cls: "dj-trends-gvb-tabs" });

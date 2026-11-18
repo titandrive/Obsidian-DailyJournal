@@ -355,10 +355,13 @@ function goodVsBad(el: HTMLElement, good: Day[], bad: Day[], all: Day[]): void {
 
 	// Wide cards: one table, the three groups side by side.
 	const table = el.createDiv({ cls: "dj-trends-compare" });
-	for (const cell of ["", ...names]) table.createDiv({ cls: "dj-trends-compare-head", text: cell });
+	// Each group's column has its own class, so it can be tinted as one band (good green, bad orange).
+	const col = ["is-good", "is-bad", "is-all"];
+	table.createDiv({ cls: "dj-trends-compare-head" });
+	names.forEach((name, i) => table.createDiv({ cls: `dj-trends-compare-head ${col[i]}`, text: name }));
 	for (const [label, cells] of rows) {
-		table.createDiv({ text: label });
-		cells.forEach((c, i) => table.createDiv({ cls: "dj-trends-compare-value" + (i === 2 ? " dj-trends-muted" : ""), text: c ?? "–" }));
+		table.createDiv({ cls: "dj-trends-compare-label", text: label });
+		cells.forEach((c, i) => table.createDiv({ cls: `dj-trends-compare-value ${col[i]}`, text: c ?? "–" }));
 	}
 
 	// Narrow cards (phones): four columns don't fit, so pick a group and see it as a plain
