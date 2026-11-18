@@ -1687,11 +1687,12 @@ function drawReading(el, day, date) {
       node.addEventListener("click", openBook);
       return node;
     };
+    const coverWrap = row2.createDiv({ cls: "dj-cover-wrap" });
     const fallback = () => {
       img == null ? void 0 : img.remove();
-      row2.prepend(linkable(createDiv({ cls: "dj-cover dj-cover-fallback", text: initials })));
+      coverWrap.prepend(linkable(createDiv({ cls: "dj-cover dj-cover-fallback", text: initials })));
     };
-    const img = b.cover ? linkable(row2.createEl("img", { cls: "dj-cover", attr: { src: b.cover, alt: b.title } })) : null;
+    const img = b.cover ? linkable(coverWrap.createEl("img", { cls: "dj-cover", attr: { src: b.cover, alt: b.title } })) : null;
     if (img)
       img.onerror = fallback;
     else
@@ -1703,13 +1704,12 @@ function drawReading(el, day, date) {
     else
       title.removeAttribute("href");
     shrinkToTwoLines(title);
-    if (b.author)
-      info.createDiv({ cls: "dj-book-author", text: b.author });
-    const badges = info.createDiv({ cls: "dj-row" });
-    if (b.started)
-      badges.createSpan({ cls: "dj-badge", text: "Started" });
-    if (b.finished)
-      badges.createSpan({ cls: "dj-badge", text: b.rating ? `Finished \xB7 rated ${b.rating}` : "Finished" });
+    const byline = [b.author, b.finished && b.rating ? `rated ${b.rating}` : ""].filter(Boolean).join(" \xB7 ");
+    if (byline)
+      info.createDiv({ cls: "dj-book-author", text: byline });
+    const chip = b.finished ? "Finished" : b.started ? "Started" : "";
+    if (chip)
+      coverWrap.createSpan({ cls: "dj-badge dj-cover-badge" + (b.finished ? " is-finished" : ""), text: chip });
     if (b.to !== null) {
       info.createDiv({ cls: "dj-bar" }).createDiv().style.width = `${Math.min(100, b.to)}%`;
       const line = info.createDiv({ cls: "dj-progress" });

@@ -328,18 +328,22 @@ export function drawReading(el: HTMLElement, day: HardcoverDay, date: Moment): v
 			node.addEventListener("click", openBook);
 			return node;
 		};
-		const fallback = () => { img?.remove(); row.prepend(linkable(createDiv({ cls: "dj-cover dj-cover-fallback", text: initials }))); };
-		const img = b.cover ? linkable(row.createEl("img", { cls: "dj-cover", attr: { src: b.cover, alt: b.title } })) as HTMLImageElement : null;
+		// The cover sits in a wrapper so the Started/Finished chip can overlay its bottom edge instead of
+		// taking a line of its own (which made the card, and the card beside it, taller).
+		const coverWrap = row.createDiv({ cls: "dj-cover-wrap" });
+		const fallback = () => { img?.remove(); coverWrap.prepend(linkable(createDiv({ cls: "dj-cover dj-cover-fallback", text: initials }))); };
+		const img = b.cover ? linkable(coverWrap.createEl("img", { cls: "dj-cover", attr: { src: b.cover, alt: b.title } })) as HTMLImageElement : null;
 		if (img) img.onerror = fallback; else fallback();
 
 		const info = row.createDiv({ cls: "dj-book-info" });
 		const title = info.createEl("a", { cls: "dj-book-title", text: b.title, href: b.url ?? "#" });
 		if (b.url) title.addEventListener("click", openBook); else title.removeAttribute("href");
 		shrinkToTwoLines(title);
-		if (b.author) info.createDiv({ cls: "dj-book-author", text: b.author });
-		const badges = info.createDiv({ cls: "dj-row" });
-		if (b.started) badges.createSpan({ cls: "dj-badge", text: "Started" });
-		if (b.finished) badges.createSpan({ cls: "dj-badge", text: b.rating ? `Finished · rated ${b.rating}` : "Finished" });
+		// The rating goes on the author line (the chip on the cover only has room for one word).
+		const byline = [b.author, b.finished && b.rating ? `rated ${b.rating}` : ""].filter(Boolean).join(" · ");
+		if (byline) info.createDiv({ cls: "dj-book-author", text: byline });
+		const chip = b.finished ? "Finished" : b.started ? "Started" : "";
+		if (chip) coverWrap.createSpan({ cls: "dj-badge dj-cover-badge" + (b.finished ? " is-finished" : ""), text: chip });
 		if (b.to !== null) {
 			info.createDiv({ cls: "dj-bar" }).createDiv().style.width = `${Math.min(100, b.to)}%`;
 			const line = info.createDiv({ cls: "dj-progress" });

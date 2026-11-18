@@ -464,3 +464,10 @@ button.dj-prompt-add { display: flex; align-items: center; gap: .4em; margin-top
 .dj-book-pages { display: grid; column-gap: 1.6em; }
 .dj-book-pages > .dj-book { grid-row: 1; visibility: hidden; min-width: 0; }
 .dj-book-pages > .dj-book.is-shown { visibility: visible; }
+
+/* Started / Finished banner across the bottom of the book cover */
+.dj-cover-wrap { position: relative; flex-shrink: 0; display: flex; }
+.dj-badge.dj-cover-badge { position: absolute; left: 0; right: 0; bottom: 0; transform: none; text-align: center; font-size: .58em; padding: .35em 0;
+	border-radius: 0 0 9px 9px; white-space: nowrap; pointer-events: none;
+	background: color-mix(in srgb, var(--background-primary) 85%, transparent); color: var(--interactive-accent); backdrop-filter: blur(4px); }
+.dj-badge.dj-cover-badge.is-finished { color: var(--color-green); }
