@@ -27,7 +27,7 @@ __export(main_exports, {
   default: () => DailyJournal
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian7 = require("obsidian");
+var import_obsidian8 = require("obsidian");
 
 // src/base.ts
 var BASE_NAME = "Insights.base";
@@ -119,8 +119,10 @@ function journalBase(settings) {
     // Trends first, so it's what the base opens to.
     `  - type: journal-trends`,
     "    name: Trends",
+    "    icon: chart-line",
     "  - type: table",
     "    name: Entries",
+    "    icon: table",
     "    order:",
     ...columns.map(([k]) => `      - ${k}`),
     "    sort:",
@@ -130,6 +132,7 @@ function journalBase(settings) {
     // Only starred entries.
     "  - type: table",
     "    name: Favorites",
+    "    icon: star",
     "    filters:",
     "      and:",
     "        - favorite == true",
@@ -140,6 +143,7 @@ function journalBase(settings) {
     "        direction: DESC",
     "  - type: table",
     "    name: By month",
+    "    icon: calendar",
     "    groupBy:",
     "      property: formula.month",
     "      direction: DESC",
@@ -416,7 +420,8 @@ var DEFAULT_SETTINGS = {
   useAsDailyTemplate: true,
   journalBase: true,
   baseFolder: null,
-  hideNoteChrome: true
+  hideNoteChrome: true,
+  baseTabs: true
 };
 
 // src/weather.ts
@@ -2331,6 +2336,11 @@ var JournalSettingTab = class extends import_obsidian5.PluginSettingTab {
       s.hideNoteChrome = v;
       await save();
     }));
+    new import_obsidian5.Setting(containerEl).setName("Tab buttons in bases").setDesc("A button for each tab (view) in the toolbar of every base, Insights included, to switch tabs in one tap.").addToggle((t) => t.setValue(s.baseTabs).onChange(async (v) => {
+      s.baseTabs = v;
+      await save();
+      this.plugin.refreshBaseTabs();
+    }));
     new import_obsidian5.Setting(containerEl).setName("Existing entries").setHeading();
     new import_obsidian5.Setting(containerEl).setName("Apply to existing entries").setDesc("Settings above only apply to new entries. This updates older entries to match them: cards, weather, check-in fields and whether the title and Properties show, and gives entries without a location the default one. Your writing and headings aren't changed.").addButton((b) => b.setButtonText("Apply\u2026").onClick(async () => {
       const files = await this.plugin.entriesNeedingLayout();
@@ -2743,8 +2753,108 @@ function lineChart(el, days, value, yMax) {
   el.appendChild(svg);
 }
 
+// src/basetabs.ts
+var import_obsidian7 = require("obsidian");
+var controllerOf = (view) => {
+  const c = view.controller;
+  return c && typeof c.selectView === "function" && typeof c.getQueryViewNames === "function" ? c : null;
+};
+var BaseTabs = class {
+  constructor(plugin, enabled) {
+    this.plugin = plugin;
+    this.enabled = enabled;
+    this.tabs = /* @__PURE__ */ new Map();
+    this.retries = 0;
+  }
+  /** Add, update or remove the buttons on every open base. */
+  refresh() {
+    var _a, _b;
+    const open = /* @__PURE__ */ new Set();
+    let loading = false;
+    for (const leaf of this.plugin.app.workspace.getLeavesOfType("bases")) {
+      open.add(leaf.view);
+      const c = controllerOf(leaf.view);
+      if (c && !((_b = (_a = c.getQueryViewNames) == null ? void 0 : _a.call(c)) != null ? _b : []).length)
+        loading = true;
+      this.draw(leaf);
+    }
+    if (loading && this.retries < 5) {
+      this.retries++;
+      window.setTimeout(() => this.refresh(), 300);
+    } else if (!loading) {
+      this.retries = 0;
+    }
+    for (const view of [...this.tabs.keys()])
+      if (!open.has(view))
+        this.clear(view);
+  }
+  clearAll() {
+    for (const view of [...this.tabs.keys()])
+      this.clear(view);
+  }
+  clear(view) {
+    var _a, _b;
+    const t = this.tabs.get(view);
+    if (!t)
+      return;
+    t.group.remove();
+    const c = controllerOf(view);
+    if (t.ref)
+      (_b = (_a = c == null ? void 0 : c.events) == null ? void 0 : _a.offref) == null ? void 0 : _b.call(_a, t.ref);
+    this.tabs.delete(view);
+  }
+  draw(leaf) {
+    var _a, _b, _c, _d;
+    const view = leaf.view;
+    const c = controllerOf(view);
+    const viewsMenu = view.containerEl.querySelector(".bases-toolbar .bases-toolbar-views-menu");
+    if (!c || !viewsMenu || !this.enabled()) {
+      this.clear(view);
+      return;
+    }
+    const names = (_b = (_a = c.getQueryViewNames) == null ? void 0 : _a.call(c)) != null ? _b : [];
+    if (names.length < 2) {
+      this.clear(view);
+      return;
+    }
+    const icon = (name) => {
+      var _a2, _b2, _c2, _d2, _e, _f;
+      const config = (_b2 = (_a2 = c.query) == null ? void 0 : _a2.getViewConfig) == null ? void 0 : _b2.call(_a2, name);
+      const own = (_c2 = config == null ? void 0 : config.get) == null ? void 0 : _c2.call(config, "icon");
+      if (typeof own === "string" && own)
+        return own;
+      return (config == null ? void 0 : config.type) && ((_f = (_e = (_d2 = c.plugin) == null ? void 0 : _d2.getRegistration) == null ? void 0 : _e.call(_d2, config.type)) == null ? void 0 : _f.icon) || "lucide-table";
+    };
+    const icons = names.map(icon);
+    const key = names.map((n, i) => `${n}\0${icons[i]}`).join("");
+    let t = this.tabs.get(view);
+    if (!t || t.key !== key || !t.group.isConnected) {
+      this.clear(view);
+      const group = createDiv({ cls: "bases-toolbar-item dj-base-tabs" });
+      names.forEach((name, i) => {
+        const b = group.createDiv({ cls: "clickable-icon dj-base-tab", attr: { "aria-label": name, "data-view": name } });
+        (0, import_obsidian7.setIcon)(b, icons[i]);
+        b.onclick = () => c.selectView(name);
+      });
+      viewsMenu.after(group);
+      const ref = (_d = (_c = c.events) == null ? void 0 : _c.on("view-changed", () => this.mark(view))) != null ? _d : null;
+      t = { key, group, ref };
+      this.tabs.set(view, t);
+    }
+    this.mark(view);
+  }
+  /** Highlight the button for the tab that's showing. */
+  mark(view) {
+    const c = controllerOf(view);
+    const t = this.tabs.get(view);
+    if (!c || !t)
+      return;
+    t.group.querySelectorAll(".dj-base-tab").forEach((b) => b.toggleClass("is-active", b.dataset.view === c.viewName));
+  }
+};
+
 // main.ts
-var JournalBlock = class extends import_obsidian7.MarkdownRenderChild {
+var JournalBlock = class extends import_obsidian8.MarkdownRenderChild {
   constructor(plugin, containerEl, section, file) {
     super(containerEl);
     this.plugin = plugin;
@@ -2791,7 +2901,7 @@ var JournalBlock = class extends import_obsidian7.MarkdownRenderChild {
     void renderSection(this.plugin, this.section, this.containerEl, this.file);
   }
 };
-var DailyJournal = class extends import_obsidian7.Plugin {
+var DailyJournal = class extends import_obsidian8.Plugin {
   constructor() {
     super(...arguments);
     this.weatherTried = /* @__PURE__ */ new Set();
@@ -2828,18 +2938,18 @@ var DailyJournal = class extends import_obsidian7.Plugin {
     });
     this.registerMarkdownCodeBlockProcessor("journal", (source, el, ctx) => {
       const file = this.app.vault.getAbstractFileByPath(ctx.sourcePath);
-      if (file instanceof import_obsidian7.TFile)
+      if (file instanceof import_obsidian8.TFile)
         ctx.addChild(new JournalBlock(this, el, source.trim(), file));
     });
     this.addCommand({
       id: "open-today",
       name: "Open today's entry",
-      callback: () => this.openEntry((0, import_obsidian7.moment)())
+      callback: () => this.openEntry((0, import_obsidian8.moment)())
     });
     this.addCommand({
       id: "create-yesterday",
       name: "Create Journal (Yesterday)",
-      callback: () => this.openEntry((0, import_obsidian7.moment)().subtract(1, "day"))
+      callback: () => this.openEntry((0, import_obsidian8.moment)().subtract(1, "day"))
     });
     this.addCommand({
       id: "create-choose",
@@ -2852,7 +2962,7 @@ var DailyJournal = class extends import_obsidian7.Plugin {
       callback: () => void this.openInsights()
     });
     this.addRibbonIcon("chart-line", "Open Insights", () => void this.openInsights());
-    this.addRibbonIcon("calendar-minus", "Create Journal (Yesterday)", () => void this.openEntry((0, import_obsidian7.moment)().subtract(1, "day")));
+    this.addRibbonIcon("calendar-minus", "Create Journal (Yesterday)", () => void this.openEntry((0, import_obsidian8.moment)().subtract(1, "day")));
     this.addRibbonIcon("calendar-search", "Create Journal (Choose Date)", () => this.pickEntryDate());
     this.addCommand({
       id: "change-date-yesterday",
@@ -2869,14 +2979,14 @@ var DailyJournal = class extends import_obsidian7.Plugin {
       name: "Refresh reading",
       checkCallback: (checking) => this.withActiveEntry(checking, async (file, date) => {
         if (!this.settings.hardcoverToken) {
-          new import_obsidian7.Notice("Add your Hardcover API token in Daily Journal's settings first.");
+          new import_obsidian8.Notice("Add your Hardcover API token in Daily Journal's settings first.");
           return;
         }
         try {
           await this.refreshReading(file, date);
-          new import_obsidian7.Notice("Reading updated from Hardcover.");
+          new import_obsidian8.Notice("Reading updated from Hardcover.");
         } catch (e) {
-          new import_obsidian7.Notice(`Couldn't load from Hardcover: ${e instanceof Error ? e.message : String(e)}`);
+          new import_obsidian8.Notice(`Couldn't load from Hardcover: ${e instanceof Error ? e.message : String(e)}`);
         }
       })
     });
@@ -2887,7 +2997,7 @@ var DailyJournal = class extends import_obsidian7.Plugin {
     });
     this.registerEvent(this.app.workspace.on("file-menu", (menu, file) => {
       const date = entryDate(this.settings, file);
-      if (!date || !(file instanceof import_obsidian7.TFile))
+      if (!date || !(file instanceof import_obsidian8.TFile))
         return;
       menu.addItem((item) => item.setTitle("Change date (yesterday)").setIcon("calendar-minus").setSection("action").onClick(() => this.moveEntry(file, date.clone().subtract(1, "day"))));
       menu.addItem((item) => item.setTitle("Change date (choose date)").setIcon("calendar-days").setSection("action").onClick(() => this.pickDate(file, date)));
@@ -2897,16 +3007,31 @@ var DailyJournal = class extends import_obsidian7.Plugin {
     this.registerEvent(this.app.workspace.on("active-leaf-change", refresh));
     this.registerEvent(this.app.workspace.on("file-open", refresh));
     this.registerEvent(this.app.metadataCache.on("changed", refresh));
+    const tabs = this.baseTabs = new BaseTabs(this, () => this.settings.baseTabs);
+    const refreshTabs = (0, import_obsidian8.debounce)(() => tabs.refresh(), 150, true);
+    this.registerEvent(this.app.workspace.on("layout-change", refreshTabs));
+    this.registerEvent(this.app.workspace.on("active-leaf-change", refreshTabs));
+    this.registerEvent(this.app.vault.on("modify", (f) => {
+      if (f.path.endsWith(".base"))
+        refreshTabs();
+    }));
     this.app.workspace.onLayoutReady(() => {
       this.refreshChrome();
+      tabs.refresh();
       this.registerEvent(this.app.vault.on("create", (file) => this.fillIfEmpty(file)));
       void this.syncDailyTemplate();
       void this.syncJournalBase();
     });
   }
+  refreshBaseTabs() {
+    var _a;
+    (_a = this.baseTabs) == null ? void 0 : _a.refresh();
+  }
   onunload() {
+    var _a;
+    (_a = this.baseTabs) == null ? void 0 : _a.clearAll();
     this.app.workspace.iterateAllLeaves((leaf) => {
-      if (leaf.view instanceof import_obsidian7.MarkdownView)
+      if (leaf.view instanceof import_obsidian8.MarkdownView)
         leaf.view.contentEl.removeClass("dj-chrome-hidden");
     });
   }
@@ -2915,7 +3040,7 @@ var DailyJournal = class extends import_obsidian7.Plugin {
     this.app.workspace.iterateAllLeaves((leaf) => {
       var _a;
       const view = leaf.view;
-      if (!(view instanceof import_obsidian7.MarkdownView))
+      if (!(view instanceof import_obsidian8.MarkdownView))
         return;
       const fm = view.file ? (_a = this.app.metadataCache.getFileCache(view.file)) == null ? void 0 : _a.frontmatter : void 0;
       const classes = Array.isArray(fm == null ? void 0 : fm.cssclasses) ? fm.cssclasses : [fm == null ? void 0 : fm.cssclasses];
@@ -2930,7 +3055,7 @@ var DailyJournal = class extends import_obsidian7.Plugin {
     if (!saved) {
       const daily = (_e = (_d = (_c = (_b = this.app.internalPlugins) == null ? void 0 : _b.getPluginById) == null ? void 0 : _c.call(_b, "daily-notes")) == null ? void 0 : _d.instance) == null ? void 0 : _e.options;
       if (daily == null ? void 0 : daily.folder)
-        this.settings.folder = (0, import_obsidian7.normalizePath)(daily.folder);
+        this.settings.folder = (0, import_obsidian8.normalizePath)(daily.folder);
       if (daily == null ? void 0 : daily.format)
         this.settings.dateFormat = daily.format;
     }
@@ -2949,7 +3074,7 @@ var DailyJournal = class extends import_obsidian7.Plugin {
   templatePath() {
     var _a, _b;
     const folder = (_b = (_a = this.corePlugin("templates")) == null ? void 0 : _a.options) == null ? void 0 : _b.folder;
-    return (0, import_obsidian7.normalizePath)(`${folder ? folder + "/" : ""}Daily Journal.md`);
+    return (0, import_obsidian8.normalizePath)(`${folder ? folder + "/" : ""}Daily Journal.md`);
   }
   /**
    * With "Use as Daily notes template" on, keep the template file in step with the settings and
@@ -2970,7 +3095,7 @@ var DailyJournal = class extends import_obsidian7.Plugin {
     if (this.settings.useAsDailyTemplate) {
       const text = entryTemplate(this.settings);
       const existing = this.app.vault.getAbstractFileByPath(path);
-      if (existing instanceof import_obsidian7.TFile) {
+      if (existing instanceof import_obsidian8.TFile) {
         if (await this.app.vault.read(existing) !== text)
           await this.app.vault.modify(existing, text);
       } else {
@@ -2978,12 +3103,12 @@ var DailyJournal = class extends import_obsidian7.Plugin {
         await this.app.vault.create(path, text);
       }
       await setDailyTemplate(name);
-    } else if ((0, import_obsidian7.normalizePath)((_b = (_a = daily == null ? void 0 : daily.options) == null ? void 0 : _a.template) != null ? _b : "") === name) {
+    } else if ((0, import_obsidian8.normalizePath)((_b = (_a = daily == null ? void 0 : daily.options) == null ? void 0 : _a.template) != null ? _b : "") === name) {
       await setDailyTemplate("");
     }
   }
   basePath() {
-    return (0, import_obsidian7.normalizePath)(`${this.settings.folder}/${BASE_NAME}`);
+    return (0, import_obsidian8.normalizePath)(`${this.settings.folder}/${BASE_NAME}`);
   }
   /**
    * Keep the Insights base (and the weather icons it shows) in the journal folder while the setting
@@ -2993,8 +3118,8 @@ var DailyJournal = class extends import_obsidian7.Plugin {
    */
   async syncJournalBase() {
     const s = this.settings;
-    const folder = (0, import_obsidian7.normalizePath)(s.folder || "/");
-    const exists = folder === "/" || this.app.vault.getAbstractFileByPath(folder) instanceof import_obsidian7.TFolder;
+    const folder = (0, import_obsidian8.normalizePath)(s.folder || "/");
+    const exists = folder === "/" || this.app.vault.getAbstractFileByPath(folder) instanceof import_obsidian8.TFolder;
     const target = s.journalBase && exists ? folder : null;
     if (s.baseFolder !== null && s.baseFolder !== target && (target !== null || !s.journalBase)) {
       await this.removeJournalBase(s.baseFolder);
@@ -3005,7 +3130,7 @@ var DailyJournal = class extends import_obsidian7.Plugin {
       return;
     const write = async (path, text) => {
       const file = this.app.vault.getAbstractFileByPath(path);
-      if (file instanceof import_obsidian7.TFile) {
+      if (file instanceof import_obsidian8.TFile) {
         if (await this.app.vault.read(file) !== text)
           await this.app.vault.modify(file, text);
       } else {
@@ -3013,10 +3138,10 @@ var DailyJournal = class extends import_obsidian7.Plugin {
         await this.app.vault.create(path, text);
       }
     };
-    const inFolder = (name) => (0, import_obsidian7.normalizePath)(folder === "/" ? name : `${folder}/${name}`);
+    const inFolder = (name) => (0, import_obsidian8.normalizePath)(folder === "/" ? name : `${folder}/${name}`);
     for (const old of OLD_BASE_NAMES) {
       const file = this.app.vault.getAbstractFileByPath(inFolder(old));
-      if (!(file instanceof import_obsidian7.TFile))
+      if (!(file instanceof import_obsidian8.TFile))
         continue;
       if (this.app.vault.getAbstractFileByPath(inFolder(BASE_NAME)))
         await this.app.fileManager.trashFile(file);
@@ -3033,7 +3158,7 @@ var DailyJournal = class extends import_obsidian7.Plugin {
     }
   }
   async removeJournalBase(folder) {
-    const inFolder = (name) => (0, import_obsidian7.normalizePath)(folder === "/" ? name : `${folder}/${name}`);
+    const inFolder = (name) => (0, import_obsidian8.normalizePath)(folder === "/" ? name : `${folder}/${name}`);
     for (const path of [inFolder(BASE_NAME), ...OLD_BASE_NAMES.map(inFolder), inFolder(ICONS_FOLDER)]) {
       const item = this.app.vault.getAbstractFileByPath(path);
       if (item)
@@ -3121,7 +3246,7 @@ var DailyJournal = class extends import_obsidian7.Plugin {
         fm.cssclasses = classes;
       });
     }
-    new import_obsidian7.Notice(`Updated ${files.length} entr${files.length === 1 ? "y" : "ies"}.`);
+    new import_obsidian8.Notice(`Updated ${files.length} entr${files.length === 1 ? "y" : "ies"}.`);
   }
   pickEntryDate() {
     new MonthPicker(
@@ -3135,19 +3260,19 @@ var DailyJournal = class extends import_obsidian7.Plugin {
   /** Open the Insights base, creating it first if it isn't there yet. */
   async openInsights() {
     let file = this.app.vault.getAbstractFileByPath(this.basePath());
-    if (!(file instanceof import_obsidian7.TFile)) {
+    if (!(file instanceof import_obsidian8.TFile)) {
       await this.syncJournalBase();
       file = this.app.vault.getAbstractFileByPath(this.basePath());
     }
-    if (file instanceof import_obsidian7.TFile)
+    if (file instanceof import_obsidian8.TFile)
       await this.app.workspace.getLeaf(false).openFile(file);
     else
-      new import_obsidian7.Notice(this.settings.journalBase ? `Couldn't find the journal folder "${this.settings.folder}".` : "Turn on Insights base in Daily Journal's settings first.");
+      new import_obsidian8.Notice(this.settings.journalBase ? `Couldn't find the journal folder "${this.settings.folder}".` : "Turn on Insights base in Daily Journal's settings first.");
   }
   async openEntry(date) {
     const path = entryPath(this.settings, date);
     let file = this.app.vault.getAbstractFileByPath(path);
-    if (!(file instanceof import_obsidian7.TFile)) {
+    if (!(file instanceof import_obsidian8.TFile)) {
       await this.ensureFolder(path);
       file = await this.app.vault.create(path, entryTemplate(this.settings));
     }
@@ -3159,7 +3284,7 @@ var DailyJournal = class extends import_obsidian7.Plugin {
       await this.app.vault.createFolder(folder);
   }
   fillIfEmpty(file) {
-    if (!this.settings.fillNewEntries || !entryDate(this.settings, file) || !(file instanceof import_obsidian7.TFile))
+    if (!this.settings.fillNewEntries || !entryDate(this.settings, file) || !(file instanceof import_obsidian8.TFile))
       return;
     window.setTimeout(async () => {
       if ((await this.app.vault.read(file)).trim() === "")
@@ -3173,30 +3298,30 @@ var DailyJournal = class extends import_obsidian7.Plugin {
     if (target === file.path)
       return;
     if (this.app.vault.getAbstractFileByPath(target)) {
-      new import_obsidian7.Notice(`There's already a journal entry for ${date.format("MMM D, YYYY")}.`);
+      new import_obsidian8.Notice(`There's already a journal entry for ${date.format("MMM D, YYYY")}.`);
       return;
     }
     await this.ensureFolder(target);
     await this.app.fileManager.renameFile(file, target);
     const place = entryPlace((_a = this.app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter, this.settings.home);
     if (!await this.entryShowsWeather(file)) {
-      new import_obsidian7.Notice(`Moved entry to ${date.format("dddd, MMM D, YYYY")}.`);
+      new import_obsidian8.Notice(`Moved entry to ${date.format("dddd, MMM D, YYYY")}.`);
       return;
     }
-    const weather = date.isAfter((0, import_obsidian7.moment)(), "day") ? null : await fetchWeather(place, date, this.settings.units);
+    const weather = date.isAfter((0, import_obsidian8.moment)(), "day") ? null : await fetchWeather(place, date, this.settings.units);
     await this.app.fileManager.processFrontMatter(file, (fm) => {
       if (weather)
         fm.weather = weather;
       else
         delete fm.weather;
     });
-    new import_obsidian7.Notice(`Moved entry to ${date.format("dddd, MMM D, YYYY")}${weather ? "" : " (weather unavailable)"}.`);
+    new import_obsidian8.Notice(`Moved entry to ${date.format("dddd, MMM D, YYYY")}${weather ? "" : " (weather unavailable)"}.`);
   }
   /** Sets an entry's location (null = the default location) and refreshes its weather. Returns the new weather. */
   async setEntryPlace(file, place, withWeather) {
     const chosen = place != null ? place : this.settings.home;
     const date = entryDate(this.settings, file);
-    const weather = withWeather && date && !date.isAfter((0, import_obsidian7.moment)(), "day") ? await fetchWeather(chosen, date, this.settings.units) : null;
+    const weather = withWeather && date && !date.isAfter((0, import_obsidian8.moment)(), "day") ? await fetchWeather(chosen, date, this.settings.units) : null;
     await this.app.fileManager.processFrontMatter(file, (fm) => {
       Object.assign(fm, { location: chosen.name, latitude: chosen.lat, longitude: chosen.lon, timezone: chosen.tz });
       if (!withWeather)

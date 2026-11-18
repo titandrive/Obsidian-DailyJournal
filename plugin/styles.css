@@ -450,3 +450,7 @@ button.dj-prompt-add { display: flex; align-items: center; gap: .4em; margin-top
 .dj-card button.dj-star svg { width: 20px; height: 20px; display: block; }
 .dj-card button.dj-star.is-on, .dj-card button.dj-star.is-on:hover { color: var(--color-yellow); }
 .dj-card button.dj-star.is-on svg { fill: currentColor; }
+
+/* Tab buttons in base toolbars */
+.dj-base-tabs { display: flex; align-items: center; gap: 2px; }
+.dj-base-tab.is-active { color: var(--interactive-accent); background-color: var(--background-modifier-hover); }

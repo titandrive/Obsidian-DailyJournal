@@ -1,4 +1,4 @@
-import { MarkdownRenderChild, MarkdownView, Notice, normalizePath, Plugin, TAbstractFile, TFile, TFolder, moment } from "obsidian";
+import { debounce, MarkdownRenderChild, MarkdownView, Notice, normalizePath, Plugin, TAbstractFile, TFile, TFolder, moment } from "obsidian";
 import { BASE_NAME, ICONS_FOLDER, journalBase, OLD_BASE_NAMES, SKY_ICONS } from "./src/base";
 import { METEOCONS } from "./src/meteocons";
 import { entryDate, entryPath, Moment } from "./src/dates";
@@ -10,6 +10,7 @@ import { JournalSettingTab } from "./src/settings-tab";
 import { applyLayout, blockShowsWeather, entryTemplate, parseBlock, SHOW_CHROME } from "./src/template";
 import { entryPlace, fetchWeather } from "./src/weather";
 import { TRENDS_VIEW, TrendsView } from "./src/trends";
+import { BaseTabs } from "./src/basetabs";
 
 /** One rendered `journal` block. Redraws when its entry's properties change (e.g. weather arrives). */
 class JournalBlock extends MarkdownRenderChild {
@@ -60,6 +61,7 @@ class JournalBlock extends MarkdownRenderChild {
 
 export default class DailyJournal extends Plugin implements JournalHost {
 	settings!: JournalSettings;
+	private baseTabs?: BaseTabs;
 	weatherTried = new Set<string>();
 	readingTried = new Set<string>();
 	readingRetries = new Map<string, "pending" | "done">();
@@ -153,16 +155,29 @@ export default class DailyJournal extends Plugin implements JournalHost {
 		this.registerEvent(this.app.workspace.on("file-open", refresh));
 		this.registerEvent(this.app.metadataCache.on("changed", refresh));
 
+		// Tab buttons in every base's header. Redrawn when panes change or a base's views are edited.
+		const tabs = this.baseTabs = new BaseTabs(this, () => this.settings.baseTabs);
+		const refreshTabs = debounce(() => tabs.refresh(), 150, true);
+		this.registerEvent(this.app.workspace.on("layout-change", refreshTabs));
+		this.registerEvent(this.app.workspace.on("active-leaf-change", refreshTabs));
+		this.registerEvent(this.app.vault.on("modify", (f) => { if (f.path.endsWith(".base")) refreshTabs(); }));
+
 		// Fill new, empty entries (e.g. from Obsidian's Daily notes or the Hearth "Today" card) with the template.
 		this.app.workspace.onLayoutReady(() => {
 			this.refreshChrome();
+			tabs.refresh();
 			this.registerEvent(this.app.vault.on("create", (file) => this.fillIfEmpty(file)));
 			void this.syncDailyTemplate();
 			void this.syncJournalBase();
 		});
 	}
 
+	refreshBaseTabs(): void {
+		this.baseTabs?.refresh();
+	}
+
 	onunload(): void {
+		this.baseTabs?.clearAll();
 		this.app.workspace.iterateAllLeaves((leaf) => {
 			if (leaf.view instanceof MarkdownView) leaf.view.contentEl.removeClass("dj-chrome-hidden");
 		});

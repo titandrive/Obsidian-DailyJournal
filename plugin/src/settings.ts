@@ -48,6 +48,8 @@ export interface JournalSettings {
 	/** Folder the plugin last wrote the Insights base to, so it can tidy up when the folder changes. */
 	baseFolder: string | null;
 	hideNoteChrome: boolean;
+	/** Tab buttons in every base's header. */
+	baseTabs: boolean;
 }
 
 export const DEFAULT_SETTINGS: JournalSettings = {
@@ -75,4 +77,5 @@ export const DEFAULT_SETTINGS: JournalSettings = {
 	journalBase: true,
 	baseFolder: null,
 	hideNoteChrome: true,
+	baseTabs: true,
 };

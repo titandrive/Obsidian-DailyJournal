@@ -151,6 +151,10 @@ export class JournalSettingTab extends PluginSettingTab {
 			.setName("Hide title and properties in entries")
 			.setDesc("The cards already show the date and check-in data.")
 			.addToggle((t) => t.setValue(s.hideNoteChrome).onChange(async (v) => { s.hideNoteChrome = v; await save(); }));
+		new Setting(containerEl)
+			.setName("Tab buttons in bases")
+			.setDesc("A button for each tab (view) in the toolbar of every base, Insights included, to switch tabs in one tap.")
+			.addToggle((t) => t.setValue(s.baseTabs).onChange(async (v) => { s.baseTabs = v; await save(); this.plugin.refreshBaseTabs(); }));
 
 		new Setting(containerEl).setName("Existing entries").setHeading();
 		new Setting(containerEl)
