@@ -1,5 +1,6 @@
 import { BasesView, QueryController, TFile } from "obsidian";
 import { entryDate, Moment } from "./dates";
+import { familyOf, moodFamilies } from "./moods";
 import { JournalSettings } from "./settings";
 
 /*
@@ -11,7 +12,7 @@ export const TRENDS_VIEW = "journal-trends";
 
 type Frontmatter = Record<string, unknown>;
 interface Day { file: TFile; date: Moment; fm: Frontmatter }
-interface Row { label: string; value: number; text: string; hint?: string }
+interface Row { label: string; value: number; text: string; hint?: string; /** Bar color (a CSS color); the accent if not given. */ color?: string }
 
 const num = (v: unknown): number | null => {
 	const n = typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : NaN;
@@ -26,6 +27,10 @@ function skippedMeals(fm: Frontmatter): string[] {
 	const listed = (Array.isArray(s) ? s : s ? [s] : []).map((x) => String(x).toLowerCase());
 	return ["breakfast", "lunch", "dinner"].filter((k) => listed.includes(k) || /^skip(ped)?$/i.test(str(fm[k])));
 }
+/** The mood words an entry saved (lowercase). */
+const moodsOf = (fm: Frontmatter): string[] => (Array.isArray(fm.mood) ? fm.mood : fm.mood ? [fm.mood] : []).map((m) => String(m).trim().toLowerCase()).filter(Boolean);
+/** The core feelings (Angry, Sad...) an entry's moods belong to, each once. */
+const feelingsOf = (fm: Frontmatter): string[] => [...new Set(moodsOf(fm).map((m) => familyOf(m)?.name).filter((n): n is string => !!n))];
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 const one = (n: number) => (Math.round(n * 10) / 10).toString();
 const times = (n: number) => `${n}×`;
@@ -131,6 +136,26 @@ export class TrendsView extends BasesView {
 		const recent = days.filter((d) => !d.date.isBefore(days[days.length - 1].date.clone().subtract(89, "days"), "day"));
 		lineChart(moodSleep.card("Day rating", "7-day average"), recent, (d) => num(d.fm.day_rating), 10);
 		lineChart(moodSleep.card("Sleep", "7-day average"), recent, (d) => num(d.fm.sleep), 12);
+
+		// Mood: which core feelings come up, the words used, and how rated days went with each feeling.
+		const mood = section("Mood");
+		const moodDays = days.filter((d) => moodsOf(d.fm).length);
+		if (moodDays.length) {
+			const feelings = moodFamilies()
+				.map((f) => ({ f, n: moodDays.filter((d) => feelingsOf(d.fm).includes(f.name)).length }))
+				.filter((x) => x.n);
+			const most = [...feelings].sort((a, b) => b.n - a.n)[0];
+			if (most) mood.tile("Most felt", most.f.name, `on ${Math.round((100 * most.n) / moodDays.length)}% of days`);
+			mood.tile("Moods logged", String(moodDays.length), `of ${days.length} days`);
+			if (feelings.length) barList(mood.card("Feelings", "Days each was felt"),
+				feelings.map(({ f, n }) => ({ label: f.name, value: n, text: times(n), color: f.color, hint: `${n} day${n === 1 ? "" : "s"}` })));
+			const words = ranked(moodDays.flatMap((d) => moodsOf(d.fm)), 5)
+				.map((r) => ({ ...r, color: familyOf(r.label)?.color }));
+			if (words.length) barList(mood.card("Top words", "Most picked"), words);
+			const byFeeling = ratingBy(days, moodFamilies().map((f): [string, (d: Day) => boolean] => [f.name, (d) => feelingsOf(d.fm).includes(f.name)]))
+				.map((r) => ({ ...r, color: moodFamilies().find((f) => f.name === r.label)?.color }));
+			if (byFeeling.length) barList(mood.card("Day rating by feeling", "Average day rating"), byFeeling, 10);
+		}
 
 		// What lines up with good and bad days
 		const patterns = section("Trends");
@@ -259,7 +284,7 @@ export class TrendsView extends BasesView {
 		const shows = ranked(days.filter(podcast).map((d) => str(d.fm.artist)), 5);
 		if (shows.length) barList(listening.card("Top podcasts"), shows);
 
-		for (const s of [overview, moodSleep, patterns, food, reading, listening]) {
+		for (const s of [overview, moodSleep, mood, patterns, food, reading, listening]) {
 			if (s.el.childElementCount < 2 || !s.el.querySelector(".dj-trends-tile, .dj-trends-card")) s.el.remove();
 		}
 	}
@@ -314,6 +339,7 @@ function goodVsBad(el: HTMLElement, good: Day[], bad: Day[], all: Day[]): void {
 	};
 	row("Days", (ds) => String(ds.length));
 	row("Sleep", (ds) => avgOf(ds, "sleep"));
+	row("Most common feeling", (ds) => top(ds.flatMap((d) => feelingsOf(d.fm))));
 	row("Exercised", (ds) => share(ds, "exercise"));
 	row("Worked", (ds) => share(ds, "worked"));
 	row("Most common weather", (ds) => top(ds.map((d) => sky(d.fm))));
@@ -402,7 +428,9 @@ function barList(el: HTMLElement, rows: Row[], max?: number): void {
 	for (const r of rows) {
 		const row = list.createDiv({ cls: "dj-trends-bar-row", attr: r.hint ? { "aria-label": r.hint } : {} });
 		row.createDiv({ cls: "dj-trends-bar-label", text: r.label });
-		row.createDiv({ cls: "dj-trends-bar-track" }).createDiv({ cls: "dj-trends-bar-fill" }).style.width = `${Math.max(2, (100 * r.value) / (top || 1))}%`;
+		const fill = row.createDiv({ cls: "dj-trends-bar-track" }).createDiv({ cls: "dj-trends-bar-fill" });
+		fill.style.width = `${Math.max(2, (100 * r.value) / (top || 1))}%`;
+		if (r.color) fill.style.background = r.color;
 		row.createDiv({ cls: "dj-trends-bar-value", text: r.text });
 	}
 }

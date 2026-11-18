@@ -32,7 +32,11 @@ const low = (w: string) => w.trim().toLowerCase();
 
 /** The wheel's families, unpleasant to pleasant (the order of junto.json). */
 const FAMILIES: MoodFamily[] = Object.entries(wheelData as Record<string, Record<string, string[]>>).map(([name, inner]) => {
-	const rows = Object.entries(inner).map(([word, more]) => ({ word: low(word), more: more.map(low) }));
+	// Rows in alphabetical order, and the two more specific words in each row too.
+	const abc = (a: string, b: string) => a.localeCompare(b);
+	const rows = Object.entries(inner)
+		.map(([word, more]) => ({ word: low(word), more: more.map(low).sort(abc) }))
+		.sort((a, b) => abc(a.word, b.word));
 	return {
 		name, color: COLORS[low(name)] ?? "var(--color-cyan)", rows,
 		words: [...new Set([low(name), ...rows.flatMap((r) => [r.word, ...r.more])])],

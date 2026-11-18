@@ -865,7 +865,8 @@ var COLORS = {
 var low = (w) => w.trim().toLowerCase();
 var FAMILIES = Object.entries(junto_default).map(([name, inner]) => {
   var _a;
-  const rows = Object.entries(inner).map(([word, more]) => ({ word: low(word), more: more.map(low) }));
+  const abc = (a, b) => a.localeCompare(b);
+  const rows = Object.entries(inner).map(([word, more]) => ({ word: low(word), more: more.map(low).sort(abc) })).sort((a, b) => abc(a.word, b.word));
   return {
     name,
     color: (_a = COLORS[low(name)]) != null ? _a : "var(--color-cyan)",
@@ -2985,6 +2986,11 @@ function skippedMeals(fm) {
   const listed = (Array.isArray(s) ? s : s ? [s] : []).map((x) => String(x).toLowerCase());
   return ["breakfast", "lunch", "dinner"].filter((k) => listed.includes(k) || /^skip(ped)?$/i.test(str(fm[k])));
 }
+var moodsOf = (fm) => (Array.isArray(fm.mood) ? fm.mood : fm.mood ? [fm.mood] : []).map((m) => String(m).trim().toLowerCase()).filter(Boolean);
+var feelingsOf = (fm) => [...new Set(moodsOf(fm).map((m) => {
+  var _a;
+  return (_a = familyOf(m)) == null ? void 0 : _a.name;
+}).filter((n) => !!n))];
 var mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
 var one = (n) => (Math.round(n * 10) / 10).toString();
 var times = (n) => `${n}\xD7`;
@@ -3088,6 +3094,32 @@ var TrendsView = class extends import_obsidian6.BasesView {
     const recent = days.filter((d) => !d.date.isBefore(days[days.length - 1].date.clone().subtract(89, "days"), "day"));
     lineChart(moodSleep.card("Day rating", "7-day average"), recent, (d) => num(d.fm.day_rating), 10);
     lineChart(moodSleep.card("Sleep", "7-day average"), recent, (d) => num(d.fm.sleep), 12);
+    const mood = section("Mood");
+    const moodDays = days.filter((d) => moodsOf(d.fm).length);
+    if (moodDays.length) {
+      const feelings = moodFamilies().map((f) => ({ f, n: moodDays.filter((d) => feelingsOf(d.fm).includes(f.name)).length })).filter((x) => x.n);
+      const most = [...feelings].sort((a, b) => b.n - a.n)[0];
+      if (most)
+        mood.tile("Most felt", most.f.name, `on ${Math.round(100 * most.n / moodDays.length)}% of days`);
+      mood.tile("Moods logged", String(moodDays.length), `of ${days.length} days`);
+      if (feelings.length)
+        barList(
+          mood.card("Feelings", "Days each was felt"),
+          feelings.map(({ f, n }) => ({ label: f.name, value: n, text: times(n), color: f.color, hint: `${n} day${n === 1 ? "" : "s"}` }))
+        );
+      const words2 = ranked(moodDays.flatMap((d) => moodsOf(d.fm)), 5).map((r) => {
+        var _a2;
+        return { ...r, color: (_a2 = familyOf(r.label)) == null ? void 0 : _a2.color };
+      });
+      if (words2.length)
+        barList(mood.card("Top words", "Most picked"), words2);
+      const byFeeling = ratingBy(days, moodFamilies().map((f) => [f.name, (d) => feelingsOf(d.fm).includes(f.name)])).map((r) => {
+        var _a2;
+        return { ...r, color: (_a2 = moodFamilies().find((f) => f.name === r.label)) == null ? void 0 : _a2.color };
+      });
+      if (byFeeling.length)
+        barList(mood.card("Day rating by feeling", "Average day rating"), byFeeling, 10);
+    }
     const patterns = section("Trends");
     const sleepIn = (lo, hi) => (d) => {
       const s = num(d.fm.sleep);
@@ -3225,7 +3257,7 @@ var TrendsView = class extends import_obsidian6.BasesView {
     const shows = ranked(days.filter(podcast).map((d) => str(d.fm.artist)), 5);
     if (shows.length)
       barList(listening.card("Top podcasts"), shows);
-    for (const s of [overview, moodSleep, patterns, food, reading, listening]) {
+    for (const s of [overview, moodSleep, mood, patterns, food, reading, listening]) {
       if (s.el.childElementCount < 2 || !s.el.querySelector(".dj-trends-tile, .dj-trends-card"))
         s.el.remove();
     }
@@ -3271,6 +3303,7 @@ function goodVsBad(el, good, bad, all) {
   };
   row("Days", (ds) => String(ds.length));
   row("Sleep", (ds) => avgOf(ds, "sleep"));
+  row("Most common feeling", (ds) => top(ds.flatMap((d) => feelingsOf(d.fm))));
   row("Exercised", (ds) => share(ds, "exercise"));
   row("Worked", (ds) => share(ds, "worked"));
   row("Most common weather", (ds) => top(ds.map((d) => sky(d.fm))));
@@ -3349,7 +3382,10 @@ function barList(el, rows, max) {
   for (const r of rows) {
     const row = list.createDiv({ cls: "dj-trends-bar-row", attr: r.hint ? { "aria-label": r.hint } : {} });
     row.createDiv({ cls: "dj-trends-bar-label", text: r.label });
-    row.createDiv({ cls: "dj-trends-bar-track" }).createDiv({ cls: "dj-trends-bar-fill" }).style.width = `${Math.max(2, 100 * r.value / (top || 1))}%`;
+    const fill = row.createDiv({ cls: "dj-trends-bar-track" }).createDiv({ cls: "dj-trends-bar-fill" });
+    fill.style.width = `${Math.max(2, 100 * r.value / (top || 1))}%`;
+    if (r.color)
+      fill.style.background = r.color;
     row.createDiv({ cls: "dj-trends-bar-value", text: r.text });
   }
 }
