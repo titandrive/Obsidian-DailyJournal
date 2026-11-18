@@ -1752,15 +1752,18 @@ function renderCheckIn(host, el, file, fm, fields) {
     const chips = box.createDiv({ cls: "dj-row" });
     const input = box.createEl("input", { cls: "dj-tag-input", type: "text", attr: { placeholder: "Add a tag\u2026", list: "dj-tag-list" } });
     const refreshSuggestions = () => {
-      var _a, _b, _c, _d;
+      var _a, _b;
       const list2 = (_a = document.getElementById("dj-tag-list")) != null ? _a : document.body.createEl("datalist", { attr: { id: "dj-tag-list" } });
       list2.empty();
-      const vaultTags = (_d = (_c = (_b = app.metadataCache).getTags) == null ? void 0 : _c.call(_b)) != null ? _d : {};
-      for (const tag of Object.keys(vaultTags).sort()) {
-        const name = tag.replace(/^#/, "");
-        if (name !== "journal")
-          list2.createEl("option", { attr: { value: name } });
+      const journalTags = /* @__PURE__ */ new Set();
+      for (const entry of host.journalEntries()) {
+        const cache = app.metadataCache.getFileCache(entry.file);
+        for (const tag of (_b = cache && (0, import_obsidian4.getAllTags)(cache)) != null ? _b : [])
+          journalTags.add(tag.replace(/^#/, ""));
       }
+      journalTags.delete("journal");
+      for (const name of [...journalTags].sort((a, b) => a.localeCompare(b)))
+        list2.createEl("option", { attr: { value: name } });
     };
     refreshSuggestions();
     const current = () => {

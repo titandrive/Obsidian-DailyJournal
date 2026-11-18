@@ -1,4 +1,4 @@
-import { App, moment, setIcon, TFile } from "obsidian";
+import { App, getAllTags, moment, setIcon, TFile } from "obsidian";
 import { entryDate, Moment } from "./dates";
 import { PlaceHistory, PlaceModal, SongPickerModal } from "./modals";
 import { CheckInFields, JournalSettings, Place } from "./settings";
@@ -402,16 +402,18 @@ function renderCheckIn(host: JournalHost, el: HTMLElement, file: TFile, fm: Fron
 		box.addClass("dj-tags");
 		const chips = box.createDiv({ cls: "dj-row" });
 		const input = box.createEl("input", { cls: "dj-tag-input", type: "text", attr: { placeholder: "Add a tag…", list: "dj-tag-list" } });
-		// Suggest every tag in the vault, rebuilt on each focus so tags added elsewhere show up right away.
+		// Suggest tags from journal entries, rebuilt on each focus so tags added in other entries show up right away.
 		const refreshSuggestions = () => {
 			const list = document.getElementById("dj-tag-list") ?? document.body.createEl("datalist", { attr: { id: "dj-tag-list" } });
 			list.empty();
-			// getTags() exists in Obsidian but isn't in its published types.
-			const vaultTags = (app.metadataCache as unknown as { getTags?: () => Record<string, number> }).getTags?.() ?? {};
-			for (const tag of Object.keys(vaultTags).sort()) {
-				const name = tag.replace(/^#/, "");
-				if (name !== "journal") list.createEl("option", { attr: { value: name } });
+			// Only tags used in journal entries, not the rest of the vault.
+			const journalTags = new Set<string>();
+			for (const entry of host.journalEntries()) {
+				const cache = app.metadataCache.getFileCache(entry.file);
+				for (const tag of (cache && getAllTags(cache)) ?? []) journalTags.add(tag.replace(/^#/, ""));
 			}
+			journalTags.delete("journal");
+			for (const name of [...journalTags].sort((a, b) => a.localeCompare(b))) list.createEl("option", { attr: { value: name } });
 		};
 		refreshSuggestions();
 		const current = (): string[] => {
