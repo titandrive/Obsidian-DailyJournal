@@ -1,4 +1,4 @@
-import { debounce, MarkdownRenderChild, MarkdownView, Notice, normalizePath, Plugin, TAbstractFile, TFile, TFolder, moment } from "obsidian";
+import { debounce, MarkdownRenderChild, MarkdownView, Notice, normalizePath, Platform, Plugin, TAbstractFile, TFile, TFolder, moment } from "obsidian";
 import { BASE_NAME, ICONS_FOLDER, journalBase, OLD_BASE_NAMES, SKY_ICONS } from "./src/base";
 import { entryDate, entryPath, Moment } from "./src/dates";
 import { HardcoverDay, hardcoverDay, readingProperties } from "./src/hardcover";
@@ -178,6 +178,22 @@ export default class DailyJournal extends Plugin implements JournalHost {
 		this.registerEvent(this.app.workspace.on("layout-change", refresh));
 		this.registerEvent(this.app.workspace.on("active-leaf-change", refresh));
 		this.registerEvent(this.app.workspace.on("file-open", refresh));
+		// Keyboard: opening an entry puts focus on the Earworm card (the first thing to fill in), so
+		// Enter opens the song search and Tab moves on through the check-in. Computers only.
+		this.registerEvent(this.app.workspace.on("file-open", (file) => {
+			if (Platform.isMobile || !file || !entryDate(this.settings, file)) return;
+			const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+			if (!view || view.file !== file) return;
+			// The cards render a moment after the note opens; wait for the Earworm card (up to ~2 s).
+			let tries = 0;
+			const tryFocus = () => {
+				if (this.app.workspace.getActiveViewOfType(MarkdownView)?.file !== file) return;
+				const start = view.containerEl.querySelector<HTMLElement>("[data-dj-start]");
+				if (start) { (start.focus as (o?: object) => void)({ preventScroll: true, focusVisible: true }); return; }
+				if (++tries < 20) window.setTimeout(tryFocus, 100);
+			};
+			window.setTimeout(tryFocus, 150);
+		}));
 		this.registerEvent(this.app.metadataCache.on("changed", refresh));
 
 		// Tab buttons in every base's header. Redrawn when panes change or a base's views are edited.

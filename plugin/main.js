@@ -2524,7 +2524,7 @@ function renderSong(host, el, file, fm) {
     if (song2.artist)
       shrinkToOneLine(info.createDiv({ cls: "dj-book-author", text: song2.artist }));
     const actions = info.createDiv({ cls: "dj-song-actions" });
-    const change = actions.createEl("a", { cls: "dj-song-change", text: "Change", href: "#" });
+    const change = actions.createEl("a", { cls: "dj-song-change", text: "Change", href: "#", attr: { "data-dj-start": "" } });
     change.onclick = (e) => {
       e.preventDefault();
       pick();
@@ -2577,7 +2577,7 @@ function renderSong(host, el, file, fm) {
   const showEmpty = () => {
     closePlayer();
     body.empty();
-    const add = body.createEl("button", { cls: "dj-song-add" });
+    const add = body.createEl("button", { cls: "dj-song-add", attr: { "data-dj-start": "" } });
     (0, import_obsidian4.setIcon)(add.createSpan({ cls: "dj-song-add-icon" }), "music");
     add.createSpan({ text: "Add a song or podcast" });
     add.onclick = pick;
@@ -3717,6 +3717,27 @@ var DailyJournal = class extends import_obsidian8.Plugin {
     this.registerEvent(this.app.workspace.on("layout-change", refresh));
     this.registerEvent(this.app.workspace.on("active-leaf-change", refresh));
     this.registerEvent(this.app.workspace.on("file-open", refresh));
+    this.registerEvent(this.app.workspace.on("file-open", (file) => {
+      if (import_obsidian8.Platform.isMobile || !file || !entryDate(this.settings, file))
+        return;
+      const view = this.app.workspace.getActiveViewOfType(import_obsidian8.MarkdownView);
+      if (!view || view.file !== file)
+        return;
+      let tries = 0;
+      const tryFocus = () => {
+        var _a2;
+        if (((_a2 = this.app.workspace.getActiveViewOfType(import_obsidian8.MarkdownView)) == null ? void 0 : _a2.file) !== file)
+          return;
+        const start = view.containerEl.querySelector("[data-dj-start]");
+        if (start) {
+          start.focus({ preventScroll: true, focusVisible: true });
+          return;
+        }
+        if (++tries < 20)
+          window.setTimeout(tryFocus, 100);
+      };
+      window.setTimeout(tryFocus, 150);
+    }));
     this.registerEvent(this.app.metadataCache.on("changed", refresh));
     const tabs = this.baseTabs = new BaseTabs(this, () => this.settings.baseTabs);
     const refreshTabs = (0, import_obsidian8.debounce)(() => tabs.refresh(), 150, true);

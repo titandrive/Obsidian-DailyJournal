@@ -565,3 +565,5 @@ button.dj-prompt-add { display: flex; align-items: center; gap: .4em; margin-top
 .dj-trends-fold svg { width: 16px; height: 16px; }
 .dj-trends-section.is-collapsed .dj-trends-fold { transform: rotate(-90deg); }
 .dj-trends-section-title:hover .dj-trends-fold { color: var(--text-muted); }
+/* Keyboard focus on the Earworm card's starting point (Add a song / Change). */
+.block-language-journal [data-dj-start]:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; border-radius: var(--radius-s); }

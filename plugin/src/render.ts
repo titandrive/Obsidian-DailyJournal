@@ -730,7 +730,8 @@ function renderSong(host: JournalHost, el: HTMLElement, file: TFile, fm: Frontma
 		// Artist, or the podcast's show name; long names shrink to fit one line like titles do.
 		if (song.artist) shrinkToOneLine(info.createDiv({ cls: "dj-book-author", text: song.artist }));
 		const actions = info.createDiv({ cls: "dj-song-actions" });
-		const change = actions.createEl("a", { cls: "dj-song-change", text: "Change", href: "#" });
+		// Where keyboard focus starts when the entry opens: Enter opens the song search.
+		const change = actions.createEl("a", { cls: "dj-song-change", text: "Change", href: "#", attr: { "data-dj-start": "" } });
 		change.onclick = (e) => { e.preventDefault(); pick(); };
 		const remove = actions.createEl("a", { cls: "dj-song-change", text: "Remove", href: "#" });
 		remove.onclick = (e) => { e.preventDefault(); void save(null); showEmpty(); };
@@ -769,7 +770,7 @@ function renderSong(host: JournalHost, el: HTMLElement, file: TFile, fm: Frontma
 	const showEmpty = () => {
 		closePlayer();
 		body.empty();
-		const add = body.createEl("button", { cls: "dj-song-add" });
+		const add = body.createEl("button", { cls: "dj-song-add", attr: { "data-dj-start": "" } });
 		setIcon(add.createSpan({ cls: "dj-song-add-icon" }), "music");
 		add.createSpan({ text: "Add a song or podcast" });
 		add.onclick = pick;
