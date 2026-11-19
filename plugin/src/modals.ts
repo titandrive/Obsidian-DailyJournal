@@ -532,10 +532,15 @@ export class SongPickerModal extends SuggestModal<Song> {
 /**
  * The mood finder: pick how you feel, in one to three words. Start from a core feeling on the
  * Junto Emotion Wheel (Anger, Sadness, Joy...) and pick the word that fits best, or search every word. A word that
- * isn't listed can be typed and added with Enter. Done saves; Escape leaves things as they were.
+ * isn't listed can be typed and added with Enter. What's picked is saved however the dialog closes
+ * (Done, Escape, a tap outside); only Cancel leaves things as they were.
  */
 export class MoodPickerModal extends Modal {
 	private picked: string[];
+	/** What was picked when it opened, so closing unchanged saves nothing. */
+	private initial: string[];
+	/** Cancel was pressed: close without saving. */
+	private cancelled = false;
 	/** The core feeling opened, or null for the six tiles. */
 	private family: MoodFamily | null = null;
 	/** Which tile to focus after the next redraw (keyboard use), or null to leave focus alone. */
@@ -547,6 +552,7 @@ export class MoodPickerModal extends Modal {
 	constructor(app: App, current: string[], private onDone: (moods: string[]) => void) {
 		super(app);
 		this.picked = [...current];
+		this.initial = [...current];
 		this.modalEl.addClass("dj-mood-modal");
 	}
 
@@ -569,7 +575,7 @@ export class MoodPickerModal extends Modal {
 		this.chosenEl = contentEl.createDiv({ cls: "dj-mood-chosen" });
 		this.bodyEl = contentEl.createDiv({ cls: "dj-mood-body" });
 		const foot = contentEl.createDiv({ cls: "modal-button-container" });
-		foot.createEl("button", { text: "Cancel" }).onclick = () => this.close();
+		foot.createEl("button", { text: "Cancel" }).onclick = () => { this.cancelled = true; this.close(); };
 		const done = foot.createEl("button", { cls: "mod-cta", text: "Done" });
 		done.onclick = () => this.finish();
 		// Key hints, like Obsidian's own pickers.
@@ -656,10 +662,11 @@ export class MoodPickerModal extends Modal {
 
 	onClose(): void {
 		this.contentEl.empty();
+		// Saved however it closed (Done, Escape, a tap outside), unless Cancel was pressed or nothing changed.
+		if (!this.cancelled && this.picked.join("\n") !== this.initial.join("\n")) this.onDone(this.picked);
 	}
 
 	private finish(): void {
-		this.onDone(this.picked);
 		this.close();
 	}
 
