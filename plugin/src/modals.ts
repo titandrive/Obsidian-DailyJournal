@@ -549,7 +549,11 @@ export class MoodPickerModal extends Modal {
 	private chosenEl!: HTMLElement;
 	private bodyEl!: HTMLElement;
 
-	constructor(app: App, current: string[], private onDone: (moods: string[]) => void) {
+	/**
+	 * [custom]: moods typed in by hand in other entries (not on the wheel). They aren't among the
+	 * tiles, but searching finds them, after the wheel's words.
+	 */
+	constructor(app: App, current: string[], private onDone: (moods: string[]) => void, private custom: string[] = []) {
 		super(app);
 		this.picked = [...current];
 		this.initial = [...current];
@@ -672,7 +676,8 @@ export class MoodPickerModal extends Modal {
 
 	/** Words containing what's typed, from every family. */
 	private matches(term: string): string[] {
-		return [...new Set(moodFamilies().flatMap((f) => f.words))].filter((w) => w.includes(term));
+		const wheel = moodFamilies().flatMap((f) => f.words);
+		return [...new Set([...wheel, ...this.custom])].filter((w) => w.includes(term));
 	}
 
 	private toggle(word: string): void {

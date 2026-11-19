@@ -1340,9 +1340,14 @@ _SongPickerModal.kind = "music";
 _SongPickerModal.MORE = { id: "__more__", title: "Show more results", artist: "", cover: null, kind: "podcast" };
 var SongPickerModal = _SongPickerModal;
 var MoodPickerModal = class extends import_obsidian3.Modal {
-  constructor(app, current, onDone) {
+  /**
+   * [custom]: moods typed in by hand in other entries (not on the wheel). They aren't among the
+   * tiles, but searching finds them, after the wheel's words.
+   */
+  constructor(app, current, onDone, custom = []) {
     super(app);
     this.onDone = onDone;
+    this.custom = custom;
     /** Cancel was pressed: close without saving. */
     this.cancelled = false;
     /** The core feeling opened, or null for the six tiles. */
@@ -1509,7 +1514,8 @@ var MoodPickerModal = class extends import_obsidian3.Modal {
   }
   /** Words containing what's typed, from every family. */
   matches(term) {
-    return [...new Set(moodFamilies().flatMap((f) => f.words))].filter((w) => w.includes(term));
+    const wheel = moodFamilies().flatMap((f) => f.words);
+    return [.../* @__PURE__ */ new Set([...wheel, ...this.custom])].filter((w) => w.includes(term));
   }
   toggle(word) {
     if (this.picked.includes(word))
@@ -2223,7 +2229,7 @@ function renderCheckIn(host, el, file, fm, fields) {
         paint();
         refocus();
         void store();
-      }).open();
+      }, customMoods(host)).open();
     };
     const refocus = () => window.setTimeout(() => {
       var _a;
@@ -2461,6 +2467,18 @@ function jumpToWriting(view) {
   editor.focus();
   editor.setCursor(pos);
   editor.scrollIntoView({ from: pos, to: pos }, true);
+}
+function customMoods(host) {
+  var _a, _b, _c;
+  const counts = /* @__PURE__ */ new Map();
+  for (const { file } of host.journalEntries()) {
+    const m = (_b = (_a = host.app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter) == null ? void 0 : _b.mood;
+    for (const w of (Array.isArray(m) ? m : m ? [m] : []).map((x) => String(x).trim().toLowerCase())) {
+      if (w && !familyOf(w))
+        counts.set(w, ((_c = counts.get(w)) != null ? _c : 0) + 1);
+    }
+  }
+  return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([w]) => w);
 }
 function focusCheckIn(app, file) {
   var _a;

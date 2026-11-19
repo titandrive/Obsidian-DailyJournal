@@ -466,7 +466,7 @@ function renderCheckIn(host: JournalHost, el: HTMLElement, file: TFile, fm: Fron
 				x.onclick = () => { moods = moods.filter((m) => m !== mood); paint(); refocus(); void store(); };
 			}
 			const add = box.createEl("button", { cls: "dj-mood-add", text: moods.length ? "+ Add" : "How are you feeling?" });
-			add.onclick = () => new MoodPickerModal(app, moods, (picked) => { moods = picked; paint(); refocus(); void store(); }).open();
+			add.onclick = () => new MoodPickerModal(app, moods, (picked) => { moods = picked; paint(); refocus(); void store(); }, customMoods(host)).open();
 		};
 		// Repainting replaces the buttons, so keyboard focus would be lost: put it back on the Mood button
 		// (after the finder has closed and handed focus back).
@@ -676,6 +676,18 @@ function jumpToWriting(view: MarkdownView): void {
 	editor.focus();
 	editor.setCursor(pos);
 	editor.scrollIntoView({ from: pos, to: pos }, true);
+}
+
+/** Moods typed in by hand in journal entries (words not on the wheel), most used first. */
+function customMoods(host: JournalHost): string[] {
+	const counts = new Map<string, number>();
+	for (const { file } of host.journalEntries()) {
+		const m = host.app.metadataCache.getFileCache(file)?.frontmatter?.mood;
+		for (const w of (Array.isArray(m) ? m : m ? [m] : []).map((x) => String(x).trim().toLowerCase())) {
+			if (w && !familyOf(w)) counts.set(w, (counts.get(w) ?? 0) + 1);
+		}
+	}
+	return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([w]) => w);
 }
 
 /** Keyboard focus to the first field of the entry's check-in (the day rating), if it's open and shown. */
