@@ -645,6 +645,16 @@ function renderCheckIn(host: JournalHost, el: HTMLElement, file: TFile, fm: Fron
 		input.addEventListener("change", add);
 		paint();
 	}
+
+	// Where keyboard focus starts when the entry opens, once the song is picked: the check-in's first
+	// field (with no song yet, it's the Earworm card's "Add a song" button instead).
+	if (savedSong(fm)) {
+		const first = Array.from(list.querySelectorAll<HTMLElement>("button, input, textarea")).find((x) => x.tabIndex >= 0);
+		if (first) {
+			first.setAttr("data-dj-start", "");
+			host.focusStart(file, first);
+		}
+	}
 }
 
 /**
@@ -758,7 +768,7 @@ function renderSong(host: JournalHost, el: HTMLElement, file: TFile, fm: Frontma
 		if (song.artist) shrinkToOneLine(info.createDiv({ cls: "dj-book-author", text: song.artist }));
 		const actions = info.createDiv({ cls: "dj-song-actions" });
 		// Where keyboard focus starts when the entry opens: Enter opens the song search.
-		const change = actions.createEl("a", { cls: "dj-song-change", text: "Change", href: "#", attr: { "data-dj-start": "" } });
+		const change = actions.createEl("a", { cls: "dj-song-change", text: "Change", href: "#" });
 		change.onclick = (e) => { e.preventDefault(); pick(); };
 		const remove = actions.createEl("a", { cls: "dj-song-change", text: "Remove", href: "#" });
 		remove.onclick = (e) => {

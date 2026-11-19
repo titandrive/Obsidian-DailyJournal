@@ -2427,6 +2427,13 @@ function renderCheckIn(host, el, file, fm, fields) {
     input.addEventListener("change", add);
     paint();
   }
+  if (savedSong(fm)) {
+    const first = Array.from(list.querySelectorAll("button, input, textarea")).find((x) => x.tabIndex >= 0);
+    if (first) {
+      first.setAttr("data-dj-start", "");
+      host.focusStart(file, first);
+    }
+  }
 }
 function jumpToWriting(view) {
   const editor = view.editor;
@@ -2567,7 +2574,7 @@ function renderSong(host, el, file, fm) {
     if (song2.artist)
       shrinkToOneLine(info.createDiv({ cls: "dj-book-author", text: song2.artist }));
     const actions = info.createDiv({ cls: "dj-song-actions" });
-    const change = actions.createEl("a", { cls: "dj-song-change", text: "Change", href: "#", attr: { "data-dj-start": "" } });
+    const change = actions.createEl("a", { cls: "dj-song-change", text: "Change", href: "#" });
     change.onclick = (e) => {
       e.preventDefault();
       pick();
