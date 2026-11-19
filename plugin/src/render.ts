@@ -54,12 +54,14 @@ function card(parent: HTMLElement, label?: string): HTMLElement {
  * Enter or Space picks. Only one of them is a Tab stop, the picked one (or the first), so Tab moves on
  * to the next field instead of through every button. Call the returned function after each repaint.
  */
-function arrowRow(buttons: HTMLButtonElement[]): () => void {
+function arrowRow(buttons: HTMLElement[], stop?: () => number): () => void {
 	const stops = () => {
-		const on = buttons.findIndex((b) => b.hasClass("is-on"));
+		const on = stop ? stop() : buttons.findIndex((b) => b.hasClass("is-on"));
 		buttons.forEach((b, i) => { b.tabIndex = i === (on < 0 ? 0 : on) ? 0 : -1; });
 	};
 	buttons.forEach((b, i) => b.addEventListener("keydown", (e) => {
+		// Space works on links too, as on buttons.
+		if (e.key === " " && b instanceof HTMLAnchorElement) { e.preventDefault(); e.stopPropagation(); b.click(); return; }
 		const to = e.key === "ArrowRight" ? i + 1 : e.key === "ArrowLeft" ? i - 1 : e.key === "Home" ? 0 : e.key === "End" ? buttons.length - 1 : null;
 		if (to === null) return;
 		e.preventDefault();
@@ -759,7 +761,16 @@ function renderSong(host: JournalHost, el: HTMLElement, file: TFile, fm: Frontma
 		const change = actions.createEl("a", { cls: "dj-song-change", text: "Change", href: "#", attr: { "data-dj-start": "" } });
 		change.onclick = (e) => { e.preventDefault(); pick(); };
 		const remove = actions.createEl("a", { cls: "dj-song-change", text: "Remove", href: "#" });
-		remove.onclick = (e) => { e.preventDefault(); void save(null); showEmpty(); };
+		remove.onclick = (e) => {
+			e.preventDefault();
+			const keyboard = activeDocument.activeElement === remove;
+			void save(null);
+			showEmpty();
+			// From the keyboard, focus goes on to the new "Add a song" button rather than being lost.
+			if (keyboard) body.querySelector<HTMLElement>("[data-dj-start]")?.focus();
+		};
+		// Play, the title, Change and Remove are one Tab stop (Change), with ← → between them.
+		arrowRow([play, title, change, remove], () => 2);
 
 		let player: HTMLElement | null = null;
 		play.onclick = () => {

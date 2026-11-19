@@ -1775,14 +1775,20 @@ function card(parent, label) {
     c.createDiv({ cls: "dj-label", text: label });
   return c;
 }
-function arrowRow(buttons) {
+function arrowRow(buttons, stop) {
   const stops = () => {
-    const on = buttons.findIndex((b) => b.hasClass("is-on"));
+    const on = stop ? stop() : buttons.findIndex((b) => b.hasClass("is-on"));
     buttons.forEach((b, i) => {
       b.tabIndex = i === (on < 0 ? 0 : on) ? 0 : -1;
     });
   };
   buttons.forEach((b, i) => b.addEventListener("keydown", (e) => {
+    if (e.key === " " && b instanceof HTMLAnchorElement) {
+      e.preventDefault();
+      e.stopPropagation();
+      b.click();
+      return;
+    }
     const to = e.key === "ArrowRight" ? i + 1 : e.key === "ArrowLeft" ? i - 1 : e.key === "Home" ? 0 : e.key === "End" ? buttons.length - 1 : null;
     if (to === null)
       return;
@@ -2568,10 +2574,15 @@ function renderSong(host, el, file, fm) {
     };
     const remove = actions.createEl("a", { cls: "dj-song-change", text: "Remove", href: "#" });
     remove.onclick = (e) => {
+      var _a2;
       e.preventDefault();
+      const keyboard = activeDocument.activeElement === remove;
       void save(null);
       showEmpty();
+      if (keyboard)
+        (_a2 = body.querySelector("[data-dj-start]")) == null ? void 0 : _a2.focus();
     };
+    arrowRow([play, title, change, remove], () => 2);
     let player = null;
     play.onclick = () => {
       if (player) {
