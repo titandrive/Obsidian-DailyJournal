@@ -2455,6 +2455,18 @@ function jumpToWriting(view) {
   editor.setCursor(pos);
   editor.scrollIntoView({ from: pos, to: pos }, true);
 }
+function focusCheckIn(app, file) {
+  var _a;
+  const view = app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+  if (!view || view.file !== file)
+    return;
+  const card2 = Array.from(view.containerEl.querySelectorAll(".dj-card")).find((c) => {
+    var _a2;
+    return ((_a2 = c.querySelector(".dj-label")) == null ? void 0 : _a2.textContent) === "Check-in";
+  });
+  const first = card2 && Array.from(card2.querySelectorAll("button, input, textarea")).find((x) => x.tabIndex >= 0 && !x.disabled && x.offsetParent !== null);
+  (_a = first == null ? void 0 : first.focus) == null ? void 0 : _a.call(first, { preventScroll: false, focusVisible: true });
+}
 function savedSong(fm) {
   var _a;
   if (fm.song && fm.song_kind === "podcast" && typeof fm.song_audio === "string" && fm.song_audio) {
@@ -2568,6 +2580,8 @@ function renderSong(host, el, file, fm) {
   };
   const pick = () => new SongPickerModal(app, settings.youtubeApiKey, async (song2) => {
     showSong(song2);
+    if (!import_obsidian4.Platform.isMobile)
+      window.setTimeout(() => focusCheckIn(app, file), 80);
     if (song2.audio && !song2.page)
       song2.page = await episodePage(song2);
     void save(song2);

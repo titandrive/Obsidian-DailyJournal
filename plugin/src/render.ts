@@ -1,4 +1,4 @@
-import { App, getAllTags, MarkdownView, moment, setIcon, TFile } from "obsidian";
+import { App, getAllTags, MarkdownView, moment, Platform, setIcon, TFile } from "obsidian";
 import { entryDate, Moment } from "./dates";
 import { MoodPickerModal, PlaceHistory, PlaceModal, SongPickerModal } from "./modals";
 import { familyOf } from "./moods";
@@ -678,6 +678,17 @@ function jumpToWriting(view: MarkdownView): void {
 	editor.scrollIntoView({ from: pos, to: pos }, true);
 }
 
+/** Keyboard focus to the first field of the entry's check-in (the day rating), if it's open and shown. */
+function focusCheckIn(app: App, file: TFile): void {
+	const view = app.workspace.getActiveViewOfType(MarkdownView);
+	if (!view || view.file !== file) return;
+	const card = Array.from(view.containerEl.querySelectorAll<HTMLElement>(".dj-card"))
+		.find((c) => c.querySelector(".dj-label")?.textContent === "Check-in");
+	const first = card && Array.from(card.querySelectorAll<HTMLElement>("button, input, textarea"))
+		.find((x) => x.tabIndex >= 0 && !(x as HTMLButtonElement).disabled && x.offsetParent !== null);
+	(first?.focus as ((o?: object) => void) | undefined)?.call(first, { preventScroll: false, focusVisible: true });
+}
+
 /** The song saved in an entry, or null (older Apple-based picks have no YouTube id and are ignored). */
 function savedSong(fm: Frontmatter): Song | null {
 	// Directory podcast episode: plays from its audio file.
@@ -764,6 +775,9 @@ function renderSong(host: JournalHost, el: HTMLElement, file: TFile, fm: Frontma
 	// Picking happens in a search dialog (roomy even when the card is half a row wide).
 	const pick = () => new SongPickerModal(app, settings.youtubeApiKey, async (song) => {
 		showSong(song);
+		// The card was redrawn, so the button that had focus is gone: carry keyboard focus on to the
+		// check-in, the next thing to fill in (once the dialog has closed and handed focus back).
+		if (!Platform.isMobile) window.setTimeout(() => focusCheckIn(app, file), 80);
 		// For a directory episode, look up its web page once (from the show's feed) before saving.
 		if (song.audio && !song.page) song.page = await episodePage(song);
 		void save(song);
