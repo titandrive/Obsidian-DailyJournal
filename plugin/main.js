@@ -1348,14 +1348,11 @@ var MoodPickerModal = class extends import_obsidian3.Modal {
     super(app);
     this.onDone = onDone;
     this.custom = custom;
-    /** Cancel was pressed: close without saving. */
-    this.cancelled = false;
     /** The core feeling opened, or null for the six tiles. */
     this.family = null;
     /** Which tile to focus after the next redraw (keyboard use), or null to leave focus alone. */
     this.focusAt = null;
     this.picked = [...current];
-    this.initial = [...current];
     this.modalEl.addClass("dj-mood-modal");
   }
   onOpen() {
@@ -1383,10 +1380,7 @@ var MoodPickerModal = class extends import_obsidian3.Modal {
     this.chosenEl = contentEl.createDiv({ cls: "dj-mood-chosen" });
     this.bodyEl = contentEl.createDiv({ cls: "dj-mood-body" });
     const foot = contentEl.createDiv({ cls: "modal-button-container" });
-    foot.createEl("button", { text: "Cancel" }).onclick = () => {
-      this.cancelled = true;
-      this.close();
-    };
+    foot.createEl("button", { text: "Cancel" }).onclick = () => this.close();
     const done = foot.createEl("button", { cls: "mod-cta", text: "Done" });
     done.onclick = () => this.finish();
     const hints = contentEl.createDiv({ cls: "prompt-instructions dj-mood-keys" });
@@ -1506,10 +1500,9 @@ var MoodPickerModal = class extends import_obsidian3.Modal {
   }
   onClose() {
     this.contentEl.empty();
-    if (!this.cancelled && this.picked.join("\n") !== this.initial.join("\n"))
-      this.onDone(this.picked);
   }
   finish() {
+    this.onDone(this.picked);
     this.close();
   }
   /** Words containing what's typed, from every family. */
