@@ -3702,8 +3702,12 @@ var DailyJournal = class extends import_obsidian8.Plugin {
     const want = this.startFocus;
     if (!want || want.path !== file.path || Date.now() > want.until)
       return;
-    if (((_a = this.app.workspace.getActiveViewOfType(import_obsidian8.MarkdownView)) == null ? void 0 : _a.file) !== file || !el.isConnected)
+    if (((_a = this.app.workspace.getActiveViewOfType(import_obsidian8.MarkdownView)) == null ? void 0 : _a.file) !== file)
       return;
+    if (!el.isConnected) {
+      window.setTimeout(() => this.focusStart(file, el), 30);
+      return;
+    }
     this.startFocus = null;
     const focus = () => el.focus({ preventScroll: true, focusVisible: true });
     focus();

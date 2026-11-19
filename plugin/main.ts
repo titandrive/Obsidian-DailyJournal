@@ -88,7 +88,9 @@ export default class DailyJournal extends Plugin implements JournalHost {
 	focusStart(file: TFile, el: HTMLElement): void {
 		const want = this.startFocus;
 		if (!want || want.path !== file.path || Date.now() > want.until) return;
-		if (this.app.workspace.getActiveViewOfType(MarkdownView)?.file !== file || !el.isConnected) return;
+		if (this.app.workspace.getActiveViewOfType(MarkdownView)?.file !== file) return;
+		// Cards are drawn before Obsidian puts them on the page: wait for it (until the deadline).
+		if (!el.isConnected) { window.setTimeout(() => this.focusStart(file, el), 30); return; }
 		this.startFocus = null;
 		const focus = () => (el.focus as (o?: object) => void)({ preventScroll: true, focusVisible: true });
 		focus();
