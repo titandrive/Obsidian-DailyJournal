@@ -95,25 +95,24 @@ export default class DailyJournal extends Plugin implements JournalHost {
 		const focus = () => (el.focus as (o?: object) => void)({ preventScroll: true, focusVisible: true });
 		focus();
 		// Something else (the editor, Remember Cursor Position) may put the cursor back into the text a
-		// moment later: take focus back once, within half a second, unless you've clicked or typed.
+		// moment later, without a focus event to catch: for a second and a half, whenever the text has
+		// focus instead, take it back, unless you've clicked or typed (then you're left alone).
 		const doc = el.doc;
 		let yours = false;
 		const mine = () => { yours = true; };
-		const back = (e: FocusEvent) => {
-			if (yours || !el.isConnected) return done();
-			// Only the text itself (the cards sit inside the editor too, and moving between them is fine).
-			const to = e.target as HTMLElement;
-			if (to.closest?.(".cm-content") && !to.closest(".block-language-journal")) { done(); focus(); }
-		};
-		const done = () => {
-			doc.removeEventListener("mousedown", mine, true);
-			doc.removeEventListener("keydown", mine, true);
-			doc.removeEventListener("focusin", back, true);
-		};
 		doc.addEventListener("mousedown", mine, true);
 		doc.addEventListener("keydown", mine, true);
-		doc.addEventListener("focusin", back, true);
-		window.setTimeout(done, 500);
+		const started = Date.now();
+		const check = window.setInterval(() => {
+			const now = doc.activeElement as HTMLElement | null;
+			const stolen = !!now?.closest?.(".cm-content") && !now.closest(".block-language-journal");
+			if (!yours && el.isConnected && stolen) focus();
+			if (yours || !el.isConnected || Date.now() - started > 1500) {
+				window.clearInterval(check);
+				doc.removeEventListener("mousedown", mine, true);
+				doc.removeEventListener("keydown", mine, true);
+			}
+		}, 50);
 	}
 
 	settings!: JournalSettings;

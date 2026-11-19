@@ -3716,25 +3716,21 @@ var DailyJournal = class extends import_obsidian8.Plugin {
     const mine = () => {
       yours = true;
     };
-    const back = (e) => {
-      var _a2;
-      if (yours || !el.isConnected)
-        return done();
-      const to = e.target;
-      if (((_a2 = to.closest) == null ? void 0 : _a2.call(to, ".cm-content")) && !to.closest(".block-language-journal")) {
-        done();
-        focus();
-      }
-    };
-    const done = () => {
-      doc.removeEventListener("mousedown", mine, true);
-      doc.removeEventListener("keydown", mine, true);
-      doc.removeEventListener("focusin", back, true);
-    };
     doc.addEventListener("mousedown", mine, true);
     doc.addEventListener("keydown", mine, true);
-    doc.addEventListener("focusin", back, true);
-    window.setTimeout(done, 500);
+    const started = Date.now();
+    const check = window.setInterval(() => {
+      var _a2;
+      const now = doc.activeElement;
+      const stolen = !!((_a2 = now == null ? void 0 : now.closest) == null ? void 0 : _a2.call(now, ".cm-content")) && !now.closest(".block-language-journal");
+      if (!yours && el.isConnected && stolen)
+        focus();
+      if (yours || !el.isConnected || Date.now() - started > 1500) {
+        window.clearInterval(check);
+        doc.removeEventListener("mousedown", mine, true);
+        doc.removeEventListener("keydown", mine, true);
+      }
+    }, 50);
   }
   async onload() {
     var _a;
