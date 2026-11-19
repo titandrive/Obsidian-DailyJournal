@@ -82,6 +82,38 @@ class JournalBlock extends MarkdownRenderChild {
 }
 
 export default class DailyJournal extends Plugin implements JournalHost {
+	/** An entry that was just opened and should get keyboard focus on its Earworm card, until a deadline. */
+	private startFocus: { path: string; until: number } | null = null;
+
+	focusStart(file: TFile, el: HTMLElement): void {
+		const want = this.startFocus;
+		if (!want || want.path !== file.path || Date.now() > want.until) return;
+		if (this.app.workspace.getActiveViewOfType(MarkdownView)?.file !== file || !el.isConnected) return;
+		this.startFocus = null;
+		const focus = () => (el.focus as (o?: object) => void)({ preventScroll: true, focusVisible: true });
+		focus();
+		// Something else (the editor, Remember Cursor Position) may put the cursor back into the text a
+		// moment later: take focus back once, within half a second, unless you've clicked or typed.
+		const doc = el.doc;
+		let yours = false;
+		const mine = () => { yours = true; };
+		const back = (e: FocusEvent) => {
+			if (yours || !el.isConnected) return done();
+			// Only the text itself (the cards sit inside the editor too, and moving between them is fine).
+			const to = e.target as HTMLElement;
+			if (to.closest?.(".cm-content") && !to.closest(".block-language-journal")) { done(); focus(); }
+		};
+		const done = () => {
+			doc.removeEventListener("mousedown", mine, true);
+			doc.removeEventListener("keydown", mine, true);
+			doc.removeEventListener("focusin", back, true);
+		};
+		doc.addEventListener("mousedown", mine, true);
+		doc.addEventListener("keydown", mine, true);
+		doc.addEventListener("focusin", back, true);
+		window.setTimeout(done, 500);
+	}
+
 	settings!: JournalSettings;
 	private baseTabs?: BaseTabs;
 	weatherTried = new Set<string>();
@@ -179,20 +211,15 @@ export default class DailyJournal extends Plugin implements JournalHost {
 		this.registerEvent(this.app.workspace.on("active-leaf-change", refresh));
 		this.registerEvent(this.app.workspace.on("file-open", refresh));
 		// Keyboard: opening an entry puts focus on the Earworm card (the first thing to fill in), so
-		// Enter opens the song search and Tab moves on through the check-in. Computers only.
+		// Enter opens the song search and Tab moves on through the check-in. Computers only. The card
+		// focuses itself as it draws (focusStart); if it's already drawn, it's focused here.
 		this.registerEvent(this.app.workspace.on("file-open", (file) => {
+			this.startFocus = null;
 			if (Platform.isMobile || !file || !entryDate(this.settings, file)) return;
+			this.startFocus = { path: file.path, until: Date.now() + 2000 };
 			const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-			if (!view || view.file !== file) return;
-			// The cards render a moment after the note opens; wait for the Earworm card (up to ~2 s).
-			let tries = 0;
-			const tryFocus = () => {
-				if (this.app.workspace.getActiveViewOfType(MarkdownView)?.file !== file) return;
-				const start = view.containerEl.querySelector<HTMLElement>("[data-dj-start]");
-				if (start) { (start.focus as (o?: object) => void)({ preventScroll: true, focusVisible: true }); return; }
-				if (++tries < 20) window.setTimeout(tryFocus, 100);
-			};
-			window.setTimeout(tryFocus, 150);
+			const start = view?.file === file ? view.containerEl.querySelector<HTMLElement>("[data-dj-start]") : null;
+			if (start) this.focusStart(file, start);
 		}));
 		this.registerEvent(this.app.metadataCache.on("changed", refresh));
 

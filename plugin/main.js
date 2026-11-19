@@ -2587,6 +2587,9 @@ function renderSong(host, el, file, fm) {
     showSong(song);
   else
     showEmpty();
+  const start = body.querySelector("[data-dj-start]");
+  if (start)
+    host.focusStart(file, start);
 }
 function pastMeals(host) {
   var _a, _b, _c;
@@ -3612,6 +3615,8 @@ var JournalBlock = class extends import_obsidian8.MarkdownRenderChild {
 var DailyJournal = class extends import_obsidian8.Plugin {
   constructor() {
     super(...arguments);
+    /** An entry that was just opened and should get keyboard focus on its Earworm card, until a deadline. */
+    this.startFocus = null;
     this.weatherTried = /* @__PURE__ */ new Set();
     this.readingTried = /* @__PURE__ */ new Set();
     this.readingRetries = /* @__PURE__ */ new Map();
@@ -3634,6 +3639,41 @@ var DailyJournal = class extends import_obsidian8.Plugin {
         void this.saveData(this.settings);
       }
     };
+  }
+  focusStart(file, el) {
+    var _a;
+    const want = this.startFocus;
+    if (!want || want.path !== file.path || Date.now() > want.until)
+      return;
+    if (((_a = this.app.workspace.getActiveViewOfType(import_obsidian8.MarkdownView)) == null ? void 0 : _a.file) !== file || !el.isConnected)
+      return;
+    this.startFocus = null;
+    const focus = () => el.focus({ preventScroll: true, focusVisible: true });
+    focus();
+    const doc = el.doc;
+    let yours = false;
+    const mine = () => {
+      yours = true;
+    };
+    const back = (e) => {
+      var _a2;
+      if (yours || !el.isConnected)
+        return done();
+      const to = e.target;
+      if (((_a2 = to.closest) == null ? void 0 : _a2.call(to, ".cm-content")) && !to.closest(".block-language-journal")) {
+        done();
+        focus();
+      }
+    };
+    const done = () => {
+      doc.removeEventListener("mousedown", mine, true);
+      doc.removeEventListener("keydown", mine, true);
+      doc.removeEventListener("focusin", back, true);
+    };
+    doc.addEventListener("mousedown", mine, true);
+    doc.addEventListener("keydown", mine, true);
+    doc.addEventListener("focusin", back, true);
+    window.setTimeout(done, 500);
   }
   async onload() {
     var _a;
@@ -3718,25 +3758,14 @@ var DailyJournal = class extends import_obsidian8.Plugin {
     this.registerEvent(this.app.workspace.on("active-leaf-change", refresh));
     this.registerEvent(this.app.workspace.on("file-open", refresh));
     this.registerEvent(this.app.workspace.on("file-open", (file) => {
+      this.startFocus = null;
       if (import_obsidian8.Platform.isMobile || !file || !entryDate(this.settings, file))
         return;
+      this.startFocus = { path: file.path, until: Date.now() + 2e3 };
       const view = this.app.workspace.getActiveViewOfType(import_obsidian8.MarkdownView);
-      if (!view || view.file !== file)
-        return;
-      let tries = 0;
-      const tryFocus = () => {
-        var _a2;
-        if (((_a2 = this.app.workspace.getActiveViewOfType(import_obsidian8.MarkdownView)) == null ? void 0 : _a2.file) !== file)
-          return;
-        const start = view.containerEl.querySelector("[data-dj-start]");
-        if (start) {
-          start.focus({ preventScroll: true, focusVisible: true });
-          return;
-        }
-        if (++tries < 20)
-          window.setTimeout(tryFocus, 100);
-      };
-      window.setTimeout(tryFocus, 150);
+      const start = (view == null ? void 0 : view.file) === file ? view.containerEl.querySelector("[data-dj-start]") : null;
+      if (start)
+        this.focusStart(file, start);
     }));
     this.registerEvent(this.app.metadataCache.on("changed", refresh));
     const tabs = this.baseTabs = new BaseTabs(this, () => this.settings.baseTabs);

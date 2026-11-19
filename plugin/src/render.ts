@@ -26,6 +26,8 @@ export interface JournalHost {
 	/** Plugin.registerInterval: the timer is cleared if the plugin unloads (works for timeouts too). */
 	registerInterval(id: number): number;
 	journalEntries(): Array<{ file: TFile; date: Moment }>;
+	/** Called as the Earworm card draws: if this entry was just opened, focus its starting point. */
+	focusStart(file: TFile, el: HTMLElement): void;
 }
 
 type Frontmatter = Record<string, unknown>;
@@ -778,6 +780,8 @@ function renderSong(host: JournalHost, el: HTMLElement, file: TFile, fm: Frontma
 
 	const song = savedSong(fm);
 	if (song) showSong(song); else showEmpty();
+	const start = body.querySelector<HTMLElement>("[data-dj-start]");
+	if (start) host.focusStart(file, start);
 }
 
 /**
