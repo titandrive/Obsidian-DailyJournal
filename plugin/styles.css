@@ -491,3 +491,7 @@ button.dj-prompt-add { display: flex; align-items: center; gap: .4em; margin-top
 .dj-cover.dj-game-cover { aspect-ratio: 1; object-fit: cover; }
 .dj-watch-modal .dj-song-thumb.dj-watch-thumb { aspect-ratio: 2 / 3; height: auto; object-fit: cover; }
 .dj-watch-modal .dj-watch-epnum { display: flex; align-items: center; justify-content: center; font-weight: 600; color: var(--text-muted); }
+
+/* The Insights base: only the view tabs and New in its toolbar (New opens today's entry). */
+.dj-insights-base .bases-toolbar > .bases-toolbar-item:not(.dj-base-tabs):not(.bases-toolbar-new-item-menu) { display: none !important; }
+.dj-insights-base .bases-toolbar .bases-toolbar-new-item-menu { margin-left: auto; }

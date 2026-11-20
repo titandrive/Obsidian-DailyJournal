@@ -3626,6 +3626,7 @@ var DailyJournal = class extends import_obsidian8.Plugin {
     this.readingRetries = /* @__PURE__ */ new Map();
     this.weatherRetried = /* @__PURE__ */ new Set();
     this.blocks = /* @__PURE__ */ new Set();
+    this.insightsHooked = /* @__PURE__ */ new WeakSet();
     /** Recently picked locations (newest first, at most 8), kept in the plugin's settings. */
     this.placeHistory = {
       get: () => {
@@ -3725,7 +3726,11 @@ var DailyJournal = class extends import_obsidian8.Plugin {
     this.registerEvent(this.app.workspace.on("file-open", refresh));
     this.registerEvent(this.app.metadataCache.on("changed", refresh));
     const tabs = this.baseTabs = new BaseTabs(this, () => this.settings.baseTabs);
-    const refreshTabs = (0, import_obsidian8.debounce)(() => tabs.refresh(), 150, true);
+    const refreshTabs = (0, import_obsidian8.debounce)(() => {
+      tabs.refresh();
+      this.refreshInsightsToolbar();
+    }, 150, true);
+    this.registerEvent(this.app.workspace.on("file-open", refreshTabs));
     this.registerEvent(this.app.workspace.on("layout-change", refreshTabs));
     this.registerEvent(this.app.workspace.on("active-leaf-change", refreshTabs));
     this.registerEvent(this.app.vault.on("modify", (f) => {
@@ -3735,6 +3740,7 @@ var DailyJournal = class extends import_obsidian8.Plugin {
     this.app.workspace.onLayoutReady(() => {
       this.refreshChrome();
       tabs.refresh();
+      this.refreshInsightsToolbar();
       this.registerEvent(this.app.vault.on("create", (file) => this.fillIfEmpty(file)));
       void this.syncDailyTemplate();
       void this.syncJournalBase();
@@ -3744,9 +3750,35 @@ var DailyJournal = class extends import_obsidian8.Plugin {
     var _a;
     (_a = this.baseTabs) == null ? void 0 : _a.refresh();
   }
+  /**
+   * The Insights base keeps a plain toolbar: only the view tabs and New (styles.css hides the rest), and New opens
+   * today's entry instead of making a blank note. Marked with a class on the base's pane while it shows Insights.
+   */
+  refreshInsightsToolbar() {
+    for (const leaf of this.app.workspace.getLeavesOfType("bases")) {
+      const el = leaf.view.containerEl;
+      const file = leaf.view.file;
+      el.toggleClass("dj-insights-base", (file == null ? void 0 : file.path) === this.basePath());
+      if (this.insightsHooked.has(el))
+        continue;
+      this.insightsHooked.add(el);
+      this.registerDomEvent(el, "click", (evt) => {
+        var _a;
+        if (!el.hasClass("dj-insights-base"))
+          return;
+        if (!((_a = evt.target) == null ? void 0 : _a.closest(".bases-toolbar-new-item-menu")))
+          return;
+        evt.preventDefault();
+        evt.stopPropagation();
+        void this.openEntry((0, import_obsidian8.moment)());
+      }, { capture: true });
+    }
+  }
   onunload() {
     var _a;
     (_a = this.baseTabs) == null ? void 0 : _a.clearAll();
+    for (const leaf of this.app.workspace.getLeavesOfType("bases"))
+      leaf.view.containerEl.removeClass("dj-insights-base");
     this.app.workspace.iterateAllLeaves((leaf) => {
       if (leaf.view instanceof import_obsidian8.MarkdownView)
         leaf.view.contentEl.removeClass("dj-chrome-hidden");

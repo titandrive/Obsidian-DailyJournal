@@ -183,7 +183,8 @@ export default class DailyJournal extends Plugin implements JournalHost {
 
 		// Tab buttons in every base's header. Redrawn when panes change or a base's views are edited.
 		const tabs = this.baseTabs = new BaseTabs(this, () => this.settings.baseTabs);
-		const refreshTabs = debounce(() => tabs.refresh(), 150, true);
+		const refreshTabs = debounce(() => { tabs.refresh(); this.refreshInsightsToolbar(); }, 150, true);
+		this.registerEvent(this.app.workspace.on("file-open", refreshTabs));
 		this.registerEvent(this.app.workspace.on("layout-change", refreshTabs));
 		this.registerEvent(this.app.workspace.on("active-leaf-change", refreshTabs));
 		this.registerEvent(this.app.vault.on("modify", (f) => { if (f.path.endsWith(".base")) refreshTabs(); }));
@@ -192,6 +193,7 @@ export default class DailyJournal extends Plugin implements JournalHost {
 		this.app.workspace.onLayoutReady(() => {
 			this.refreshChrome();
 			tabs.refresh();
+			this.refreshInsightsToolbar();
 			this.registerEvent(this.app.vault.on("create", (file) => this.fillIfEmpty(file)));
 			void this.syncDailyTemplate();
 			void this.syncJournalBase();
@@ -202,8 +204,32 @@ export default class DailyJournal extends Plugin implements JournalHost {
 		this.baseTabs?.refresh();
 	}
 
+	private insightsHooked = new WeakSet<HTMLElement>();
+
+	/**
+	 * The Insights base keeps a plain toolbar: only the view tabs and New (styles.css hides the rest), and New opens
+	 * today's entry instead of making a blank note. Marked with a class on the base's pane while it shows Insights.
+	 */
+	refreshInsightsToolbar(): void {
+		for (const leaf of this.app.workspace.getLeavesOfType("bases")) {
+			const el = leaf.view.containerEl;
+			const file = (leaf.view as unknown as { file?: TFile | null }).file;
+			el.toggleClass("dj-insights-base", file?.path === this.basePath());
+			if (this.insightsHooked.has(el)) continue;
+			this.insightsHooked.add(el);
+			this.registerDomEvent(el, "click", (evt) => {
+				if (!el.hasClass("dj-insights-base")) return;
+				if (!(evt.target as HTMLElement | null)?.closest(".bases-toolbar-new-item-menu")) return;
+				evt.preventDefault();
+				evt.stopPropagation();
+				void this.openEntry(moment());
+			}, { capture: true });
+		}
+	}
+
 	onunload(): void {
 		this.baseTabs?.clearAll();
+		for (const leaf of this.app.workspace.getLeavesOfType("bases")) leaf.view.containerEl.removeClass("dj-insights-base");
 		this.app.workspace.iterateAllLeaves((leaf) => {
 			if (leaf.view instanceof MarkdownView) leaf.view.contentEl.removeClass("dj-chrome-hidden");
 		});
