@@ -493,5 +493,15 @@ button.dj-prompt-add { display: flex; align-items: center; gap: .4em; margin-top
 .dj-watch-modal .dj-watch-epnum { display: flex; align-items: center; justify-content: center; font-weight: 600; color: var(--text-muted); }
 
 /* The Insights base: only the view tabs and New in its toolbar (New opens today's entry). */
-.dj-insights-base .bases-toolbar > .bases-toolbar-item:not(.dj-base-tabs):not(.bases-toolbar-new-item-menu) { display: none !important; }
+.dj-insights-base .bases-toolbar > .bases-toolbar-item:not(.dj-base-tabs):not(.bases-toolbar-new-item-menu):not(.dj-search-item) { display: none !important; }
 .dj-insights-base .bases-toolbar .bases-toolbar-new-item-menu { margin-left: auto; }
+/* On its table tabs, a search box in the toolbar filling the space before New. */
+.dj-search-open .bases-search-row { display: none !important; }
+.dj-search-item { flex: 1 1 auto; min-width: 110px; margin-left: var(--size-4-2); }
+.dj-search-item + .bases-toolbar-new-item-menu { margin-left: 0; }
+.dj-search-item .search-input-container { position: relative; width: 100%; }
+.dj-search-item input { height: 28px; width: 100%; padding-right: 4.5em; border-radius: var(--radius-m); border: 1px solid var(--background-modifier-border); background-color: var(--background-modifier-form-field); box-shadow: none; font-size: var(--font-ui-small); }
+.dj-search-item input:focus, .dj-search-item input:focus-visible { border-color: var(--interactive-accent); box-shadow: 0 0 0 2px hsla(var(--interactive-accent-hsl), 0.2); }
+.dj-search-item .search-input-clear-button { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); margin: 0; }
+.dj-search-item .document-search-count { right: 28px; color: var(--text-faint); font-size: var(--font-ui-smaller); }
+.dj-search-item input:placeholder-shown ~ .document-search-count { display: none; }

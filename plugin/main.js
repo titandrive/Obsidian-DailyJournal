@@ -3751,22 +3751,81 @@ var DailyJournal = class extends import_obsidian8.Plugin {
     (_a = this.baseTabs) == null ? void 0 : _a.refresh();
   }
   /**
+   * On the Insights base's table tabs, Bases' search box sits in the toolbar, always open, between the tab buttons
+   * and New. On Trends, and on other bases, it goes back to its own row behind Bases' Search button.
+   */
+  placeSearch(view, insights) {
+    var _a, _b, _c;
+    const v = view;
+    const el = v.containerEl;
+    const toolbar = el.querySelector(".bases-toolbar");
+    const row = el.querySelector(".bases-search-row");
+    if (!toolbar || !row)
+      return;
+    const want = insights && ((_b = (_a = v.controller) == null ? void 0 : _a.view) == null ? void 0 : _b.type) === "table";
+    let item = toolbar.querySelector(".dj-search-item");
+    const box = (item != null ? item : row).querySelector(".search-input-container");
+    el.toggleClass("dj-search-open", want);
+    if (!want) {
+      if (item) {
+        if (box)
+          row.appendChild(box);
+        item.remove();
+      }
+      return;
+    }
+    if (!item) {
+      item = createDiv({ cls: "bases-toolbar-item dj-search-item" });
+      toolbar.insertBefore(item, toolbar.querySelector(".bases-toolbar-new-item-menu"));
+    }
+    if (box && box.parentElement !== item)
+      item.appendChild(box);
+    const input = item.querySelector("input");
+    if (input && !input.dataset.djSearch) {
+      input.dataset.djSearch = "1";
+      input.placeholder = "Search entries";
+      const apply = () => {
+        var _a2, _b2;
+        return (_b2 = (_a2 = v.controller) == null ? void 0 : _a2.updateSearchQuery) == null ? void 0 : _b2.call(_a2, input.value.trim());
+      };
+      input.addEventListener("input", apply);
+      input.addEventListener("search", apply);
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && input.value) {
+          e.preventDefault();
+          e.stopPropagation();
+          input.value = "";
+          apply();
+        }
+      });
+      (_c = item.querySelector(".search-input-clear-button")) == null ? void 0 : _c.addEventListener("click", () => {
+        input.value = "";
+        apply();
+      });
+    }
+  }
+  /**
    * The Insights base keeps a plain toolbar: only the view tabs and New (styles.css hides the rest), and New opens
    * today's entry instead of making a blank note. Marked with a class on the base's pane while it shows Insights.
    */
   refreshInsightsToolbar() {
+    var _a;
     for (const leaf of this.app.workspace.getLeavesOfType("bases")) {
       const el = leaf.view.containerEl;
       const file = leaf.view.file;
-      el.toggleClass("dj-insights-base", (file == null ? void 0 : file.path) === this.basePath());
+      const insights = (file == null ? void 0 : file.path) === this.basePath();
+      el.toggleClass("dj-insights-base", insights);
+      this.placeSearch(leaf.view, insights);
       if (this.insightsHooked.has(el))
         continue;
       this.insightsHooked.add(el);
+      const controller = leaf.view.controller;
+      (_a = controller == null ? void 0 : controller.events) == null ? void 0 : _a.on("view-changed", () => window.setTimeout(() => this.refreshInsightsToolbar(), 0));
       this.registerDomEvent(el, "click", (evt) => {
-        var _a;
+        var _a2;
         if (!el.hasClass("dj-insights-base"))
           return;
-        if (!((_a = evt.target) == null ? void 0 : _a.closest(".bases-toolbar-new-item-menu")))
+        if (!((_a2 = evt.target) == null ? void 0 : _a2.closest(".bases-toolbar-new-item-menu")))
           return;
         evt.preventDefault();
         evt.stopPropagation();
@@ -3777,8 +3836,10 @@ var DailyJournal = class extends import_obsidian8.Plugin {
   onunload() {
     var _a;
     (_a = this.baseTabs) == null ? void 0 : _a.clearAll();
-    for (const leaf of this.app.workspace.getLeavesOfType("bases"))
-      leaf.view.containerEl.removeClass("dj-insights-base");
+    for (const leaf of this.app.workspace.getLeavesOfType("bases")) {
+      this.placeSearch(leaf.view, false);
+      leaf.view.containerEl.removeClass("dj-insights-base", "dj-search-open");
+    }
     this.app.workspace.iterateAllLeaves((leaf) => {
       if (leaf.view instanceof import_obsidian8.MarkdownView)
         leaf.view.contentEl.removeClass("dj-chrome-hidden");

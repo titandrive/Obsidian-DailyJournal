@@ -207,6 +207,47 @@ export default class DailyJournal extends Plugin implements JournalHost {
 	private insightsHooked = new WeakSet<HTMLElement>();
 
 	/**
+	 * On the Insights base's table tabs, Bases' search box sits in the toolbar, always open, between the tab buttons
+	 * and New. On Trends, and on other bases, it goes back to its own row behind Bases' Search button.
+	 */
+	private placeSearch(view: unknown, insights: boolean): void {
+		const v = view as { containerEl: HTMLElement; controller?: { view?: { type?: string }; updateSearchQuery?(q: string): void } };
+		const el = v.containerEl;
+		const toolbar = el.querySelector<HTMLElement>(".bases-toolbar");
+		const row = el.querySelector<HTMLElement>(".bases-search-row");
+		if (!toolbar || !row) return;
+		const want = insights && v.controller?.view?.type === "table";
+		let item = toolbar.querySelector<HTMLElement>(".dj-search-item");
+		const box = (item ?? row).querySelector<HTMLElement>(".search-input-container");
+		el.toggleClass("dj-search-open", want);
+		if (!want) {
+			if (item) {
+				if (box) row.appendChild(box);
+				item.remove();
+			}
+			return;
+		}
+		if (!item) {
+			item = createDiv({ cls: "bases-toolbar-item dj-search-item" });
+			toolbar.insertBefore(item, toolbar.querySelector(".bases-toolbar-new-item-menu"));
+		}
+		if (box && box.parentElement !== item) item.appendChild(box);
+		const input = item.querySelector<HTMLInputElement>("input");
+		if (input && !input.dataset.djSearch) {
+			// Bases only listens to its box while its own search is open; pass what's typed straight to the base.
+			input.dataset.djSearch = "1";
+			input.placeholder = "Search entries";
+			const apply = () => v.controller?.updateSearchQuery?.(input.value.trim());
+			input.addEventListener("input", apply);
+			input.addEventListener("search", apply);
+			input.addEventListener("keydown", (e) => {
+				if (e.key === "Escape" && input.value) { e.preventDefault(); e.stopPropagation(); input.value = ""; apply(); }
+			});
+			item.querySelector(".search-input-clear-button")?.addEventListener("click", () => { input.value = ""; apply(); });
+		}
+	}
+
+	/**
 	 * The Insights base keeps a plain toolbar: only the view tabs and New (styles.css hides the rest), and New opens
 	 * today's entry instead of making a blank note. Marked with a class on the base's pane while it shows Insights.
 	 */
@@ -214,9 +255,14 @@ export default class DailyJournal extends Plugin implements JournalHost {
 		for (const leaf of this.app.workspace.getLeavesOfType("bases")) {
 			const el = leaf.view.containerEl;
 			const file = (leaf.view as unknown as { file?: TFile | null }).file;
-			el.toggleClass("dj-insights-base", file?.path === this.basePath());
+			const insights = file?.path === this.basePath();
+			el.toggleClass("dj-insights-base", insights);
+			this.placeSearch(leaf.view, insights);
 			if (this.insightsHooked.has(el)) continue;
 			this.insightsHooked.add(el);
+			// Switching tabs inside the base: show or hide the search box for the new tab.
+			const controller = (leaf.view as unknown as { controller?: { events?: { on(name: string, cb: () => void): unknown } } }).controller;
+			controller?.events?.on("view-changed", () => window.setTimeout(() => this.refreshInsightsToolbar(), 0));
 			this.registerDomEvent(el, "click", (evt) => {
 				if (!el.hasClass("dj-insights-base")) return;
 				if (!(evt.target as HTMLElement | null)?.closest(".bases-toolbar-new-item-menu")) return;
@@ -229,7 +275,10 @@ export default class DailyJournal extends Plugin implements JournalHost {
 
 	onunload(): void {
 		this.baseTabs?.clearAll();
-		for (const leaf of this.app.workspace.getLeavesOfType("bases")) leaf.view.containerEl.removeClass("dj-insights-base");
+		for (const leaf of this.app.workspace.getLeavesOfType("bases")) {
+			this.placeSearch(leaf.view, false);
+			leaf.view.containerEl.removeClass("dj-insights-base", "dj-search-open");
+		}
 		this.app.workspace.iterateAllLeaves((leaf) => {
 			if (leaf.view instanceof MarkdownView) leaf.view.contentEl.removeClass("dj-chrome-hidden");
 		});
